@@ -1,0 +1,1615 @@
+import Phaser from 'phaser';
+import {
+  GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, GENERATE_AHEAD_LEVELS, RENDER_AHEAD_LEVELS, KEEP_BELOW_LEVELS,
+  levelToMeters, yToMeters, LEVEL_PX, PX_PER_METER, METERS_PER_LEVEL,
+} from '../config/gameConfig.js';
+import { BALANCE } from '../config/balanceConfig.js';
+import { Mountain } from '../systems/SegmentGenerator.js';
+import { ComboSystem, timingWindows } from '../systems/ComboSystem.js';
+import { GripSystem } from '../systems/GripSystem.js';
+import { DayNightSystem } from '../systems/DayNightSystem.js';
+import { WeatherSystem } from '../systems/WeatherSystem.js';
+import { Effects } from '../systems/Effects.js';
+import { Audio } from '../systems/AudioSystem.js';
+import { Background } from '../world/Background.js';
+import { WallRenderer } from '../world/WallRenderer.js';
+import { Climber } from '../entities/Climber.js';
+import { HUD } from '../ui/HUD.js';
+import { RouteSelector } from '../ui/RouteSelector.js';
+import { ComboPrompt } from '../ui/ComboPrompt.js';
+import { RestMenu } from '../ui/RestMenu.js';
+import { PixelText, COLORS } from '../ui/PixelText.js';
+import { biomeAt, biomeMixAt, biomeStretchAt } from '../data/biomes.js';
+import { BiomeMechanics } from '../systems/mechanics/index.js';
+import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
+import { DARKNESS } from '../systems/mechanics/Darkness.js';
+import { echoCallMs } from '../systems/mechanics/Echo.js';
+import { sandboxCopy } from '../systems/ProgressionSystem.js';
+import { DISCOVERIES } from '../data/discoveries.js';
+import { SeededRandom, hashInts, randomSeed } from '../utils/seededRandom.js';
+import { buildClimberTexture } from '../render/textures.js';
+import { modeConfig, difficultyAt } from '../systems/DifficultySystem.js';
+import { TutorialMountain, TUTORIAL_SEED } from '../systems/TutorialMountain.js';
+import { TutorialDirector } from '../systems/TutorialDirector.js';
+import { TutorialCoach } from '../ui/TutorialCoach.js';
+import { POSES } from '../render/climberArt.js';
+import { GEMS } from '../data/gems.js';
+import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
+import { findCosmetic } from '../data/cosmetics.js';
+import { GEM_TARGET } from '../ui/HUD.js';
+import { toCss, lerpColor } from '../utils/color.js';
+
+const MILESTONE_LINES = {
+  1: 'HIGHER THAN BIG BEN',
+  4: 'ABOVE THE EIFFEL TOWER',
+  5: 'ABOVE THE EMPIRE STATE BUILDING',
+  9: 'ABOVE THE BURJ KHALIFA',
+  other: ['KEEP CLIMBING', "DON'T LOOK DOWN", 'THE AIR GETS THINNER', 'THE CLOUDS ARE BELOW YOU', 'NOBODY HAS BEEN THIS HIGH TODAY'],
+};
+
+export const STATE = {
+  ROUTE_SELECT: 'ROUTE_SELECT',
+  CLIMBING_COMBO: 'CLIMBING_COMBO',
+  CLIMB_ANIMATION: 'CLIMB_ANIMATION',
+  RESTING: 'RESTING',
+  VIEWING: 'VIEWING',
+  SLIPPING: 'SLIPPING',
+  DODGING: 'DODGING',
+  FALLING: 'FALLING',
+  PAUSED: 'PAUSED',
+  RUN_OVER: 'RUN_OVER',
+};
+
+const DIR_KEYS = { ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', ArrowUp: 'U', KeyW: 'U' };
+const STAND_HAND = 50;
+
+function urlSeed() {
+  try {
+    const v = new URLSearchParams(window.location.search).get('seed');
+    return v !== null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : null;
+  } catch { return null; }
+}
+
+export class ClimbScene extends Phaser.Scene {
+  constructor() { super('Climb'); }
+
+  init(data) {
+    this.tutorial = !!(data && data.tutorial);
+    this.seed = this.tutorial ? TUTORIAL_SEED : (data && data.seed) ?? urlSeed() ?? randomSeed();
+    // Dev teleport (code WARPZONE): start at this height on a save copy that is never written.
+    this.devStart = this.tutorial ? null : (data && data.devStart) ?? null;
+    this.devRun = this.devStart !== null;
+  }
+
+  create() {
+    this.prog = this.registry.get('progression');
+    if (this.devRun) this.prog = sandboxCopy(this.prog);
+    this.settings = this.prog.settings;
+    Audio.setVolumes(this.settings.music, this.settings.sfx);
+    buildClimberTexture(this, this.prog.data.look);
+
+    this.runRng = new SeededRandom(hashInts(this.seed, 31337));
+    this.clock = 0;
+    this.lastFramePerf = performance.now();
+    this.state = null;
+    this.paused = false;
+    // The scene instance is reused on restart: reset all per-run fields.
+    this.runId = (this.runId || 0) + 1;
+    this.combo = null;
+    this.recovery = null;
+    this.route = null;
+    this.routes = [];
+    this.prevRouteType = null;
+    this.photoBusy = false;
+    this.viewHint = null;
+    this.targetMark = null;
+    this.crumbleAt = 0;
+    this.crumbleUI = null;
+    this.gustAnnounced = null;
+    this.runOverUI = null;
+
+    this.mode = this.tutorial ? 'normal' : BALANCE.modes[this.settings.mode] ? this.settings.mode : 'normal';
+    this.modeCfg = modeConfig(this.mode);
+    this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
+    this.mountain.ensureLevel(GENERATE_AHEAD_LEVELS);
+    this.grip = new GripSystem(BALANCE, this.modeCfg);
+    this.dayNight = new DayNightSystem({ dayLengthSec: 600, startT: 0.09 });
+    this.background = new Background(this);
+    this.wall = new WallRenderer(this, this.mountain, this.seed);
+    this.weather = new WeatherSystem(this);
+    this.mechanics = this.tutorial ? null : new BiomeMechanics(new SeededRandom(hashInts(this.seed, 4242)));
+    this.effects = new Effects(this);
+    this.effects.reduced = this.settings.reducedParticles;
+    this.lightOverlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light).setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+    const start = this.mountain.getLevel(0).nodes[0];
+    this.climber = new Climber(this, start.x, start.y);
+    this.hud = new HUD(this);
+    this.routeUI = new RouteSelector(this, (i, confirm) => this.pickRoute(i, confirm));
+    this.comboUI = new ComboPrompt(this);
+    // Crystal Heights: each note of the crystal's call chimes and glints.
+    this.comboUI.onEchoCall = (note) => {
+      Audio.play('crystal', { dir: note.dir });
+      this.effects.sparkle(this.climber.x + (note.dir === 'L' ? -12 : note.dir === 'R' ? 12 : 0), this.climber.y - 26, 3);
+    };
+    this.restUI = new RestMenu(this, (a) => this.restAction(a));
+    this.floaters = [];
+    this.director = null;
+    if (this.tutorial) {
+      this.tutorialCard = new TutorialCoach(this);
+      this.director = new TutorialDirector(this, this.tutorialCard);
+    }
+
+    this.cam = this.cameras.main;
+    this.cam.setRoundPixels(true);
+    this.camY = start.y - STAND_HAND - GAME_HEIGHT * CAMERA_ANCHOR;
+    this.cam.setScroll(0, Math.round(this.camY));
+    this.lookOffset = 0;
+    this.revealUntil = 0;
+
+    this.node = start;
+    this.checkpoint = start;
+    this.run = { climbed: 0, slips: 0, falls: 0, perfects: 0, flawless: 0, firstSlip: true, newBestShown: false, startBest: this.tutorial ? 0 : this.prog.bestFor(this.mode), streak: 0, bestStreak: 0 };
+    this.run.gems = 0;
+    // One free fall per biome; the second fall in the same biome ends the run.
+    this.run.biomeFalls = {};
+    this.run.heightMarks = 0;
+    this.gearAllowed = !this.tutorial && this.mode === 'normal';
+    this.gear = {};
+    this.perk = null;
+    this.traderTag = null;
+    this.routeGems = [];
+    this.pendingGem = null;
+    this.recordMark = null;
+    this.recordPassed = false;
+    this.biomeId = null;
+    this.debugVisible = false;
+    this.bot = null;
+    this.lastJudge = '-';
+    this.eventT = 0;
+    this.auroraT = 0;
+    this.floatT = 0;
+    this.sitting = false;
+
+    this.wall.update(0, RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
+    this.wall.flush();
+
+    this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
+    this.input.keyboard.on('keydown', this.onKeyDown, this);
+    this.input.keyboard.on('keyup', this.onKeyUp, this);
+    this.onBlur = () => this.pauseGame();
+    this.game.events.on('blur', this.onBlur);
+    this.events.on('resume', this.onResume, this);
+    this.events.once('shutdown', this.cleanup, this);
+
+    if (!this.tutorial) this.prog.startRun();
+    this.refreshLook();
+    this.updateGearHud();
+    this.checkBiome(0);
+    this.enterRest(start, { initial: true });
+    if (this.devRun && this.devStart > 0) {
+      this.run.newBestShown = true;
+      // Climb on to the first rest ledge inside the biome: you start there, and
+      // it is your checkpoint, so a fall never drops you back a biome.
+      this.run.milestone = Infinity;
+      this.debugTeleport(this.devStart + 1);
+      for (let guard = 0; this.state !== STATE.RESTING && guard < 200; guard++) this.debugTeleport(levelToMeters(this.node.level) + 0.1);
+      this.hud.toastQueue.length = 0;
+      this.run.milestone = Math.floor(levelToMeters(this.node.level) / 100);
+      // Let the biome's mechanic see where we landed, then offer routes again.
+      this.mechanics.update(1, biomeMixAt(levelToMeters(this.node.level)));
+      if (this.state === STATE.ROUTE_SELECT) { this.routeUI.hide(); this.enterRouteSelect(); }
+    }
+    if (typeof window !== 'undefined') window.__atc = this;
+  }
+
+  // ---------------------------------------------------------------- timing
+  // Pausable game clock plus sub-frame precision from the DOM event timestamp.
+  now(event) {
+    const pn = performance.now();
+    let t = this.clock + Phaser.Math.Clamp(pn - this.lastFramePerf, 0, 50);
+    if (event && event.timeStamp) {
+      const lag = pn - event.timeStamp;
+      if (lag > 0 && lag < 120) t -= lag;
+    }
+    return t;
+  }
+
+  get forgiving() { return this.settings.forgiving && this.modeCfg.allowForgiving; }
+
+  // ---------------------------------------------------------------- input
+  onKeyUp(event) {
+    const dir = DIR_KEYS[event.code];
+    if (!dir || this.state !== STATE.CLIMBING_COMBO || !this.combo) return;
+    const broken = this.combo.release(dir, this.now(event));
+    if (broken) this.onNote(broken);
+  }
+
+  onKeyDown(event) {
+    if (event.repeat) return;
+    const code = event.code;
+    Audio.init();
+    if (this.director && this.tutorialCard.open) {
+      if (code === 'Escape' && this.tutorialCard.final) { this.prog.data.tutorialDone = true; this.prog.save(); this.scene.start('Menu'); }
+      else if (code === 'Escape' || code === 'KeyP') this.pauseGame();
+      else if (code === 'Space' || code === 'Enter' || DIR_KEYS[code] === 'U') this.tutorialCard.close();
+      return;
+    }
+    if (this.state === STATE.RUN_OVER && code === 'Escape') { this.scene.start('Menu'); return; }
+    if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
+    if (code === 'F3' || code === 'Backquote') { this.debugVisible = !this.debugVisible; if (!this.debugVisible) this.hud.setDebug(null); return; }
+    if (code === 'KeyB' && this.debugVisible) {
+      const modes = [null, 'perfect', 'sloppy'];
+      const next = modes[(modes.indexOf(this.bot ? this.bot.mode : null) + 1) % modes.length];
+      this.bot = next ? { mode: next, wait: 0, plans: null } : null;
+      this.hud.toast(`AUTOPILOT: ${next ? next.toUpperCase() : 'OFF'}`, COLORS.blue);
+      return;
+    }
+    const dir = DIR_KEYS[code];
+    const confirm = code === 'Space' || code === 'Enter';
+    switch (this.state) {
+      case STATE.ROUTE_SELECT:
+        if (code === 'ArrowLeft' || code === 'KeyA') this.cycleRoute(-1);
+        else if (code === 'ArrowRight' || code === 'KeyD') this.cycleRoute(1);
+        else if (dir === 'U' || confirm) this.pickRoute(this.selected, true);
+        else if (/^Digit[1-3]$/.test(code)) this.pickRoute(Number(code.slice(5)) - 1, true);
+        break;
+      case STATE.CLIMBING_COMBO:
+        if (dir) this.comboInput(dir, this.now(event));
+        break;
+      case STATE.SLIPPING:
+        if (dir && this.recovery) this.recoveryInput(dir, this.now(event));
+        break;
+      case STATE.DODGING:
+        if (dir) this.dodgeInput(dir, this.now(event));
+        break;
+      case STATE.RESTING:
+        if (code === 'KeyR' || code === 'ArrowDown' || code === 'KeyS') this.restAction('rest');
+        else if (code === 'KeyV') this.restAction('view');
+        else if (code === 'KeyC') this.restAction('photo');
+        else if (code === 'KeyT') this.restAction('trader');
+        else if (confirm || dir === 'U') this.restAction('continue');
+        break;
+      case STATE.VIEWING:
+        this.exitView();
+        break;
+      case STATE.RUN_OVER:
+        if (confirm || dir === 'U') this.scene.restart(this.devRun ? { devStart: this.devStart } : {});
+        break;
+      default:
+        break;
+    }
+  }
+
+  pauseGame() {
+    if (this.paused || !this.sys.isActive() || this.state === STATE.RUN_OVER) return;
+    this.paused = true;
+    Audio.setPaused(true);
+    this.scene.launch('Pause');
+    this.scene.pause();
+  }
+
+  onResume() {
+    this.paused = false;
+    this.settings = this.prog.settings;
+    this.effects.reduced = this.settings.reducedParticles;
+    Audio.setPaused(false);
+    Audio.setVolumes(this.settings.music, this.settings.sfx);
+    this.lastFramePerf = performance.now();
+    // Give the player a moment to find the rhythm again.
+    const shift = BALANCE.timing.resumeShiftMs;
+    if (this.state === STATE.CLIMBING_COMBO && this.combo) this.combo.shift(shift);
+    if (this.state === STATE.SLIPPING && this.recovery) this.recovery.shift(shift);
+    if (this.state === STATE.DODGING && this.dodge) {
+      this.dodge.shift(shift);
+      if (this.dodgeRock) {
+        // Restart the rock's drop so it still lands on the (shifted) beat.
+        this.tweens.killTweensOf(this.dodgeRock);
+        this.tweens.add({ targets: this.dodgeRock, y: this.climber.y - 22, duration: Math.max(200, this.dodge.notes[0].time - this.now()), ease: 'Quad.easeIn' });
+      }
+    }
+    if (this.state === STATE.ROUTE_SELECT && this.crumbleAt) this.crumbleAt = Math.max(this.crumbleAt, this.clock + 1200);
+    if (this.bot) this.bot.plans = null;
+    this.refreshLook();
+    this.updateGearHud();
+  }
+
+  // Re-reads the outfit and wallet (after the wardrobe or the trader).
+  refreshLook() {
+    this.climber.refreshTexture();
+    this.effects.setChalk(findCosmetic('chalk', this.prog.data.look.chalk || 'chalk-white'));
+    this.hud.setGems(this.prog.gems);
+  }
+
+  // ---------------------------------------------------------------- route selection
+  enterRouteSelect() {
+    this.state = STATE.ROUTE_SELECT;
+    this.grip.resetHang();
+    const node = this.node;
+    if (node.kind === 'ledge') {
+      this.climber.setPosition(node.x, node.y - STAND_HAND);
+      this.climber.setPose('hang');
+    }
+    this.routes = this.mountain.computeRoutes(node, { forgiving: this.forgiving });
+    if (this.mechanics) this.mechanics.decorateRoutes(this.routes, { mountain: this.mountain });
+    if (!this.director) this.rollGems();
+    this.startCrumble(node);
+    if (!this.routes.length) {
+      console.warn('No routes from', node.id);
+      this.startSlip();
+      return;
+    }
+    let sel = this.routes.findIndex((r) => r.type === (this.prevRouteType || 'normal'));
+    if (sel < 0) sel = this.routes.findIndex((r) => r.type === 'normal');
+    if (sel < 0 || this.grip.isLow) sel = 0;
+    this.selected = sel;
+    // Stone Wall: a due rockfall comes down as soon as you grab a hold; the
+    // routes appear once it has passed.
+    const rf = this.mechanics && this.mechanics.get('rockfall');
+    if (rf && rf.due && node.kind !== 'ledge' && node.hazard !== 'crumbling') { this.startRockfall(); return; }
+    this.routeUI.show(this.routes, sel, { x: this.climber.x, y: this.climber.y });
+    if (this.director) this.director.onRouteSelect(node);
+  }
+
+  // ---------------------------------------------------------------- rockfall (Stone Wall)
+  startRockfall() {
+    this.dodges = this.mechanics.get('rockfall').start(levelToMeters(this.node.level));
+    this.dodgeIndex = 0;
+    this.dodgeHits = 0;
+    this.state = STATE.DODGING;
+    this.routeUI.hide();
+    this.floatText('ROCKFALL!', COLORS.red, 14);
+    Audio.play('creak');
+    Audio.play('pebble', { count: 4 });
+    if (this.settings.shake) this.cam.shake(500, 0.002);
+    const biome = biomeAt(levelToMeters(this.node.level));
+    for (let i = 0; i < 3; i++) {
+      this.time.delayedCall(i * 220, () => this.effects.pebbleFall(this.climber.x + this.runRng.range(-30, 30), this.camY + 2, 3, biome.rock[3]));
+    }
+    this.nextDodge(ROCKFALL.warnMs);
+  }
+
+  nextDodge(leadInMs) {
+    const dir = this.dodges[this.dodgeIndex];
+    const mult = (this.forgiving ? BALANCE.timing.forgivingMultiplier : 1) * this.modeCfg.catchScale;
+    this.dodge = new ComboSystem({
+      pattern: [dir], beatMs: 1,
+      perfectMs: Math.round(ROCKFALL.perfectMs * mult), goodMs: Math.round(ROCKFALL.goodMs * mult),
+      earlyGraceMs: 150, leadInMs, startTime: this.now(),
+    });
+    this.comboUI.showRecovery(this.dodge, { label: `DODGE ${dir === 'L' ? 'LEFT' : 'RIGHT'}!` });
+    // The rock drops onto the climber and lands exactly on the beat.
+    const rock = this.add.image(this.climber.x + (dir === 'L' ? 5 : -5), this.camY - 14, 'rock_fall').setDepth(DEPTH.fx + 2).setScale(2);
+    let trail = 0;
+    this.tweens.add({
+      targets: rock, y: this.climber.y - 22, angle: 200, duration: leadInMs, ease: 'Quad.easeIn',
+      onUpdate: () => { if (++trail % 6 === 0) this.effects.pebbleFall(rock.x, rock.y - 8, 1, 0xa8743e); },
+    });
+    this.dodgeRock = rock;
+  }
+
+  dodgeInput(dir, t) {
+    if (!this.dodge) return;
+    const res = this.dodge.press(dir, t);
+    if (res.auto.length) this.dodgeResult(res.auto[0]);
+    else if (res.judged) this.dodgeResult(res.judged);
+  }
+
+  dodgeResult(note) {
+    this.comboUI.judge(note);
+    this.dodge = null;
+    const rock = this.dodgeRock;
+    this.dodgeRock = null;
+    if (rock) {
+      this.tweens.killTweensOf(rock);
+      this.tweens.add({ targets: rock, y: rock.y + 260, angle: rock.angle + 260, duration: 700, ease: 'Quad.easeIn', onComplete: () => rock.destroy() });
+    }
+    const biome = biomeAt(levelToMeters(this.node.level));
+    if (note.result !== 'miss') {
+      this.climber.hold(note.dir === 'L' ? 'perfectL' : 'perfectR', 280);
+      this.addStreak();
+      this.floatText(note.result === 'perfect' ? 'DODGED!' : 'CLOSE ONE!', COLORS.green, 12);
+      Audio.play('good');
+    } else {
+      this.dodgeHits++;
+      this.grip.change(-ROCKFALL.hitGrip * this.modeCfg.costScale);
+      this.breakStreak();
+      this.climber.hold('slip2', 300);
+      this.effects.pebbleFall(this.climber.x, this.climber.y - 8, 8, biome.rock[3]);
+      Audio.play('miss');
+      Audio.play('pebble', { count: 5 });
+      if (this.settings.shake) this.cam.shake(160, 0.005);
+      this.floatText(`HIT! -${Math.round(ROCKFALL.hitGrip * this.modeCfg.costScale)} GRIP`, COLORS.red, 12);
+      if (this.grip.isEmpty) { this.startSlip(); return; }
+    }
+    this.dodgeIndex++;
+    if (this.dodgeIndex < this.dodges.length) { this.nextDodge(ROCKFALL.nextMs); return; }
+    this.time.delayedCall(380, () => {
+      if (this.state !== STATE.DODGING) return;
+      this.comboUI.hide();
+      if (!this.dodgeHits) this.discover('rockfall-dodged');
+      this.state = STATE.ROUTE_SELECT;
+      this.grip.resetHang();
+      this.climber.setPose('hang');
+      this.routeUI.show(this.routes, this.selected, { x: this.climber.x, y: this.climber.y });
+    });
+  }
+
+  cycleRoute(d) {
+    const n = this.routes.length;
+    this.selected = (this.selected + d + n) % n;
+    this.routeUI.setSelected(this.selected);
+    Audio.play('ui');
+  }
+
+  pickRoute(i, confirm) {
+    if (this.state !== STATE.ROUTE_SELECT || !this.routes[i]) return;
+    if (this.director && this.director.holdRoutes) return;
+    if (i !== this.selected) {
+      this.selected = i;
+      this.routeUI.setSelected(i);
+      Audio.play('ui');
+    }
+    if (confirm) this.startCombo();
+  }
+
+  // Crumbling holds give you only a few seconds to pick a route.
+  startCrumble(node) {
+    this.clearCrumble();
+    if (node.hazard !== 'crumbling') return;
+    const ms = this.modeCfg.crumbleMs * (this.gear.quickdraws ? GEAR_FX.quickdrawScale : 1);
+    this.crumbleAt = this.clock + ms;
+    this.crumbleTotal = ms;
+    const g = this.add.graphics().setDepth(DEPTH.fx + 4);
+    const label = new PixelText(this, 0, 0, 'CRUMBLING!', { color: COLORS.red }).setOrigin(0.5, 0).setDepth(DEPTH.fx + 4);
+    this.crumbleUI = { g, label, creakT: 0 };
+    Audio.play('creak');
+  }
+
+  updateCrumble(dt) {
+    if (!this.crumbleAt || !this.crumbleUI) return;
+    const left = this.crumbleAt - this.clock;
+    const h = this.climber.head;
+    const { g, label } = this.crumbleUI;
+    const w = 30, x = Math.round(h.x - w / 2), y = Math.round(h.y - 30);
+    g.clear();
+    g.fillStyle(0x16141f, 0.85); g.fillRect(x - 1, y - 1, w + 2, 4);
+    g.fillStyle(left < 1000 ? 0xf0644b : 0xf2c14e, 1); g.fillRect(x, y, Math.max(0, Math.round((w * left) / this.crumbleTotal)), 2);
+    label.setPosition(Math.round(h.x), y - 9).setVisible(left > 1000 || Math.floor(left / 120) % 2 === 0);
+    const hold = this.wall.getHold(this.node.id);
+    if (hold) hold.x = this.node.x + (left < 1500 ? (Math.floor(this.clock / 60) % 2 ? 1 : -1) : 0);
+    this.crumbleUI.creakT += dt;
+    if (this.crumbleUI.creakT > 700) { this.crumbleUI.creakT = 0; Audio.play('creak'); this.effects.pebbleFall(this.node.x, this.node.y + 4, 1, 0x8a7f74); }
+    if (left <= 0) {
+      const node = this.node;
+      this.clearCrumble();
+      Audio.play('crumble');
+      this.effects.pebbleFall(node.x, node.y + 3, 10, 0x8a7f74);
+      this.effects.chalk(node.x, node.y);
+      const hs = this.wall.getHold(node.id);
+      if (hs) {
+        const debris = this.add.image(hs.x, hs.y, hs.texture.key).setDepth(DEPTH.fx);
+        this.tweens.add({ targets: debris, y: debris.y + 120, angle: 200, alpha: 0, duration: 900, ease: 'Quad.easeIn', onComplete: () => debris.destroy() });
+      }
+      this.floatText('THE HOLD BROKE!', COLORS.red, 12);
+      this.startSlip();
+    }
+  }
+
+  clearCrumble() {
+    this.crumbleAt = 0;
+    if (this.crumbleUI) { this.crumbleUI.g.destroy(); this.crumbleUI.label.destroy(); this.crumbleUI = null; }
+    const hold = this.node && this.wall.getHold(this.node.id);
+    if (hold) hold.x = this.node.x;
+  }
+
+  // ---------------------------------------------------------------- combo
+  startCombo() {
+    const route = this.routes[this.selected];
+    this.route = route;
+    this.prevRouteType = route.type;
+    if (this.director) this.director.onComboStart(route);
+    const keep = this.routeGems.find((g) => g.route === route) || null;
+    this.clearRouteGems(keep);
+    this.pendingGem = keep;
+    this.routeUI.hide();
+    this.clearCrumble();
+    this.state = STATE.CLIMBING_COMBO;
+    this.thermalEarned = false;
+    this.gustAnnounced = null;
+    let windowScale = route.windowScale * (route.echo ? route.echo.windowScale : 1);
+    const echoMs = route.echo ? echoCallMs(route) : 0;
+    if (this.gear.crampons && route.hazard === 'icy') windowScale /= BALANCE.hazards.icy.windowScale;
+    if (this.gear.chalk && levelToMeters(this.node.level) < GEAR_FX.chalkUntil) windowScale *= GEAR_FX.chalkWindow;
+    const w = timingWindows(BALANCE, { windowScale, forgiving: this.forgiving });
+    const r = BALANCE.ramp;
+    this.combo = new ComboSystem({
+      notes: route.notes,
+      minGapMs: r.minGapMs,
+      gustWindowScale: r.gustWindowScale,
+      holdReleaseGraceMs: r.holdReleaseGraceMs,
+      minPerfectMs: BALANCE.timing.minPerfectMs,
+      minGoodMs: BALANCE.timing.minGoodMs,
+      beatMs: route.beatMs,
+      perfectMs: w.perfectMs,
+      goodMs: w.goodMs,
+      earlyGraceMs: BALANCE.timing.earlyGraceMs,
+      leadInMs: BALANCE.timing.leadInMs + echoMs,
+      startTime: this.now(),
+    });
+    this.comboUI.show(this.combo, route, { echoOffset: echoMs });
+    this.clearTargetMark();
+    this.targetMark = this.add.image(route.target.x, route.target.y + 3, 'ring').setDepth(DEPTH.routeMarks).setTint(route.toLedge ? 0x9fd8ff : this.routeUI.colorOf(route)).setAlpha(0.8);
+    this.from = { x: this.climber.x, y: this.climber.y };
+    this.to = { x: route.target.x, y: route.target.y };
+    this.successes = 0;
+    Audio.play('cloth');
+  }
+
+  comboInput(dir, t) {
+    if (!this.combo) return;
+    const res = this.combo.press(dir, t);
+    res.auto.forEach((n) => this.onNote(n));
+    if (res.judged && this.state === STATE.CLIMBING_COMBO) this.onNote(res.judged);
+  }
+
+  onNote(note) {
+    if (this.state !== STATE.CLIMBING_COMBO) return;
+    const route = this.route;
+    if (this.perk === 'steady' && note.result === 'miss' && !this.combo.steadyUsed) {
+      this.combo.steadyUsed = true;
+      this.grip.change(-this.grip.noteCost(route, note.result) * 0.5);
+    } else this.grip.applyNote(route, note.result);
+    const style = this.comboUI.judge(note);
+    this.lastJudge = `${note.result.toUpperCase()}${note.reason ? ' ' + note.reason.toUpperCase() : ''} ${Math.round(note.offset)}MS`;
+    const n = this.combo.notes.length;
+    const biome = biomeAt(levelToMeters(route.target.level));
+    if (note.thermal && note.result === 'perfect') {
+      this.thermalEarned = true;
+      this.floatText('THERMAL!', '#ffb45a', 24);
+      Audio.play('gust');
+    }
+    if (note.result === 'perfect') this.addStreak();
+    else if (note.result === 'good' && this.perk === 'streaksaver' && !this.run.streakSaved && this.run.streak >= 3) {
+      this.run.streakSaved = true;
+      this.floatText('STREAK SAVED', '#ff9a3c', 20);
+    } else this.breakStreak();
+    if (note.reason === 'release') {
+      this.successes = Math.max(0, this.successes - 1);
+      this.climber.hold('slip2', 240);
+      Audio.play('miss');
+      if (this.settings.shake) this.cam.shake(90, 0.002);
+      this.floatText(style.text, style.color);
+      this.tryEnergyBar();
+      if (this.grip.isEmpty) this.startSlip();
+      return;
+    }
+    if (note.result !== 'miss') {
+      this.successes++;
+      const p = Math.min(0.85, (this.successes / n) * 0.85);
+      const tx = this.from.x + (this.to.x - this.from.x) * p;
+      const ty = this.from.y + (this.to.y - this.from.y) * p;
+      let pose;
+      if (note.dir === 'L') pose = note.result === 'perfect' ? 'perfectL' : 'reachL';
+      else if (note.dir === 'R') pose = note.result === 'perfect' ? 'perfectR' : 'reachR';
+      else pose = ['pull', 'stepL', 'stepR'][note.index % 3];
+      this.climber.setPose(pose);
+      this.climber.tweenTo(tx, ty, 150, 'Quad.easeOut');
+      const hx = this.climber.x + (note.dir === 'L' ? -10 : note.dir === 'R' ? 10 : 0), hy = this.climber.y - 2;
+      if (note.result === 'perfect') {
+        this.run.perfects++;
+        Audio.play('perfect', { streak: this.run.streak });
+        this.effects.sparkle(hx, hy, 6);
+        this.effects.ring(hx, hy, this.run.streak >= 10 ? 0xff9a3c : 0xf2d06a, this.run.streak >= 10 ? 16 : 12);
+        this.climber.flash(50);
+        this.climber.squash(0.88, 1.14, 180);
+        if (this.settings.shake) this.cam.shake(60, 0.002);
+      } else {
+        Audio.play('grab');
+        this.climber.squash(0.95, 1.06, 140);
+      }
+      if (note.dir === 'U') Audio.play('boot', { snow: biome.weather.snow > 0.3 });
+      this.effects.chalk(hx, hy);
+      if (note.holdMs) { this.climber.setPose('pull'); this.floatText('HOLD IT...', COLORS.gold, 10); }
+    } else {
+      this.climber.hold(this.grip.isLow ? 'slip2' : 'hesitate', 220);
+      Audio.play('miss');
+      if (route.hazard === 'loose') {
+        this.effects.pebbleFall(route.target.x, route.target.y + 4, 6, 0xa8743e);
+        Audio.play('pebble', { count: 5 });
+      }
+      if (route.hazard === 'icy') this.effects.snowBurst(route.target.x, route.target.y + 4);
+      if (this.settings.shake) this.cam.shake(90, 0.002);
+    }
+    if (!note.holdMs || note.result === 'miss') this.floatText(style.text, style.color, 0, note.result === 'perfect');
+    this.tryEnergyBar();
+    if (this.grip.isEmpty) { this.startSlip(); return; }
+    if (this.combo.done) this.finishCombo();
+  }
+
+  // ---------------------------------------------------------------- perfect streaks
+  addStreak() {
+    const n = ++this.run.streak;
+    this.run.bestStreak = Math.max(this.run.bestStreak, n);
+    this.hud.setStreak(n);
+    const cfg = BALANCE.streak;
+    const last = cfg.milestones[cfg.milestones.length - 1];
+    const ms = cfg.milestones.find((m) => m.at === n);
+    const grip = ms ? ms.grip : n > last.at && (n - last.at) % cfg.every === 0 ? cfg.laterGrip : 0;
+    if (grip) {
+      this.grip.change(grip);
+      Audio.play('streakmilestone');
+      this.effects.sparkle(this.climber.x, this.climber.y - 6, 16);
+      this.effects.ring(this.climber.x, this.climber.y - 10, 0xff9a3c, 30, 420);
+      this.hud.flashScreen(0xff9a3c, 0.15, 300);
+      if (this.settings.shake) this.cam.shake(160, 0.004);
+      this.floatText(`${n} PERFECT! +${grip} GRIP`, '#ff9a3c', 20, true);
+      this.awardGems(GEM_INCOME.streak[n] || GEM_INCOME.streak.later);
+    }
+    if (!this.director) this.prog.recordStreak(n).forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+  }
+
+  breakStreak() {
+    if (this.run.streak >= 5) {
+      this.hud.toast(`STREAK ENDED AT ${this.run.streak}`, COLORS.dim);
+      Audio.play('streakbreak', { streak: this.run.streak });
+    }
+    this.run.streak = 0;
+    this.run.streakSaved = false;
+    this.hud.setStreak(0);
+  }
+
+  // ---------------------------------------------------------------- gems
+  get gemScale() { return GEM_INCOME.modeScale[this.mode] || 1; }
+
+  // Each offered route may carry a gem on its target. Only the route you take
+  // keeps its gem; the others fade away.
+  rollGems() {
+    this.clearRouteGems();
+    const scale = this.perk === 'gemsense' ? GEAR_FX.gemSense : 1;
+    for (const r of this.routes) {
+      r.gem = this.mountain.routeGem(r, scale * ((r.mods && r.mods.gemScale) || 1) * (r.echo ? r.echo.gemScale : 1));
+      if (!r.gem) continue;
+      const y = r.target.y - 6;
+      const img = this.add.image(r.target.x, y, `gem_${r.gem.type}`).setDepth(DEPTH.holds + 2).setScale(0);
+      this.tweens.add({ targets: img, scale: 1, duration: 320, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: img, y: y - 1, duration: 420, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [1] });
+      this.effects.sparkle(r.target.x, y, 4);
+      this.routeGems.push({ route: r, img });
+    }
+  }
+
+  fadeGem(g) {
+    if (!g || !g.img) return;
+    const img = g.img;
+    this.tweens.killTweensOf(img);
+    this.tweens.add({ targets: img, alpha: 0, y: img.y - 5, duration: 280, onComplete: () => img.destroy() });
+  }
+
+  clearRouteGems(keep = null) {
+    (this.routeGems || []).forEach((g) => { if (g !== keep) this.fadeGem(g); });
+    this.routeGems = [];
+  }
+
+  dropPendingGem() {
+    this.fadeGem(this.pendingGem);
+    this.pendingGem = null;
+  }
+
+  collectGem({ route, img }) {
+    const gem = GEMS[route.gem.type];
+    const node = route.target;
+    this.mountain.takeGem(route.gem);
+    const firstOfKind = this.prog.found(gem.id) === 0;
+    const lucky = this.gear.charm > 0;
+    if (lucky) { this.gear.charm--; this.updateGearHud(); }
+    const value = Math.round(gem.value * this.gemScale * (lucky ? 2 : 1));
+    this.prog.addGems(value, gem.id);
+    this.run.gems += value;
+    Audio.play('gem', { value: gem.value });
+    this.effects.sparkle(node.x, node.y - 6, 8);
+    this.effects.ring(node.x, node.y - 6, gem.color, 14, 300);
+    this.floatText(`${gem.name} +${value}`, toCss(gem.color), 26, true);
+    if (firstOfKind) this.hud.toast(`NEW GEM FOUND: ${gem.name}`, toCss(gem.color));
+    const sx = (img ? img.x : node.x) - this.cam.scrollX, sy = (img ? img.y : node.y - 6) - this.cam.scrollY;
+    if (img) { this.tweens.killTweensOf(img); img.destroy(); }
+    this.flyingGems = (this.flyingGems || []).filter((f) => f.active);
+    if (this.flyingGems.length >= 4) this.flyingGems.shift().destroy();
+    const fly = this.add.image(sx, sy, `gem_${gem.id}`).setScrollFactor(0).setDepth(DEPTH.hud + 2);
+    this.flyingGems.push(fly);
+    this.tweens.add({ targets: fly, x: GEM_TARGET.x, duration: 520, ease: 'Sine.easeOut' });
+    this.tweens.add({
+      targets: fly, y: GEM_TARGET.y, scale: { from: 1.8, to: 1 }, duration: 520, ease: 'Cubic.easeIn',
+      onComplete: () => { fly.destroy(); this.hud.setGems(this.prog.gems, true); this.hud.gemGain(value, toCss(gem.color)); Audio.play('tick'); },
+    });
+  }
+
+  // Small gem rewards outside the wall stones (height, streaks, records).
+  awardGems(base) {
+    if (this.director || !base) return;
+    const value = Math.max(1, Math.round(base * this.gemScale));
+    this.prog.addGems(value);
+    this.run.gems += value;
+    this.hud.setGems(this.prog.gems, true);
+    this.hud.gemGain(value);
+  }
+
+  checkHeightGems() {
+    if (this.director) return;
+    const marks = Math.floor((this.run.maxHeight || 0) / GEM_INCOME.heightEvery);
+    if (marks <= this.run.heightMarks) return;
+    const gained = marks - this.run.heightMarks;
+    this.run.heightMarks = marks;
+    this.awardGems(gained);
+  }
+
+  // ---------------------------------------------------------------- gear, perks & the trader
+  // Packed gear is spent when you leave base camp at the start of a Normal run.
+  activateLoadout() {
+    if (!this.gearAllowed) return;
+    const used = this.prog.consumePack();
+    this.gear = {};
+    used.forEach((id) => { this.gear[id] = id === 'charm' ? GEAR_FX.charmGems : 1; });
+    this.perk = this.prog.data.activePerk;
+    if (used.length) {
+      Audio.play('gear');
+      this.hud.toast(`GEAR: ${used.map((id) => GEAR_BY_ID[id].name).join(', ')}`, COLORS.green);
+    }
+    if (this.perk) this.hud.toast(`PERK: ${PERK_BY_ID[this.perk].name}`, COLORS.gold);
+    this.updateGearHud();
+  }
+
+  updateGearHud() {
+    if (!this.gearAllowed) { this.hud.setGear([]); return; }
+    const list = [];
+    if (this.run.departed) {
+      for (const id of Object.keys(this.gear)) list.push({ icon: GEAR_BY_ID[id].icon, used: !this.gear[id] });
+      if (this.perk) list.push({ icon: PERK_BY_ID[this.perk].icon, used: false });
+    } else {
+      // Before leaving base camp: show what is packed.
+      this.prog.data.packed.forEach((id) => list.push({ icon: GEAR_BY_ID[id].icon, used: false }));
+      if (this.prog.data.activePerk) list.push({ icon: PERK_BY_ID[this.prog.data.activePerk].icon, used: false });
+    }
+    this.hud.setGear(list);
+  }
+
+  // The energy bar saves you once when grip runs (nearly) out.
+  tryEnergyBar() {
+    if (!this.gear.energy || this.grip.value > 12) return;
+    this.gear.energy = 0;
+    this.grip.change(GEAR_FX.energyGrip);
+    Audio.play('gear');
+    this.effects.sparkle(this.climber.x, this.climber.y - 10, 8);
+    this.floatText(`ENERGY BAR! +${GEAR_FX.energyGrip} GRIP`, COLORS.green, 26, true);
+    this.updateGearHud();
+  }
+
+  atTrader() { return !this.tutorial && this.node && this.node.level === 0 && !!this.wall.trader; }
+
+  showTraderTag() {
+    this.hideTraderTag();
+    if (!this.atTrader()) return;
+    const t = this.wall.trader;
+    const tag = new PixelText(this, Math.round(t.x), Math.round(t.y - 44), 'T  TRADER', { color: COLORS.gold }).setOrigin(0.5, 0).setDepth(DEPTH.fx + 5);
+    const gem = this.add.image(Math.round(t.x), Math.round(t.y - 50), 'icon_gem').setDepth(DEPTH.fx + 5);
+    this.tweens.add({ targets: [tag, gem], y: '-=2', duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    [tag, t].forEach((o) => o.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.restAction('trader')));
+    this.traderTag = [tag, gem];
+  }
+
+  hideTraderTag() {
+    if (this.traderTag) this.traderTag.forEach((o) => o.destroy());
+    this.traderTag = null;
+    if (this.wall.trader && this.wall.trader.active) this.wall.trader.removeAllListeners('pointerdown').disableInteractive();
+  }
+
+  openTrader() {
+    if (this.paused) return;
+    this.paused = true;
+    Audio.play('select');
+    this.scene.launch('Shop', { mode: 'trader', returnTo: 'Climb', departed: !!this.run.departed, gearAllowed: this.gearAllowed });
+    this.scene.pause();
+  }
+
+  // ---------------------------------------------------------------- big moments
+  celebrateRecord() {
+    Audio.play('fanfare');
+    this.hud.flashScreen(0xf2c14e, 0.25, 420);
+    this.hud.celebrate({ title: 'NEW RECORD!', sub: `BEST WAS ${Math.floor(this.run.startBest)} M`, flicker: true });
+    const v = this.cam.worldView;
+    this.effects.confettiBurst(v.x + 40, v.y + 30, 30);
+    this.effects.confettiBurst(v.right - 40, v.y + 30, 30);
+    this.effects.confettiBurst(this.climber.x, this.climber.y - 30, 20);
+    if (this.settings.shake) this.cam.shake(240, 0.004);
+    this.awardGems(GEM_INCOME.record);
+  }
+
+  // A banner every 100 m (only the first time this run reaches it).
+  checkMilestone(h) {
+    if (this.director) return;
+    const m = Math.floor(h / 100);
+    if (m <= (this.run.milestone || 0)) return;
+    this.run.milestone = m;
+    Audio.play('milestone');
+    this.effects.sparkle(this.climber.x, this.climber.y - 10, 10);
+    this.hud.celebrate({ title: `${m * 100} M`, sub: MILESTONE_LINES[m] || MILESTONE_LINES.other[m % MILESTONE_LINES.other.length], color: COLORS.text });
+  }
+
+  // ---------------------------------------------------------------- record marker
+  // A subtle flag line across the wall at this mode's record height.
+  updateRecordMark() {
+    const best = this.run.startBest;
+    if (best < 3 || this.recordPassed) return;
+    const y = Math.round(-best * PX_PER_METER);
+    if (!this.recordMark) {
+      if (y < this.camY - 80) return;
+      const b = this.mountain.boundsAt(best / METERS_PER_LEVEL);
+      const g = this.add.graphics().setDepth(DEPTH.wall + 2);
+      for (let x = Math.round(b.l) - 6; x < b.r + 6; x += 6) {
+        g.fillStyle(0xf2c14e, 0.55); g.fillRect(x, y, 3, 1);
+        g.fillStyle(0x16141f, 0.35); g.fillRect(x, y + 1, 3, 1);
+      }
+      const flag = this.add.image(Math.round(b.r) + 2, y + 1, 'flag').setOrigin(0.1, 1).setDepth(DEPTH.decor + 1);
+      const label = new PixelText(this, Math.round(b.r) - 2, y - 8, `RECORD ${Math.floor(best)} M`, { color: COLORS.gold }).setOrigin(1, 0).setDepth(DEPTH.decor + 1).setAlpha(0.85);
+      this.recordMark = { g, flag, label, y };
+    }
+    if (levelToMeters(this.node.level) > best) {
+      this.recordPassed = true;
+      const m = this.recordMark;
+      this.effects.sparkle(m.flag.x, m.y - 10, 14);
+      this.tweens.add({ targets: m.flag, y: m.flag.y - 8, scaleY: 1.3, duration: 260, yoyo: true, ease: 'Quad.easeOut' });
+      this.tweens.add({ targets: [m.g, m.flag, m.label], alpha: 0, duration: 1600, delay: 1400, onComplete: () => { m.g.destroy(); m.flag.destroy(); m.label.destroy(); } });
+      this.recordMark = null;
+    }
+  }
+
+  // Per-frame combo upkeep: late misses, finished holds and gust warnings.
+  updateCombo(now) {
+    const combo = this.combo;
+    combo.update(now).forEach((n) => this.onNote(n));
+    if (this.combo !== combo || this.state !== STATE.CLIMBING_COMBO) return;
+    for (const n of combo.updateHolds(now)) {
+      Audio.play('held');
+      this.effects.sparkle(this.climber.x, this.climber.y, 3);
+      this.floatText('HELD!', COLORS.gold);
+    }
+    const gust = combo.notes.find((n) => n.gust && !n.result);
+    if (gust && gust.time - now < 1300 && this.gustAnnounced !== combo) {
+      this.gustAnnounced = combo;
+      Audio.play('gust');
+      this.floatText('GUST INCOMING', COLORS.blue, 16);
+    }
+    this.gustActive = !!gust && gust.time - now < 1300;
+    this.climber.offsetX = this.gustActive && Math.floor(now / 140) % 2 ? 1 : 0;
+    if (combo.done) this.finishCombo();
+  }
+
+  finishCombo() {
+    const combo = this.combo;
+    if (!combo || this.state !== STATE.CLIMBING_COMBO) return;
+    this.gustActive = false;
+    this.climber.offsetX = 0;
+    const s = combo.summary();
+    const route = this.route;
+    const ok = s.miss <= BALANCE.combo.maxMissesForSuccess;
+    this.grip.applyComboEnd(s, ok);
+    this.state = STATE.CLIMB_ANIMATION;
+    this.clearTargetMark();
+    this.time.delayedCall(280, () => { if (this.comboUI.combo === combo) this.comboUI.hide(); });
+    this.combo = null;
+    if (this.director) this.director.onComboEnd(route, s, ok);
+    if (ok) this.completeClimb(route, s);
+    else this.failClimb();
+  }
+
+  async completeClimb(route, s) {
+    const t = route.target;
+    if (route.echo && s.allPerfect) {
+      this.grip.change(route.echo.perfectGrip);
+      this.floatText(`PERFECT ECHO +${route.echo.perfectGrip} GRIP`, '#b8fff4', 22);
+      Audio.play('streakmilestone');
+      this.discover('crystal-echo');
+    }
+    if (route.mods && route.mods.discovery) this.discover(route.mods.discovery);
+    if (s.miss === 1) {
+      this.floatText('SHAKY...', COLORS.dim, 10);
+      await this.climber.hold('hesitate', 260);
+    }
+    if (s.allPerfect) {
+      this.run.flawless++;
+      Audio.play('flawless');
+      this.effects.sparkle(t.x, t.y, 10);
+      this.floatText(`FLAWLESS +${BALANCE.combo.perfectComboBonus} GRIP`, COLORS.gold, 12);
+    }
+    if (t.kind === 'ledge') {
+      this.climber.setPose('pull');
+      await this.climber.tweenTo(t.x, t.y + 2, 200, 'Quad.easeOut');
+      this.climber.setPose('land');
+      this.climber.setPosition(t.x, t.y + 24);
+      await this.climber.tweenTo(t.x, t.y, 220, 'Back.easeOut');
+      this.climber.squash(1.16, 0.84, 220);
+      Audio.play('boot');
+      this.effects.chalk(t.x, t.y);
+      await this.climber.hold('stand', 150);
+    } else {
+      const flourish = s.allPerfect ? (t.x < this.from.x ? 'perfectL' : 'perfectR') : 'grab';
+      this.climber.setPose(flourish);
+      await this.climber.tweenTo(t.x, t.y, s.allPerfect ? 170 : 240, s.allPerfect ? 'Back.easeOut' : 'Sine.easeOut');
+      Audio.play('grab', { icy: t.hazard === 'icy' });
+      this.climber.squash(1.1, 0.9, 160);
+      this.effects.chalk(t.x, t.y + 2);
+      if (t.hazard === 'icy') this.effects.snowBurst(t.x, t.y + 3);
+      this.flashHold(t.id);
+      await this.climber.hold('grab', 120);
+    }
+    if (this.thermalEarned && route.thermal) {
+      this.thermalEarned = false;
+      this.arrive(t, route.heightGain, { stay: true });
+      await this.thermalLift(route.thermal);
+      return;
+    }
+    this.arrive(t, route.heightGain);
+  }
+
+  // Above the Clouds: a perfect thermal note lets the updraft carry you higher.
+  async thermalLift({ to, gain }) {
+    this.state = STATE.CLIMB_ANIMATION;
+    this.climber.setPose('pull');
+    Audio.play('gust');
+    for (let i = 0; i < 6; i++) {
+      this.time.delayedCall(i * 70, () => this.effects.breathPuff(this.climber.x + this.runRng.range(-8, 8), this.climber.y + 14));
+    }
+    await this.climber.tweenTo(to.x, to.y, 560, 'Sine.easeInOut');
+    this.climber.setPose('grab');
+    Audio.play('grab');
+    this.effects.chalk(to.x, to.y);
+    this.effects.sparkle(to.x, to.y, 6);
+    this.flashHold(to.id);
+    this.floatText(`LIFTED +${gain}M`, '#ffb45a', 12);
+    this.discover('thermal-ride');
+    await this.climber.hold('grab', 140);
+    this.arrive(to, gain);
+  }
+
+  async failClimb() {
+    this.dropPendingGem();
+    this.floatText('LOST THE HOLD', COLORS.red, 10);
+    await this.climber.hold('slip2', 220);
+    Audio.play('pebble', { count: 2, volume: 0.6 });
+    await this.climber.tweenTo(this.from.x, this.from.y, 260, 'Quad.easeIn');
+    this.climber.setPose('hang');
+    if (this.grip.isEmpty) { this.startSlip(); return; }
+    this.enterRouteSelect();
+  }
+
+  // stay: record the arrival but leave the next state to the caller.
+  arrive(node, gain, { stay = false } = {}) {
+    this.node = node;
+    this.run.climbed += gain;
+    const h = levelToMeters(node.level);
+    this.run.maxHeight = Math.max(this.run.maxHeight || 0, h);
+    if (this.director) this.director.onArrive(node);
+    else this.prog.addClimbed(gain);
+    const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] } : this.prog.recordHeight(h, this.mode);
+    if (newBest && !this.run.newBestShown && this.run.startBest > 0) {
+      this.run.newBestShown = true;
+      this.celebrateRecord();
+    }
+    unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+    if (this.pendingGem && this.pendingGem.route.target === node) this.collectGem(this.pendingGem);
+    this.pendingGem = null;
+    this.checkHeightGems();
+    this.checkMilestone(h);
+    this.checkBiome(h);
+    this.mountain.ensureLevel(node.level + GENERATE_AHEAD_LEVELS);
+    this.mountain.prune(Math.min(this.checkpoint.level, node.level - KEEP_BELOW_LEVELS));
+    if (stay) return;
+    if (node.kind === 'ledge') this.enterRest(node);
+    else this.enterRouteSelect();
+  }
+
+  // ---------------------------------------------------------------- slipping & falling
+  startSlip() {
+    if (this.state === STATE.SLIPPING || this.state === STATE.FALLING) return;
+    this.state = STATE.SLIPPING;
+    this.dodge = null;
+    this.routeUI.hide();
+    this.comboUI.hide();
+    this.clearTargetMark();
+    this.clearCrumble();
+    this.gustActive = false;
+    this.combo = null;
+    this.clearRouteGems();
+    this.dropPendingGem();
+    this.breakStreak();
+    this.run.slips++;
+    this.climber.stopTweens();
+    const cp = this.checkpoint;
+    const catchLevel = this.mountain.catchLevelBelow(this.node.level - BALANCE.slip.slideLevels, cp.level);
+    let catchNode = cp;
+    if (catchLevel !== null) {
+      const lv = this.mountain.getLevel(catchLevel);
+      catchNode = lv.nodes.slice().sort((a, b) => Math.abs(a.x - this.climber.x) - Math.abs(b.x - this.climber.x))[0];
+    }
+    this.catchNode = catchNode;
+    const catchY = catchNode.kind === 'ledge' ? catchNode.y - STAND_HAND : catchNode.y;
+    this.climber.setPose('slip');
+    Audio.play('slip');
+    const biome = biomeAt(levelToMeters(this.node.level));
+    this.effects.pebbleFall(this.climber.x, this.climber.y + 10, 8, biome.rock[3]);
+    if (biome.weather.snow > 0.3) this.effects.snowBurst(this.climber.x, this.climber.y + 6);
+    this.effects.chalk(this.climber.x, this.climber.y);
+    if (this.settings.shake) this.cam.shake(260, 0.006);
+    this.floatText('SLIPPING!', COLORS.red, 12);
+
+    const cfg = BALANCE.slip;
+    const extra = this.run.firstSlip ? cfg.firstSlipBonusMs : 0;
+    this.run.firstSlip = false;
+    const mult = (this.forgiving ? BALANCE.timing.forgivingMultiplier : 1) * this.modeCfg.catchScale;
+    const dir = this.runRng.pick(['L', 'U', 'R']);
+    this.recovery = new ComboSystem({
+      pattern: [dir], beatMs: 1,
+      perfectMs: Math.round(cfg.perfectMs * mult), goodMs: Math.round((cfg.goodMs + extra) * mult),
+      earlyGraceMs: 150, leadInMs: cfg.leadInMs, startTime: this.now(),
+    });
+    this.comboUI.showRecovery(this.recovery);
+    this.climber.tweenTo(catchNode.x, catchY, cfg.leadInMs, 'Quad.easeIn');
+  }
+
+  recoveryInput(dir, t) {
+    const res = this.recovery.press(dir, t);
+    if (res.auto.length) return this.recoveryFail(res.auto[0]);
+    if (!res.judged) return;
+    if (res.judged.result === 'miss') this.recoveryFail(res.judged);
+    else this.recoverySuccess(res.judged);
+  }
+
+  async recoverySuccess(note, byRope = false) {
+    if (this.director) this.director.onSlipCaught();
+    if (!byRope) this.comboUI.judge(note);
+    this.recovery = null;
+    this.state = STATE.CLIMB_ANIMATION;
+    this.lastJudge = byRope ? 'RECOVERY BY SPARE ROPE' : `RECOVERY ${note.result.toUpperCase()} ${Math.round(note.offset)}MS`;
+    const node = this.catchNode;
+    this.climber.stopTweens();
+    const y = node.kind === 'ledge' ? node.y - STAND_HAND : node.y;
+    this.climber.setPose('grab');
+    Audio.play('recover');
+    this.effects.chalk(node.x, y);
+    if (this.settings.shake) this.cam.shake(120, 0.004);
+    this.grip.set(note.result === 'perfect' ? BALANCE.grip.afterPerfectRecovery : BALANCE.grip.afterRecovery);
+    this.floatText(byRope ? 'THE SPARE ROPE HELD!' : note.result === 'perfect' ? 'GREAT CATCH!' : 'CAUGHT IT!', COLORS.green, 12);
+    await this.climber.tweenTo(node.x, y, 110, 'Quad.easeOut');
+    await this.climber.hold('grab', 350);
+    this.comboUI.hide();
+    this.node = node;
+    if (node.kind === 'ledge') this.respawnAt(node, 'CAUGHT THE LEDGE', false);
+    else this.enterRouteSelect();
+  }
+
+  recoveryFail(note) {
+    if (note) {
+      this.comboUI.judge(note);
+      this.lastJudge = `RECOVERY MISS ${note.reason ? note.reason.toUpperCase() : ''}`;
+    }
+    this.recovery = null;
+    if (this.gear.rope > 0) {
+      this.gear.rope = 0;
+      Audio.play('gear');
+      this.updateGearHud();
+      this.recoverySuccess({ result: 'good', offset: 0 }, true);
+      return;
+    }
+    this.startFall();
+  }
+
+  async startFall() {
+    if (this.director) this.director.onFall();
+    this.state = STATE.FALLING;
+    this.run.falls++;
+    this.climber.stopTweens();
+    this.time.delayedCall(250, () => this.comboUI.hide());
+    Audio.play('fall');
+    this.climber.setPose('fall');
+    const cp = this.checkpoint;
+    const dist = cp.y - this.climber.y;
+    const stretch = biomeStretchAt(levelToMeters(this.node.level));
+    const fallsHere = this.director ? 0 : (this.run.biomeFalls[stretch] || 0) + 1;
+    if (!this.director) this.run.biomeFalls[stretch] = fallsHere;
+    this.runOverReason = this.modeCfg.permadeath ? null : fallsHere >= 2 ? `A SECOND FALL IN ${biomeAt(levelToMeters(this.node.level)).name}` : null;
+    if (this.modeCfg.permadeath || this.runOverReason) {
+      this.climber.tweenTo(this.climber.x, this.climber.y + 220, 1100, 'Quad.easeIn');
+      this.time.delayedCall(700, () => this.cam.fadeOut(600, 10, 12, 20));
+      this.time.delayedCall(1400, () => this.runOver());
+      return;
+    }
+    if (dist < 170) {
+      await this.climber.tweenTo(cp.x, cp.y, 300 + dist * 2, 'Quad.easeIn');
+      this.climber.setPose('land');
+      Audio.play('land');
+      this.effects.chalk(cp.x, cp.y);
+      this.effects.chalk(cp.x - 6, cp.y);
+      if (this.settings.shake) this.cam.shake(200, 0.008);
+      this.floatText('LANDED SAFELY', COLORS.text, 12);
+      await this.climber.hold('land', 550);
+      this.respawnAt(cp, 'YOU LANDED ON THE LEDGE', false);
+      this.warnLastFall();
+    } else {
+      this.climber.tweenTo(this.climber.x, this.climber.y + 150, 800, 'Quad.easeIn');
+      this.time.delayedCall(420, () => {
+        this.cam.fadeOut(420, 10, 12, 20);
+        this.cam.once('camerafadeoutcomplete', () => {
+          this.respawnAt(cp, cp.level === 0 ? 'BACK AT BASE CAMP' : 'BACK AT THE LAST CHECKPOINT', true);
+          this.warnLastFall();
+          this.cam.fadeIn(650, 10, 12, 20);
+        });
+      });
+    }
+  }
+
+  warnLastFall() {
+    if (this.director) return;
+    this.hud.toast('FALL USED: THE NEXT ONE HERE SENDS YOU BACK TO 0 M', COLORS.red);
+  }
+
+  // Summit mode: one fall ends the run. Other modes: a second fall in one biome.
+  runOver() {
+    this.state = STATE.RUN_OVER;
+    this.routeUI.hide();
+    this.comboUI.hide();
+    this.restUI.hide();
+    this.hud.setVisible(false);
+    Audio.play('runover');
+    const best = this.prog.bestFor(this.mode);
+    const reached = this.run.maxHeight || 0;
+    const add = (o) => o.setScrollFactor(0).setDepth(DEPTH.overlay + 1);
+    const W = GAME_WIDTH / 2;
+    this.runOverUI = [
+      add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0c14, 1).setOrigin(0, 0)),
+      add(new PixelText(this, W, 70, 'THE MOUNTAIN WINS', { color: COLORS.red }).setOrigin(0.5, 0).setScale(2)),
+      add(new PixelText(this, W, 96, `${this.modeCfg.label} RUN: ${reached.toFixed(0)} M`, { color: COLORS.text }).setOrigin(0.5, 0).setScale(2)),
+      add(new PixelText(this, W, 120, reached >= best && reached > 0 ? `A NEW ${this.modeCfg.label} RECORD` : `${this.modeCfg.label} RECORD ${best.toFixed(0)} M`, { color: reached >= best && reached > 0 ? COLORS.gold : COLORS.dim }).setOrigin(0.5, 0)),
+      ...(this.runOverReason ? [add(new PixelText(this, W, 58, `${this.runOverReason}: BACK TO 0 M`, { color: COLORS.dim }).setOrigin(0.5, 0))] : []),
+      add(new PixelText(this, W, 132, `PERFECT MOVES ${this.run.perfects}   BEST STREAK ${this.run.bestStreak}   SLIPS SURVIVED ${Math.max(0, this.run.slips - this.run.falls)}`, { color: COLORS.faint }).setOrigin(0.5, 0)),
+      add(new PixelText(this, W, 144, `GEMS FOUND +${this.run.gems}   WALLET ◆${this.prog.gems}`, { color: '#9fe8ff' }).setOrigin(0.5, 0)),
+      add(new PixelText(this, W, 160, 'SPACE  CLIMB AGAIN        ESC  TITLE', { color: COLORS.green }).setOrigin(0.5, 0)),
+    ];
+    this.cam.fadeIn(500, 10, 12, 20);
+  }
+
+  respawnAt(cp, message, snap) {
+    this.climber.stopTweens();
+    this.grip.restoreFull();
+    this.node = cp;
+    if (snap) {
+      this.camY = cp.y - STAND_HAND - GAME_HEIGHT * CAMERA_ANCHOR;
+      this.cam.setScroll(0, Math.round(this.camY));
+    }
+    this.enterRest(cp, { respawn: true, message });
+  }
+
+  // ---------------------------------------------------------------- resting
+  enterRest(node, opts = {}) {
+    this.state = STATE.RESTING;
+    this.node = node;
+    this.checkpoint = node;
+    this.routeUI.hide();
+    this.comboUI.hide();
+    this.clearCrumble();
+    this.climber.stopTweens();
+    this.climber.setPosition(node.x, node.y);
+    this.climber.setPose('stand');
+    this.sitting = false;
+    this.grip.resetHang();
+    const seg = this.mountain.segmentForLevel(node.level);
+    const rest = (seg && seg.rest) || { type: 'ledge', name: 'LEDGE' };
+    let title = rest.name || 'LEDGE';
+    let subtitle = 'CHECKPOINT  •  GRIP RESTORED';
+    let detail = '';
+    if (opts.initial) { title = this.tutorial ? 'TRAINING CRAG' : 'BASE CAMP'; subtitle = this.tutorial ? 'TUTORIAL' : 'THE MOUNTAIN IS WAITING'; }
+    else if (opts.respawn) subtitle = opts.message || 'BACK AT THE LAST CHECKPOINT';
+    else if (this.director) Audio.play('checkpoint');
+    else {
+      Audio.play('checkpoint');
+      if (rest.viewpoint) {
+        const r = this.prog.discoverViewpoint(rest.viewpoint);
+        if (r.isNew) { detail = 'NEW VIEWPOINT'; this.hud.toast(`VIEWPOINT: ${rest.viewpoint}`, COLORS.blue); }
+        r.unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+        this.revealUntil = this.clock + 5000;
+        Audio.swell(28);
+      }
+      if (rest.discovery) {
+        const r = this.discover(rest.discovery);
+        if (r) detail = DISCOVERIES[rest.discovery].text;
+      }
+    }
+    this.restInfo = { title, subtitle, detail, trader: this.atTrader() };
+    this.restUI.show({ ...this.restInfo, sitting: false });
+    this.showTraderTag();
+    Audio.setMusicIntensity(0.6);
+    if (this.director) this.director.onRest(node);
+  }
+
+  // First completion pays out a few gems for the trader.
+  grantTutorialReward(n) {
+    if (this.prog.data.tutorialDone) return 0;
+    this.prog.data.tutorialDone = true;
+    this.prog.addGems(n);
+    this.hud.setGems(this.prog.gems, true);
+    return n;
+  }
+
+  celebrateTutorial() {
+    Audio.play('fanfare');
+    this.hud.flashScreen(0xf2c14e, 0.25, 420);
+    const v = this.cam.worldView;
+    this.effects.confettiBurst(v.x + 40, v.y + 30, 30);
+    this.effects.confettiBurst(v.right - 40, v.y + 30, 30);
+    this.effects.confettiBurst(this.climber.x, this.climber.y - 30, 20);
+  }
+
+  onTutorialComplete() {
+    this.prog.data.tutorialDone = true;
+    this.prog.save();
+    this.scene.restart({});
+  }
+
+  restAction(a) {
+    if (this.state !== STATE.RESTING) return;
+    if (a === 'continue' && this.director && this.director.holdRest && !this.director.finished) { this.tutorialCard.next(); return; }
+    if (a === 'rest') {
+      this.sitting = !this.sitting;
+      Audio.play('cloth');
+      this.restUI.show({ ...this.restInfo, sitting: this.sitting });
+      if (this.sitting) Audio.swell(18);
+    } else if (a === 'view') this.startView();
+    else if (a === 'photo') this.takePhoto();
+    else if (a === 'trader' && this.atTrader()) this.openTrader();
+    else if (a === 'continue') this.leaveRest();
+  }
+
+  leaveRest() {
+    this.grip.restoreFull();
+    this.restUI.hide();
+    this.hideTraderTag();
+    if (!this.run.departed && this.node.level === 0) { this.run.departed = true; this.activateLoadout(); }
+    this.sitting = false;
+    Audio.setMusicIntensity(0.3);
+    Audio.play('cloth');
+    this.enterRouteSelect();
+  }
+
+  startView() {
+    this.state = STATE.VIEWING;
+    this.restUI.hide();
+    this.hideTraderTag();
+    this.hud.setVisible(false);
+    this.sitting = false;
+    this.viewHint = new PixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, 'PRESS ANY KEY TO RETURN', { color: COLORS.faint }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
+    Audio.swell(20);
+  }
+
+  exitView() {
+    this.state = STATE.RESTING;
+    this.hud.setVisible(true);
+    if (this.viewHint) { this.viewHint.destroy(); this.viewHint = null; }
+    this.restUI.show({ ...this.restInfo, sitting: this.sitting });
+    this.showTraderTag();
+  }
+
+  takePhoto() {
+    if (this.photoBusy) return;
+    this.photoBusy = true;
+    this.hud.setVisible(false);
+    this.restUI.setVisible(false);
+    const h = Math.round(yToMeters(this.node.y));
+    this.game.renderer.snapshot((img) => {
+      this.photoBusy = false;
+      if (!this.sys.isActive() && !this.sys.isPaused()) return;
+      this.hud.setVisible(true);
+      this.restUI.setVisible(true);
+      Audio.play('photo');
+      const flash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay);
+      this.tweens.add({ targets: flash, alpha: 0, duration: 400, onComplete: () => flash.destroy() });
+      this.prog.addPhoto();
+      try {
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = `above-the-clouds-${h}m.png`;
+        a.click();
+      } catch { /* downloads blocked */ }
+      this.hud.toast('PHOTO SAVED', COLORS.text);
+    });
+  }
+
+  // ---------------------------------------------------------------- discoveries & biomes
+  discover(id) {
+    if (this.director) return false;
+    const r = this.prog.discover(id);
+    r.unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+    if (!r.isNew) return false;
+    this.hud.toast(`DISCOVERY: ${DISCOVERIES[id].name}`, COLORS.gold);
+    Audio.play('discovery');
+    return true;
+  }
+
+  checkBiome(h) {
+    const b = biomeAt(h);
+    if (b.id === this.biomeId) return;
+    this.biomeId = b.id;
+    const r = this.prog.discoverBiome(b.id);
+    if (this.director && h === 0) return;
+    this.hud.showBanner(b.name, r.isNew && h > 0 ? 'A NEW PART OF THE MOUNTAIN' : `${Math.floor(h)} M`);
+    Audio.setMusicMode(b.music);
+    if (h > 0) { Audio.swell(16); Audio.play('titlecard'); }
+  }
+
+  onMechanicEvent({ id, event }) {
+    if (id !== 'whiteout') return;
+    if (event === 'warning') this.hud.toast('A WHITEOUT IS COMING', COLORS.blue);
+    else if (event === 'storm') {
+      this.hud.showBanner('WHITEOUT', 'NOTES SHOW LATE  \u2022  GEMS X2');
+      Audio.play('gust');
+    } else if (event === 'clear') this.hud.toast('THE WHITEOUT CLEARS', COLORS.blue);
+  }
+
+  updateEvents(dt, alt, day) {
+    this.eventT += dt;
+    if (this.eventT < 1000) return;
+    this.eventT = 0;
+    const biome = biomeAt(alt);
+    if (biome.events?.eagles && alt > 25 && day.night < 0.4 && this.runRng.chance(1 / 120)) {
+      this.background.spawnEagle(() => { Audio.play('wing'); this.discover('rare-bird'); });
+    }
+    this.auroraT = this.background.auroraVisible ? this.auroraT + 1 : 0;
+    if (this.auroraT === 5) this.discover('northern-lights');
+    this.floatT = this.background.floatersVisible ? this.floatT + 1 : 0;
+    if (this.floatT === 4) this.discover('floating-stones');
+    if (day.isDawn && alt > 480) this.discover('sunrise-above');
+    if (biome.hazards.loose > 0 && this.runRng.chance(0.1)) {
+      const b = this.mountain.boundsAt(-(this.camY / LEVEL_PX));
+      this.effects.pebbleFall(this.runRng.range(b.l + 10, b.r - 10), this.camY - 6, this.runRng.int(1, 3), biome.rock[3]);
+      Audio.play('pebble', { count: 2, volume: 0.35 });
+    }
+  }
+
+  // ---------------------------------------------------------------- update
+  update(time, delta) {
+    const dt = Math.min(delta, 100);
+    this.clock += dt;
+    this.lastFramePerf = performance.now();
+    const now = this.clock;
+    this.dayNight.update(dt);
+    const day = this.dayNight.state();
+
+    const cardOpen = this.director && this.tutorialCard.open;
+    if (cardOpen && this.state === STATE.ROUTE_SELECT && this.node.kind === 'jug') this.grip.hang(dt / 1000, { onJug: true });
+    switch (cardOpen ? null : this.state) {
+      case STATE.ROUTE_SELECT: {
+        const biome = biomeAt(levelToMeters(this.node.level));
+        const icy = this.node.hazard === 'icy' && !this.gear.crampons ? 1.4 : 1;
+        this.grip.hang(dt / 1000, {
+          drainMultiplier: this.director ? 0 : biome.drainMultiplier * icy * (this.perk === 'irongrip' ? GEAR_FX.ironGrip : 1),
+          onJug: this.node.kind === 'jug',
+        });
+        this.tryEnergyBar();
+        if (this.grip.isEmpty) this.startSlip();
+        else this.updateCrumble(dt);
+        break;
+      }
+      case STATE.CLIMBING_COMBO:
+        if (this.combo) this.updateCombo(now);
+        break;
+      case STATE.DODGING:
+        if (this.dodge) {
+          const missed = this.dodge.update(now);
+          if (missed.length) this.dodgeResult(missed[0]);
+        }
+        break;
+      case STATE.SLIPPING:
+        if (this.recovery) {
+          const missed = this.recovery.update(now);
+          if (missed.length) this.recoveryFail(missed[0]);
+        }
+        this.climber.setPose(Math.floor(now / 110) % 2 ? 'slip' : 'slip2');
+        break;
+      case STATE.FALLING:
+        if (POSES[this.climber.pose].anchor === 28) this.climber.setPose(Math.floor(now / 140) % 2 ? 'fall' : 'fall2');
+        break;
+      case STATE.RESTING:
+      case STATE.VIEWING:
+        if (this.grip.value < this.grip.max) this.grip.change((BALANCE.grip.restRecoverPerSec * dt) / 1000);
+        break;
+      default:
+        break;
+    }
+
+    this.updateCamera(dt);
+    const alt = Math.max(0, yToMeters(this.camY + GAME_HEIGHT * CAMERA_ANCHOR));
+    const climberAlt = Math.max(0, yToMeters(this.climber.y));
+    const biome = biomeAt(climberAlt);
+    const ambience = biome.ambience;
+    if (this.mechanics) this.mechanics.update(dt, biomeMixAt(climberAlt)).forEach((e) => this.onMechanicEvent(e));
+    const mech = this.mechanics ? this.mechanics.weather() : { snow: 0, mist: 0, wind: 0 };
+    const whiteout = this.mechanics ? this.mechanics.get('whiteout').intensity : 0;
+    this.background.update(dt, alt, day, { birds: ambience.birds }, { mix: biomeMixAt(alt), whiteout });
+    this.weather.update(dt, {
+      biome, alt, light: day.light, reduced: this.settings.reducedParticles,
+      mistBoost: (alt > 440 && alt < 500 ? 0.3 : 0) + mech.mist,
+      windBoost: (this.gustActive ? 1.2 : 0) + mech.wind,
+      snowBoost: mech.snow,
+      whiteout,
+    });
+    // Obsidian Spires: the light sinks and the headlamp comes on.
+    const dark = this.mechanics ? this.mechanics.get('darkness').intensity : 0;
+    this.lightOverlay.fillColor = dark > 0.01 ? lerpColor(day.light, DARKNESS.shade, dark * DARKNESS.shadeAmount) : day.light;
+    this.climber.updateLamp(Math.max(day.night, dark));
+    const camLevelTop = -(this.camY / LEVEL_PX);
+    this.wall.update(dt, Math.ceil(camLevelTop) + RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
+
+    const wallState = this.state === STATE.ROUTE_SELECT ? 'wall'
+      : this.state === STATE.RESTING ? 'ledge'
+        : this.state === STATE.VIEWING ? 'look' : 'none';
+    this.climber.idle(dt, { state: wallState, gripRatio: this.grip.ratio, cold: biome.weather.snow > 0.3 || day.night > 0.6, effects: this.effects, sitting: this.sitting });
+
+    this.hud.update(dt, {
+      heightM: climberAlt,
+      best: this.prog.bestFor(this.mode),
+      modeLabel: this.director ? 'TUTORIAL' : this.devRun ? `DEV ${this.mode === 'normal' ? '' : this.modeCfg.label}`.trim() : this.mode === 'normal' ? '' : this.modeCfg.label,
+      biomeName: this.director ? biome.name : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO FALLS LEFT' : '1 FALL LEFT'}`,
+      grip: this.grip.value,
+      gripLow: this.grip.isLow && this.state !== STATE.RESTING,
+      gripCritical: this.grip.isCritical && this.state !== STATE.RESTING,
+    });
+    this.comboUI.update(this.now(), dt);
+    if (this.state === STATE.ROUTE_SELECT) this.routeUI.update(dt, { x: this.climber.x, y: this.climber.y });
+
+    Audio.setAmbience({
+      wind: Math.min(1, ambience.wind * 0.8 + Math.min(1, alt / 1000) * 0.4 + whiteout * 0.5),
+      stream: this.wall.waterfallNear(this.climber.y) ? 0.9 : ambience.stream * 0.35,
+      birds: day.night < 0.4 ? ambience.birds : 0,
+    });
+    Audio.update();
+    this.updateEvents(dt, climberAlt, day);
+    this.updateRecordMark();
+    this.updateBot(now);
+    if (this.debugVisible) this.hud.setDebug(this.debugText(biome, day));
+  }
+
+  updateCamera(dt) {
+    const anchor = POSES[this.climber.pose].anchor;
+    let focusY = this.climber.y;
+    if (anchor === 54 || anchor === 40) focusY = this.climber.y - STAND_HAND;
+    else if (anchor === 28) focusY = this.climber.y - 23;
+    let look = 0;
+    if (this.state === STATE.VIEWING) look = -150;
+    else if (this.state === STATE.RESTING && this.clock < this.revealUntil) look = -60;
+    else if (this.state === STATE.RESTING) look = 34;
+    else if (this.state === STATE.ROUTE_SELECT || this.state === STATE.CLIMBING_COMBO) look = -10;
+    this.lookOffset += (look - this.lookOffset) * (1 - Math.exp((-dt / 1000) * 1.8));
+    const target = focusY - GAME_HEIGHT * CAMERA_ANCHOR + this.lookOffset;
+    const k = this.state === STATE.FALLING ? 3 : 5;
+    this.camY += (target - this.camY) * (1 - Math.exp((-dt / 1000) * k));
+    this.cam.setScroll(0, Math.round(this.camY));
+  }
+
+  floatText(text, color, dy = 0, pop = false) {
+    if (this.floaters.length > 3) this.floaters.shift().destroy();
+    const h = this.climber.head;
+    const t = new PixelText(this, Math.round(h.x), Math.round(h.y - 22 - dy), text, { color }).setOrigin(0.5, 0).setDepth(DEPTH.fx + 5);
+    if (pop) {
+      t.setScale(2.2);
+      this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
+    }
+    this.floaters.push(t);
+    this.tweens.add({
+      targets: t, y: t.y - 12, alpha: 0, duration: 900, delay: 250, ease: 'Sine.easeIn',
+      onComplete: () => { this.floaters = this.floaters.filter((f) => f !== t); t.destroy(); },
+    });
+  }
+
+  clearTargetMark() {
+    if (this.targetMark) { this.targetMark.destroy(); this.targetMark = null; }
+  }
+
+  flashHold(nodeId) {
+    const s = this.wall.getHold(nodeId);
+    if (!s) return;
+    s.setTintFill(0xffffff);
+    this.time.delayedCall(70, () => { if (s.active) s.clearTint(); });
+  }
+
+  // ---------------------------------------------------------------- debug / autopilot
+  updateBot(now) {
+    const b = this.bot;
+    if (!b) return;
+    if (this.director && this.tutorialCard.open) {
+      if (!b.cardWait) b.cardWait = this.clock + 400;
+      if (this.clock > b.cardWait) { b.cardWait = 0; this.tutorialCard.close(); }
+      return;
+    }
+    if (this.state === STATE.RESTING) {
+      if (!b.wait) b.wait = this.clock + 700;
+      if (this.clock > b.wait) { b.wait = 0; this.restAction('continue'); }
+      return;
+    }
+    if (this.state === STATE.ROUTE_SELECT) {
+      if (!b.wait) b.wait = this.clock + 350;
+      if (this.clock > b.wait) {
+        b.wait = 0;
+        const want = this.grip.value > 65 ? 'risky' : this.grip.value > 35 ? 'normal' : 'safe';
+        let i = this.routes.findIndex((r) => r.type === want);
+        if (i < 0) i = 0;
+        this.pickRoute(i, true);
+      }
+      return;
+    }
+    const combo = this.state === STATE.CLIMBING_COMBO ? this.combo : this.state === STATE.SLIPPING ? this.recovery : this.state === STATE.DODGING ? this.dodge : null;
+    if (!combo || combo.done) return;
+    if (b.plans === null || b.plansFor !== combo) { b.plans = {}; b.plansFor = combo; }
+    const note = combo.current;
+    if (!b.plans[note.index]) {
+      const sloppy = b.mode === 'sloppy';
+      const off = sloppy ? (Math.random() * 2 - 1) * 260 : (Math.random() * 2 - 1) * 40;
+      const wrong = sloppy && Math.random() < 0.12;
+      const dirs = ['L', 'U', 'R'].filter((d) => d !== note.dir);
+      b.plans[note.index] = { t: note.time + off, dir: wrong ? dirs[Math.floor(Math.random() * 2)] : note.dir };
+    }
+    const plan = b.plans[note.index];
+    if (now >= plan.t) {
+      if (this.state === STATE.CLIMBING_COMBO) this.comboInput(plan.dir, Math.max(plan.t, now - 16));
+      else if (this.state === STATE.DODGING) this.dodgeInput(plan.dir, Math.max(plan.t, now - 16));
+      else this.recoveryInput(plan.dir, Math.max(plan.t, now - 16));
+    }
+  }
+
+  // Debug helper: skip upward along the longest routes (used for testing biomes).
+  debugTeleport(meters) {
+    let guard = 0;
+    while (levelToMeters(this.node.level) < meters && guard++ < 5000) {
+      if (this.state === STATE.RESTING) this.leaveRest();
+      const route = this.routes[this.routes.length - 1];
+      this.routeUI.hide();
+      this.state = STATE.CLIMB_ANIMATION;
+      this.climber.setPosition(route.target.x, route.target.y);
+      this.arrive(route.target, route.heightGain);
+    }
+    this.camY = this.climber.y - STAND_HAND - GAME_HEIGHT * CAMERA_ANCHOR;
+    this.wall.update(0, Math.ceil(-(this.camY / LEVEL_PX)) + RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
+    this.wall.flush();
+  }
+
+  debugText(biome, day) {
+    const seg = this.mountain.segmentForLevel(this.node.level);
+    const cur = this.combo && this.combo.current;
+    const lines = [
+      `STATE ${this.paused ? STATE.PAUSED : this.state}   SEED ${this.seed}${this.director ? `   LESSON ${this.director.pointer}` : ''}`,
+      `BIOME ${biome.id.toUpperCase()}   SEG ${seg ? seg.index : '-'} ${seg ? seg.templateId.toUpperCase() : ''}`,
+      `NODE ${this.node.id}  LV ${this.node.level}  H ${levelToMeters(this.node.level).toFixed(1)}M  CP LV ${this.checkpoint.level}`,
+      `GRIP ${this.grip.value.toFixed(1)}   TIME ${day.name} ${(day.t * 24).toFixed(1)}H   MODE ${this.modeCfg.label}`,
+      (() => { const d = difficultyAt(levelToMeters(this.node.level), this.mode); return `RAMP BEAT x${d.beatScale.toFixed(2)} WIN x${d.windowScale.toFixed(2)} +${d.extraInputs} REST/${d.restEvery}`; })(),
+      `ROUTE ${this.route ? this.route.type.toUpperCase() + ' ' + this.route.pattern.join('') + ' ' + (this.route.tags || []).join(' ') : '-'}`,
+      `INPUT ${cur ? `${cur.index + 1}/${this.combo.notes.length} ${cur.dir} IN ${Math.round(cur.time - this.now())}MS` : '-'}`,
+      `LAST ${this.lastJudge}`,
+      `SEGMENTS ${this.mountain.segments.size} DATA / ${this.wall.activeCount} DRAWN   LEVELS ${this.mountain.levels.size}`,
+      `OBJECTS ${this.children.length}   TWEENS ${this.tweens.getTweens().length}   TEXTURES ${this.textures.getTextureKeys().length}`,
+      `AUTOPILOT ${this.bot ? this.bot.mode.toUpperCase() : 'OFF'} (B)   CLIMBED ${this.run.climbed.toFixed(1)}M   STREAK ${this.run.streak}`,
+    ];
+    return lines.join('\n');
+  }
+
+  cleanup() {
+    this.input.keyboard.off('keydown', this.onKeyDown, this);
+    this.input.keyboard.off('keyup', this.onKeyUp, this);
+    this.game.events.off('blur', this.onBlur);
+    this.events.off('resume', this.onResume, this);
+    this.wall.destroy();
+    this.routeUI.destroy();
+    this.comboUI.hide();
+    this.restUI.hide();
+    if (this.tutorialCard) this.tutorialCard.destroy();
+    Audio.setPaused(false);
+    Audio.setMusicIntensity(0.3);
+    if (typeof window !== 'undefined' && window.__atc === this) window.__atc = null;
+  }
+}
