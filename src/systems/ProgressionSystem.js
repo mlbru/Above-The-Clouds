@@ -269,12 +269,21 @@ export class ProgressionSystem {
   hasStamp(id) { return this.data.stamps.includes(id); }
 
   // Checks every unearned stamp against the save and the current run (or
-  // null). Earned stamps are recorded and paid out; returns them.
+  // null). Keeps the best run so far for per-run stamps. Earned stamps are
+  // recorded and paid out; returns them.
   checkStamps(run = null) {
     const d = this.data;
-    const ctx = { d, run, c: d.counters };
-    const earned = STAMPS.filter((s) => !d.stamps.includes(s.id) && s.test(ctx));
-    if (!earned.length) return [];
+    const c = d.counters;
+    const ctx = { d, run, c };
+    let changed = false;
+    const earned = [];
+    for (const s of STAMPS) {
+      if (d.stamps.includes(s.id)) continue;
+      const v = s.value(ctx);
+      if (s.perRun && v > (c[`best:${s.id}`] || 0)) { c[`best:${s.id}`] = v; changed = true; }
+      if (v >= s.goal) earned.push(s);
+    }
+    if (!earned.length) { if (changed) this.save(); return []; }
     for (const s of earned) {
       d.stamps.push(s.id);
       d.gems += s.gems;

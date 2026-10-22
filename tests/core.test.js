@@ -410,12 +410,13 @@ test("Bram's tips: one or two lines that fit the bubble, and every tag tip exist
 
 test("Bram's logbook: stamps pay once, read the run and the lifetime counters", async () => {
   const { ProgressionSystem } = await import('../src/systems/ProgressionSystem.js');
-  const { STAMPS, LOGBOOK_PAGES } = await import('../src/data/logbook.js');
+  const { STAMPS, LOGBOOK_PAGES, stampProgress } = await import('../src/data/logbook.js');
   const { measureLine, hasGlyph } = await import('../src/utils/pixelFont.js');
   assert.equal(new Set(STAMPS.map((s) => s.id)).size, STAMPS.length);
   for (const s of STAMPS) {
     assert.ok(LOGBOOK_PAGES.some((p) => p.id === s.page), s.id);
-    assert.ok(measureLine(s.text) <= 320, `${s.id} text too wide`);
+    assert.ok(measureLine(s.text) <= 290, `${s.id} text too wide`);
+    assert.ok(s.goal > 0 && typeof s.value === 'function', `${s.id} has a goal`);
     for (const ch of s.name + s.text) assert.ok(hasGlyph(ch), `${s.id}: no glyph for "${ch}"`);
   }
   const p = new ProgressionSystem({ getItem: () => null, setItem: () => {} });
@@ -424,8 +425,15 @@ test("Bram's logbook: stamps pay once, read the run and the lifetime counters", 
   assert.deepEqual(first, ['first-pitch', 'stone-wall']);
   assert.equal(p.data.gems, 13);
   assert.deepEqual(p.checkStamps(run), []);
-  for (let i = 0; i < 9; i++) p.bump('dodges');
+  for (let i = 0; i < 24; i++) p.bump('dodges');
   assert.deepEqual(p.checkStamps(null), []);
+  const dodger = STAMPS.find((s) => s.id === 'rock-dodger');
+  assert.deepEqual(stampProgress(dodger, p.data), { now: 24, goal: 25 });
   p.bump('dodges');
   assert.deepEqual(p.checkStamps(null).map((s) => s.id), ['rock-dodger']);
+  // Per-run stamps remember the best run for the progress shown in the logbook.
+  const groove = STAMPS.find((s) => s.id === 'metronome');
+  p.checkStamps({ ...run, bestStreak: 12 });
+  p.checkStamps({ ...run, bestStreak: 8 });
+  assert.deepEqual(stampProgress(groove, p.data), { now: 12, goal: 30 });
 });

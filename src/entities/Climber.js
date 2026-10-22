@@ -85,9 +85,36 @@ export class Climber {
     this.scene.time.delayedCall(ms, () => { if (s.active) s.clearTint(); });
   }
 
+  // Shows an in-between frame for a moment, then the pose itself (unless
+  // something else changed the pose meanwhile).
+  via(mid, name, ms = 55) {
+    this.setPose(mid);
+    this.scene.time.delayedCall(ms, () => { if (this.pose === mid) this.setPose(name); });
+  }
+
+  // Arms and legs flail through the fall frames while the body turns.
+  // spin: degrees per second (a run-ending fall tumbles; a short one wobbles).
+  flail(spin = 0) {
+    this.stopFlail();
+    const frames = ['fall', 'fall2', 'fall3', 'fall2'];
+    let i = 0;
+    this.setPose('fall');
+    this.flailT = this.scene.time.addEvent({ delay: 95, loop: true, callback: () => this.setPose(frames[++i % frames.length]) });
+    const s = this.sprite;
+    if (spin) this.flailTween = this.scene.tweens.add({ targets: s, angle: (Math.random() < 0.5 ? -1 : 1) * 360, duration: 360000 / spin, repeat: -1 });
+    else this.flailTween = this.scene.tweens.add({ targets: s, angle: { from: -10, to: 10 }, duration: 240, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  stopFlail() {
+    if (this.flailT) { this.flailT.remove(); this.flailT = null; }
+    if (this.flailTween) { this.flailTween.stop(); this.flailTween = null; }
+    this.sprite.setAngle(0);
+  }
+
   // Cancels any movement in progress (pending tween promises are abandoned).
   stopTweens() {
     this.scene.tweens.killTweensOf(this);
+    this.stopFlail();
     this.busy = 0;
     this.sync();
   }

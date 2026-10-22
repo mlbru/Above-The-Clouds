@@ -5,10 +5,14 @@ import { COACH } from './coachLayout.js';
 import { BRAM_TIPS } from '../data/bramTips.js';
 
 // Bram pops up in the coach bubble with one sentence, the first time a
-// mechanic appears in a real run. The game keeps running; the bubble types
-// out, stays a moment and slides away. Tips that arrive together queue up.
+// mechanic appears in a real run. The game stands still while he talks
+// (onOpen / onClose let the scene freeze and resume); the bubble types out,
+// then waits for a key or tap, or closes by itself after a while. Tips that
+// arrive together queue up.
 export class BramTip {
-  constructor(scene, prog) {
+  constructor(scene, prog, { onOpen = () => {}, onClose = () => {} } = {}) {
+    this.onOpen = onOpen;
+    this.onClose = onClose;
     this.scene = scene;
     this.prog = prog;
     const c = COACH;
@@ -17,7 +21,8 @@ export class BramTip {
     this.face = scene.add.sprite(c.x + 15, c.y + c.h / 2 + 1, 'bram_face', 0).setScrollFactor(0).setDepth(d + 1);
     this.name = new PixelText(scene, c.x + 2, c.y + c.h + 3, 'BRAM', { color: COLORS.gold }).setScrollFactor(0).setDepth(d + 1);
     this.text = new PixelText(scene, c.x + c.textX, c.y + 7, '', { color: COLORS.text }).setScrollFactor(0).setDepth(d + 1);
-    this.parts = [this.g, this.face, this.name, this.text];
+    this.more = new PixelText(scene, c.x + c.w - 2, c.y + c.h + 3, 'SPACE ▶', { color: COLORS.green }).setOrigin(1, 0).setScrollFactor(0).setDepth(d + 1);
+    this.parts = [this.g, this.face, this.name, this.text, this.more];
     this.queue = [];
     this.current = null;
     this.timer = null;
@@ -29,6 +34,9 @@ export class BramTip {
     this.parts.push(zone);
     this.blinkT = scene.time.addEvent({ delay: 2600, loop: true, callback: () => { this.face.setFrame(1); scene.time.delayedCall(140, () => this.face.active && this.face.setFrame(0)); } });
   }
+
+  // True while Bram is talking: the game should stand still.
+  get blocking() { return !!this.current; }
 
   get seen() { return this.prog.data.tipsSeen || (this.prog.data.tipsSeen = []); }
 
@@ -44,8 +52,11 @@ export class BramTip {
 
   next() {
     const id = this.queue.shift();
+    const was = this.current;
     this.current = id || null;
-    if (!id) { this.fade(0); return; }
+    if (!id) { this.fade(0); if (was) this.onClose(); return; }
+    if (!was) this.onOpen();
+    this.more.setVisible(false);
     const str = BRAM_TIPS[id];
     this.fade(1);
     this.text.setText('');
@@ -70,7 +81,8 @@ export class BramTip {
     this.text.setText(BRAM_TIPS[this.current] || '');
     this.face.y = COACH.y + COACH.h / 2 + 1;
     if (this.timer) this.timer.remove();
-    const hold = Math.max(2400, this.text.text.length * 55 + 900);
+    this.more.setVisible(!this.hidden);
+    const hold = Math.max(3500, this.text.text.length * 70 + 1500);
     this.timer = this.scene.time.delayedCall(hold, () => { this.timer = null; this.next(); });
   }
 
@@ -103,6 +115,7 @@ export class BramTip {
   setVisible(v) {
     this.hidden = !v;
     this.parts.forEach((p) => p.setVisible(v));
+    if (v && this.typing) this.more.setVisible(false);
   }
 
   destroy() {

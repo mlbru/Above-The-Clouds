@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
-import { LOGBOOK_PAGES, STAMPS } from '../data/logbook.js';
+import { LOGBOOK_PAGES, STAMPS, stampProgress } from '../data/logbook.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
@@ -66,7 +66,19 @@ export class LogbookScene extends Phaser.Scene {
       const hidden = s.secret && !has;
       this.text(x0 + 26, y + 3, hidden ? '???' : s.name, has ? toCss(page.color) : COLORS.text);
       this.text(x0 + 26, y + 12, hidden ? 'A SECRET. BRAM WILL NOT SAY.' : s.text, has ? COLORS.dim : COLORS.faint);
-      this.text(x0 + w - 4, y + 7, has ? 'STAMPED' : `◆${s.gems}`, has ? COLORS.green : '#9fe8ff', 1);
+      if (has) this.text(x0 + w - 4, y + 7, 'STAMPED', COLORS.green, 1);
+      else {
+        this.text(x0 + w - 4, y + 3, `◆${s.gems}`, '#9fe8ff', 1);
+        if (!hidden) {
+          // Progress: numbers on the right and a thin bar under the text.
+          const pr = stampProgress(s, this.prog.data);
+          const best = s.perRun ? 'BEST ' : '';
+          this.text(x0 + w - 4, y + 12, `${best}${pr.now}/${pr.goal}${s.unit ? ' ' + s.unit : ''}`, pr.now ? COLORS.dim : COLORS.faint, 1);
+          const bw = w - 110;
+          g.fillStyle(0x2e2a3c, 1).fillRect(x0 + 26, y + 19, bw, 2);
+          if (pr.now) g.fillStyle(page.color, 0.8).fillRect(x0 + 26, y + 19, Math.max(1, Math.round((bw * pr.now) / pr.goal)), 2);
+        }
+      }
       if (i < list.length - 1) { g.fillStyle(0x2e2a3c, 1); g.fillRect(x0, y + ROW_H - 2, w, 1); }
     });
 

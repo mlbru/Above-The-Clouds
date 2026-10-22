@@ -25,6 +25,16 @@ export const POSES = {
   slip2: { lh: [17, 2], rh: [31, 0], lf: [19, 55], rf: [30, 52], b: [1, 5], head: 'down', anchor: 5 },
   fall: { lh: [8, 16], rh: [40, 12], lf: [13, 53], rf: [36, 50], b: [0, 4], anchor: 28 },
   fall2: { lh: [9, 12], rh: [39, 16], lf: [15, 54], rf: [34, 52], b: [0, 4], anchor: 28 },
+  // In-betweens: halfway into a reach or a pull, so moves read as motion.
+  reachL_mid: { lh: [14, 3], rh: [30, 6], lf: [20, 52], rf: [29, 50], b: [-1, 1], anchor: 5 },
+  reachR_mid: { lh: [18, 6], rh: [34, 3], lf: [19, 50], rf: [28, 52], b: [1, 1], anchor: 5 },
+  pull_mid: { lh: [18, 7], rh: [30, 7], lf: [18, 49], rf: [30, 48], b: [0, -2], anchor: 5 },
+  // Topping out onto a ledge: elbows over the edge, then a knee up.
+  mantle: { lh: [13, 30], rh: [35, 30], lf: [18, 50], rf: [31, 46], b: [0, 0], anchor: 30 },
+  mantle2: { lh: [14, 36], rh: [34, 36], lf: [17, 53], rf: [31, 44], b: [0, 5], head: 'down', anchor: 36 },
+  // Falling: hands peel off the hold, then arms and legs flail (fall, fall2, fall3).
+  fall_peel: { lh: [12, 3], rh: [37, 6], lf: [17, 55], rf: [32, 54], b: [0, 8], head: 'down', anchor: 5 },
+  fall3: { lh: [6, 20], rh: [42, 20], lf: [11, 50], rf: [38, 54], b: [0, 4], anchor: 28 },
   stand: { lh: [15, 34], rh: [33, 34], lf: [20, 54], rf: [28, 54], b: [0, 3], anchor: 54 },
   stand_b: { lh: [15, 35], rh: [33, 35], lf: [20, 54], rf: [28, 54], b: [0, 4], pb: 1, anchor: 54 },
   land: { lh: [12, 37], rh: [36, 37], lf: [17, 54], rf: [31, 54], b: [0, 9], anchor: 54 },

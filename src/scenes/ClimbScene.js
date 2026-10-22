@@ -137,7 +137,8 @@ export class ClimbScene extends Phaser.Scene {
       this.tutorialCard = new TutorialCoach(this);
       this.director = new TutorialDirector(this, this.tutorialCard);
     }
-    this.tips = this.tutorial ? null : new BramTip(this, this.prog);
+    this.tips = this.tutorial ? null : new BramTip(this, this.prog, { onOpen: () => this.freezeForTip(), onClose: () => this.unfreezeForTip() });
+    this.frozenTweens = null;
 
     this.cam = this.cameras.main;
     this.cam.setRoundPixels(true);
@@ -243,6 +244,11 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (this.state === STATE.RUN_OVER && code === 'Escape') { this.scene.start('Menu'); return; }
+    if (this.tipOpen) {
+      if (code === 'Escape' || code === 'KeyP') this.pauseGame();
+      else if (DIR_KEYS[code] || code === 'Space' || code === 'Enter') this.tips.skip();
+      return;
+    }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
     if (code === 'F3' || code === 'Backquote') { this.debugVisible = !this.debugVisible; if (!this.debugVisible) this.hud.setDebug(null); return; }
     if (code === 'KeyB' && this.debugVisible) {
@@ -303,8 +309,14 @@ export class ClimbScene extends Phaser.Scene {
     Audio.setPaused(false);
     Audio.setVolumes(this.settings.music, this.settings.sfx);
     this.lastFramePerf = performance.now();
-    // Give the player a moment to find the rhythm again.
-    const shift = BALANCE.timing.resumeShiftMs;
+    this.shiftTiming(BALANCE.timing.resumeShiftMs);
+    if (this.bot) this.bot.plans = null;
+    this.refreshLook();
+    this.updateGearHud();
+  }
+
+  // Gives the player a moment to find the rhythm again (after a pause or a tip).
+  shiftTiming(shift) {
     if (this.state === STATE.CLIMBING_COMBO && this.combo) this.combo.shift(shift);
     if (this.state === STATE.SLIPPING && this.recovery) this.recovery.shift(shift);
     if (this.state === STATE.DODGING && this.dodge) {
@@ -316,10 +328,31 @@ export class ClimbScene extends Phaser.Scene {
       }
     }
     if (this.state === STATE.ROUTE_SELECT && this.crumbleAt) this.crumbleAt = Math.max(this.crumbleAt, this.clock + 1200);
-    if (this.bot) this.bot.plans = null;
-    this.refreshLook();
-    this.updateGearHud();
   }
+
+  // While Bram talks the game clock stops (combos, crumbling, crystals and the
+  // grip drain all run on it) and every running tween holds still.
+  // Tweens started while frozen (a rock that was about to drop, the slide of
+  // a slip) are caught on the next frame. Bram's own bubble keeps moving.
+  freezeForTip() {
+    this.frozenTweens = this.frozenTweens || [];
+    const own = this.tips ? this.tips.parts : [];
+    for (const t of this.tweens.getTweens()) {
+      if (!t.isPlaying() || (t.targets || []).some((o) => own.includes(o))) continue;
+      t.pause();
+      this.frozenTweens.push(t);
+    }
+  }
+
+  unfreezeForTip() {
+    (this.frozenTweens || []).forEach((t) => { try { t.resume(); } catch { /* tween already gone */ } });
+    this.frozenTweens = null;
+    this.lastFramePerf = performance.now();
+    this.shiftTiming(BALANCE.timing.resumeShiftMs);
+    if (this.bot) this.bot.plans = null;
+  }
+
+  get tipOpen() { return !!(this.tips && this.tips.blocking); }
 
   // Re-reads the outfit and wallet (after the wardrobe or the trader).
   refreshLook() {
@@ -507,7 +540,7 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   pickRoute(i, confirm) {
-    if (this.state !== STATE.ROUTE_SELECT || !this.routes[i]) return;
+    if (this.state !== STATE.ROUTE_SELECT || !this.routes[i] || this.tipOpen) return;
     if (this.routes[i].sealed) { Audio.play('denied'); return; }
     if (this.director && this.director.holdRoutes) return;
     if (i !== this.selected) {
@@ -662,7 +695,7 @@ export class ClimbScene extends Phaser.Scene {
       if (note.dir === 'L') pose = note.result === 'perfect' ? 'perfectL' : 'reachL';
       else if (note.dir === 'R') pose = note.result === 'perfect' ? 'perfectR' : 'reachR';
       else pose = ['pull', 'stepL', 'stepR'][note.index % 3];
-      this.climber.setPose(pose);
+      this.climber.via(note.dir === 'L' ? 'reachL_mid' : note.dir === 'R' ? 'reachR_mid' : 'pull_mid', pose);
       this.climber.tweenTo(tx, ty, 150, 'Quad.easeOut');
       const hx = this.climber.x + (note.dir === 'L' ? -10 : note.dir === 'R' ? 10 : 0), hy = this.climber.y - 2;
       if (note.result === 'perfect') {
@@ -679,7 +712,7 @@ export class ClimbScene extends Phaser.Scene {
       }
       if (note.dir === 'U') Audio.play('boot', { snow: biome.weather.snow > 0.3 });
       this.effects.chalk(hx, hy);
-      if (note.holdMs) { this.climber.setPose('pull'); this.floatText('HOLD IT...', COLORS.gold, 10); }
+      if (note.holdMs) { this.climber.via('pull_mid', 'pull'); this.floatText('HOLD IT...', COLORS.gold, 10); }
     } else {
       this.climber.hold(this.grip.isLow ? 'slip2' : 'hesitate', 220);
       Audio.play('miss');
@@ -979,6 +1012,7 @@ export class ClimbScene extends Phaser.Scene {
     const t = route.target;
     if (!this.director) {
       this.run.riskyRow = route.type === 'risky' ? this.run.riskyRow + 1 : 0;
+      this.run.riskyBest = Math.max(this.run.riskyBest || 0, this.run.riskyRow);
       if (this.mechanics && this.mechanics.get('whiteout').active) this.run.whiteoutClimbs++;
       if (route.seal && route.type === 'risky') this.prog.bump('quickHands');
     }
@@ -994,11 +1028,17 @@ export class ClimbScene extends Phaser.Scene {
       this.floatText(`FLAWLESS +${BALANCE.combo.perfectComboBonus} GRIP`, COLORS.gold, 12);
     }
     if (t.kind === 'ledge') {
-      this.climber.setPose('pull');
+      // Pull up, elbows over the edge, a knee up, then stand.
+      this.climber.via('pull_mid', 'pull', 50);
       await this.climber.tweenTo(t.x, t.y + 2, 200, 'Quad.easeOut');
+      this.climber.setPose('mantle');
+      this.climber.setPosition(t.x, t.y + 4);
+      await this.climber.tweenTo(t.x, t.y - 2, 110, 'Quad.easeOut');
+      this.climber.setPose('mantle2');
+      this.climber.setPosition(t.x, t.y - 4);
+      await this.climber.tweenTo(t.x, t.y - 16, 120, 'Quad.easeOut');
       this.climber.setPose('land');
-      this.climber.setPosition(t.x, t.y + 24);
-      await this.climber.tweenTo(t.x, t.y, 220, 'Back.easeOut');
+      this.climber.setPosition(t.x, t.y);
       this.climber.squash(1.16, 0.84, 220);
       Audio.play('boot');
       this.effects.chalk(t.x, t.y);
@@ -1186,25 +1226,34 @@ export class ClimbScene extends Phaser.Scene {
     this.climber.stopTweens();
     this.time.delayedCall(250, () => this.comboUI.hide());
     Audio.play('fall');
-    this.climber.setPose('fall');
     const cp = this.checkpoint;
     const dist = cp.y - this.climber.y;
     const stretch = biomeStretchAt(levelToMeters(this.node.level));
     const fallsHere = this.director ? 0 : (this.run.biomeFalls[stretch] || 0) + 1;
     if (!this.director) this.run.biomeFalls[stretch] = fallsHere;
     this.runOverReason = this.modeCfg.permadeath ? null : fallsHere >= 2 ? `A SECOND FALL IN ${biomeAt(levelToMeters(this.node.level)).name}` : null;
-    if (this.modeCfg.permadeath || this.runOverReason) {
-      this.climber.tweenTo(this.climber.x, this.climber.y + 220, 1100, 'Quad.easeIn');
+    const ending = this.modeCfg.permadeath || this.runOverReason;
+    await this.peelOff();
+    if (this.state !== STATE.FALLING) return;
+    if (ending) {
+      // The last fall: the climber tumbles away down the wall.
+      this.climber.flail(540);
+      this.climber.tweenTo(this.climber.x + this.runRng.range(-30, 30), this.climber.y + 260, 1200, 'Quad.easeIn');
+      this.tweens.add({ targets: this.climber.sprite, scale: 0.7, duration: 1200, ease: 'Quad.easeIn' });
       this.time.delayedCall(700, () => this.cam.fadeOut(600, 10, 12, 20));
-      this.time.delayedCall(1400, () => this.runOver());
+      this.time.delayedCall(1400, () => { this.climber.sprite.setScale(1); this.runOver(); });
       return;
     }
+    this.climber.flail();
     if (dist < 170) {
       await this.climber.tweenTo(cp.x, cp.y, 300 + dist * 2, 'Quad.easeIn');
+      this.climber.stopFlail();
       this.climber.setPose('land');
+      this.climber.squash(1.25, 0.75, 260);
       Audio.play('land');
       this.effects.chalk(cp.x, cp.y);
       this.effects.chalk(cp.x - 6, cp.y);
+      this.effects.chalk(cp.x + 6, cp.y);
       if (this.settings.shake) this.cam.shake(200, 0.008);
       this.floatText('LANDED SAFELY', COLORS.text, 12);
       await this.climber.hold('land', 550);
@@ -1221,6 +1270,18 @@ export class ClimbScene extends Phaser.Scene {
         });
       });
     }
+  }
+
+  // The hands lose the hold: a short moment hanging off nothing, chalk and
+  // grit coming off the hold, before the drop.
+  async peelOff() {
+    const c = this.climber;
+    c.setPose('fall_peel');
+    this.effects.chalk(c.x - 6, c.y);
+    this.effects.chalk(c.x + 6, c.y);
+    this.effects.pebbleFall(c.x, c.y + 2, 4, 0x8a7f74);
+    await c.tweenTo(c.x, c.y - 3, 90, 'Quad.easeOut');
+    await c.tweenTo(c.x, c.y + 6, 110, 'Quad.easeIn');
   }
 
   warnLastFall() {
@@ -1477,7 +1538,9 @@ export class ClimbScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- update
   update(time, delta) {
-    const dt = Math.min(delta, 100);
+    const frozen = this.tipOpen;
+    if (frozen) this.freezeForTip();
+    const dt = frozen ? 0 : Math.min(delta, 100);
     this.clock += dt;
     this.lastFramePerf = performance.now();
     const now = this.clock;
@@ -1486,7 +1549,7 @@ export class ClimbScene extends Phaser.Scene {
 
     const cardOpen = this.director && this.tutorialCard.open;
     if (cardOpen && this.state === STATE.ROUTE_SELECT && this.node.kind === 'jug') this.grip.hang(dt / 1000, { onJug: true });
-    switch (cardOpen ? null : this.state) {
+    switch (cardOpen || frozen ? null : this.state) {
       case STATE.ROUTE_SELECT: {
         if (this.growStart) this.updateGrowth();
         const biome = biomeAt(levelToMeters(this.node.level));
@@ -1517,7 +1580,6 @@ export class ClimbScene extends Phaser.Scene {
         this.climber.setPose(Math.floor(now / 110) % 2 ? 'slip' : 'slip2');
         break;
       case STATE.FALLING:
-        if (POSES[this.climber.pose].anchor === 28) this.climber.setPose(Math.floor(now / 140) % 2 ? 'fall' : 'fall2');
         break;
       case STATE.RESTING:
       case STATE.VIEWING:
@@ -1626,6 +1688,11 @@ export class ClimbScene extends Phaser.Scene {
   updateBot(now) {
     const b = this.bot;
     if (!b) return;
+    if (this.tipOpen) {
+      if (!b.tipWait) b.tipWait = performance.now() + 400;
+      if (performance.now() > b.tipWait) { b.tipWait = 0; this.tips.skip(); this.tips.skip(); }
+      return;
+    }
     if (this.director && this.tutorialCard.open) {
       if (!b.cardWait) b.cardWait = this.clock + 400;
       if (this.clock > b.cardWait) { b.cardWait = 0; this.tutorialCard.close(); }

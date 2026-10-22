@@ -58,7 +58,9 @@ There is no separate tutorial: the first time something new shows up in a run (c
 route, the beat, jugs, ledges, slipping, off-beat and hold notes, loose rock, ice,
 crumbling holds, gusts, blind notes, gems, and every biome's twist), Bram, the base camp
 trader, pops up and explains it in one sentence ("DUCK THE ROCK! PRESS THE ARROW ON THE
-BEAT!"). The game keeps running; tap the bubble to skip. Each tip is shown once per save
+BEAT!"). The game stands still while he talks (the clock, notes, crumbling holds and
+falling rocks all wait); press Space, an arrow or tap the bubble to carry on, and the
+rhythm gets a short lead-in again. Each tip is shown once per save
 (`src/data/bramTips.js`, `src/ui/BramTip.js`).
 
 The old Training Crag still exists for testing: `?tutorial` jumps straight in.
@@ -66,8 +68,10 @@ The old Training Crag still exists for testing: `?tutorial` jumps straight in.
 ## Bram's logbook
 
 28 stamps on five pages (height, rhythm, mountain, finds, daring), from "climb 50 m" to
-"reach 480 m in Summit mode", plus two secret ones. Every stamp pays gems once. Open the
-logbook from the title screen or the pause menu (`src/data/logbook.js`,
+"reach 2000 m" and "reach 800 m in Summit mode", plus two secret ones. The later stamps on
+each page are real challenges. Every stamp shows its progress (`BEST 24/30`, `18/25`): per-run
+stamps show your best run so far. Every stamp pays gems once. Open the logbook from the
+title screen or the pause menu (`src/data/logbook.js`,
 `src/scenes/LogbookScene.js`).
 
 ## End of a run
@@ -94,6 +98,9 @@ run earned (`src/ui/RunSummary.js`).
   Wall, a music box in the Frozen Reach, a breathy flute above the clouds, a low bowed
   string with a slow drum in the Obsidian Spires and FM glass bells in the Crystal Heights.
   The motif plays under every biome title card and comes back (sometimes varied) while you climb.
+- **Animation**: every reach and pull goes through an in-between frame; topping out on a
+  ledge goes elbows-over, knee up, stand. A fall starts with the hands peeling off the hold,
+  then the climber flails down (a run-ending fall tumbles away).
 - **Feedback**: perfect hits flash the climber, burst a ring and play a note that climbs with
   the streak. The streak counter grows and catches fire at 10/20, and shatters when broken.
   New biomes get a typed title card, every 100 m shows a banner, and beating your record
@@ -160,17 +167,6 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
 | Trader / wardrobe | ↑ ↓ choose · ← → pack / change · Space buy / wear · Q E tabs · Esc leave |
 | Pause | Esc / P (in fullscreen in Chrome and Edge a tap of Esc pauses; hold Esc to leave fullscreen) |
 | Debug overlay | F3 or ` (then B cycles the autopilot) |
-
-## Sound credits
-
-Recorded sounds (all CC0, trimmed and normalised in `src/assets/audio/`): grabs and
-footsteps from Kenney's [Impact Sounds](https://kenney.nl/assets/impact-sounds); pebbles,
-rockfall, rock hits and sliding from rubberduck's
-[75 breaking, falling and hit sounds](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx);
-crystals from legoluft's
-[Atmospheric Interaction Sound Pack](https://opengameart.org/content/atmospheric-interaction-sound-pack);
-wind from SketchMan3's [wind whoosh loop](https://opengameart.org/content/wind-whoosh-loop).
-Everything else is synthesized.
 
 ## Deploy
 
