@@ -5,6 +5,7 @@ import { MenuScene } from './scenes/MenuScene.js';
 import { ClimbScene } from './scenes/ClimbScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { ShopScene } from './scenes/ShopScene.js';
+import { LogbookScene } from './scenes/LogbookScene.js';
 import { installFullscreenKey } from './utils/fullscreen.js';
 import { installTouchControls, isTouchDevice } from './ui/TouchControls.js';
 import { Audio } from './systems/AudioSystem.js';
@@ -23,7 +24,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene],
+  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, LogbookScene],
   disableContextMenu: true,
 });
 

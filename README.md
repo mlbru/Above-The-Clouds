@@ -52,15 +52,30 @@ URL flags: `?seed=123` (reproducible mountain), `?play` (skip title),
 `?timer` (setTimeout game loop for background tabs), `?harness` (loads the in-browser
 integration tests; run `await __runHarness()` in the console).
 
-## Tutorial
+## Bram explains as you go
 
-**TUTORIAL** on the title screen opens the Training Crag: a short hand-built wall
-(`src/data/tutorial.js`) with one lesson per feature, played with the real mechanics. Bram,
-the base camp trader, coaches you in short speech bubbles while you play (the game does not
-stop), points at what he talks about, and gives each lesson a small goal with a checkmark.
-A tag shows when the feature appears in a real run (calculated from `balanceConfig.js`).
-Finishing it the first time pays 15 gems; the pause menu can skip it.
-URL flag: `?tutorial` jumps straight in.
+There is no separate tutorial: the first time something new shows up in a run (choosing a
+route, the beat, jugs, ledges, slipping, off-beat and hold notes, loose rock, ice,
+crumbling holds, gusts, blind notes, gems, and every biome's twist), Bram, the base camp
+trader, pops up and explains it in one sentence ("DUCK THE ROCK! PRESS THE ARROW ON THE
+BEAT!"). The game keeps running; tap the bubble to skip. Each tip is shown once per save
+(`src/data/bramTips.js`, `src/ui/BramTip.js`).
+
+The old Training Crag still exists for testing: `?tutorial` jumps straight in.
+
+## Bram's logbook
+
+28 stamps on five pages (height, rhythm, mountain, finds, daring), from "climb 50 m" to
+"reach 480 m in Summit mode", plus two secret ones. Every stamp pays gems once. Open the
+logbook from the title screen or the pause menu (`src/data/logbook.js`,
+`src/scenes/LogbookScene.js`).
+
+## End of a run
+
+When the run ends you get a summary: the height you reached, a strip of the mountain
+showing which biome you were stranded in (and your record), perfect moves, best streak,
+finds (stones, discoveries, viewpoints), gems and slips caught, and any logbook stamps the
+run earned (`src/ui/RunSummary.js`).
 
 ## Game details
 
@@ -74,6 +89,11 @@ URL flag: `?tutorial` jumps straight in.
   the Blaze jacket (`streak` in `balanceConfig.js`).
 - **Record marker**: a dashed gold line with a flag shows your record height for the current
   mode on the wall, and fades when you pass it.
+- **Music**: every biome has its own key, tempo, lead instrument and motif (`music` in
+  `src/data/biomes.js`): a plucked string in the Green Rise, a wooden marimba on the Stone
+  Wall, a music box in the Frozen Reach, a breathy flute above the clouds, a low bowed
+  string with a slow drum in the Obsidian Spires and FM glass bells in the Crystal Heights.
+  The motif plays under every biome title card and comes back (sometimes varied) while you climb.
 - **Feedback**: perfect hits flash the climber, burst a ring and play a note that climbs with
   the streak. The streak counter grows and catches fire at 10/20, and shatters when broken.
   New biomes get a typed title card, every 100 m shows a banner, and beating your record
@@ -138,8 +158,19 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
 | Climb inputs | ← ↑ → / A W D, on the beat (keep held for hold notes) |
 | At a ledge | R rest · V view · C photo · T trader (base camp) · Space climb |
 | Trader / wardrobe | ↑ ↓ choose · ← → pack / change · Space buy / wear · Q E tabs · Esc leave |
-| Pause | Esc / P |
+| Pause | Esc / P (in fullscreen in Chrome and Edge a tap of Esc pauses; hold Esc to leave fullscreen) |
 | Debug overlay | F3 or ` (then B cycles the autopilot) |
+
+## Sound credits
+
+Recorded sounds (all CC0, trimmed and normalised in `src/assets/audio/`): grabs and
+footsteps from Kenney's [Impact Sounds](https://kenney.nl/assets/impact-sounds); pebbles,
+rockfall, rock hits and sliding from rubberduck's
+[75 breaking, falling and hit sounds](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx);
+crystals from legoluft's
+[Atmospheric Interaction Sound Pack](https://opengameart.org/content/atmospheric-interaction-sound-pack);
+wind from SketchMan3's [wind whoosh loop](https://opengameart.org/content/wind-whoosh-loop).
+Everything else is synthesized.
 
 ## Deploy
 
@@ -171,9 +202,12 @@ cards and menu items directly, and use the PAUSE button at the top.
 
 ## Replacing assets
 
-- Audio: add `{ key, url }` entries to `src/data/audioManifest.js` with keys like `grab`,
-  `boot`, `slip`, `perfect`. A loaded file replaces that synthesized sound; missing files
-  are ignored.
+- Audio: add `{ key, url, gain? }` entries to `src/data/audioManifest.js` (import the
+  file with `?inline` so the one-file builds stay one file). Several entries with one key
+  are takes of the same sound; one is picked at random with a small pitch change. Keys
+  with recordings: `grab`, `grab-ice`, `boot`, `boot-snow`, `pebble`, `rockfall`, `rockhit`,
+  `slide`, `crystal` and a looping `wind`; any other key replaces the synth sound of that
+  name. Missing or broken files keep the synth sound.
 - Art: every texture is created under a fixed key in `src/render/textures.js`
   (e.g. `climber` with named frames, `hold_<biome>_<kind>_<hazard>`, `decor_*`, `bg_*`).
   Load a sheet under the same key to replace it.

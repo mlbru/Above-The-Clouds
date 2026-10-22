@@ -7,6 +7,9 @@
 //   events    ambient set pieces (eagles)
 //   backdrop  sky tint and distant scenery layers (see render/backdropArt.js)
 //   mechanic  the biome's own rule (see systems/mechanics/)
+//   music     key (root + scale), lead instrument (see AudioSystem INSTRUMENTS),
+//             tempo, and a motif of [semitones above root, beats] played an
+//             `octave` up; drum adds a slow low pulse
 import { DEPTH } from '../config/gameConfig.js';
 
 export const BIOMES = {
@@ -22,7 +25,7 @@ export const BIOMES = {
     hazards: { loose: 0, icy: 0 },
     weather: { wind: 0.25, snow: 0, leaves: 0.6, mist: 0.15 },
     ambience: { birds: 1, stream: 0.6, wind: 0.25 },
-    music: { root: 57, scale: [0, 2, 4, 7, 9] },
+    music: { root: 57, scale: [0, 2, 4, 7, 9], instrument: 'pluck', tempo: 96, octave: 12, motif: [[0, 1], [4, 0.5], [7, 0.5], [9, 1], [7, 1], [4, 2]] },
     wall: { overlays: ['moss'], ledgeTop: 'accentB', ledgeFringe: true, featureStrata: false },
     rest: { hut: 0.1, tool: 0.04, discovery: null, viewpoints: ['PINE OVERLOOK', 'FALLS LOOKOUT', 'MEADOW BALCONY', 'FERN TERRACE'] },
     backdrop: {
@@ -46,7 +49,7 @@ export const BIOMES = {
     hazards: { loose: 0.14, icy: 0 },
     weather: { wind: 0.55, snow: 0, leaves: 0, mist: 0.45 },
     ambience: { birds: 0.25, stream: 0, wind: 0.55 },
-    music: { root: 55, scale: [0, 3, 5, 7, 10] },
+    music: { root: 55, scale: [0, 3, 5, 7, 10], instrument: 'marimba', tempo: 84, octave: 12, motif: [[0, 0.5], [0, 0.5], [3, 1], [5, 0.5], [7, 1.5], [5, 0.5], [3, 2]] },
     wall: { overlays: ['strata', 'lichen'], ledgeTop: 'rock4' },
     rest: { discovery: 'valley-reveal', viewpoints: ['GRANITE BALCONY', "EAGLE'S PERCH", 'MISTY VALLEY VIEW', 'THE ANVIL'] },
     backdrop: {
@@ -71,7 +74,7 @@ export const BIOMES = {
     hazards: { loose: 0.05, icy: 0.2 },
     weather: { wind: 0.75, snow: 0.8, leaves: 0, mist: 0.3 },
     ambience: { birds: 0, stream: 0, wind: 0.8 },
-    music: { root: 52, scale: [0, 2, 3, 7, 8] },
+    music: { root: 52, scale: [0, 2, 3, 7, 8], instrument: 'musicbox', tempo: 72, octave: 24, motif: [[7, 1], [8, 0.5], [7, 0.5], [3, 1], [2, 1], [0, 3]] },
     wall: { overlays: ['frost'], ledgeTop: 'accentB' },
     decor: { pine: 'decor_pine_snow' },
     rest: { discovery: 'prayer-flags', viewpoints: ['FROST WINDOW', 'BLUE CREVASSE VIEW', 'GLACIER STEP', 'SILENT CORNICE'] },
@@ -96,7 +99,7 @@ export const BIOMES = {
     hazards: { loose: 0.05, icy: 0.1 },
     weather: { wind: 0.6, snow: 0.2, leaves: 0, mist: 0.1 },
     ambience: { birds: 0, stream: 0, wind: 0.6 },
-    music: { root: 60, scale: [0, 2, 4, 7, 11] },
+    music: { root: 60, scale: [0, 2, 4, 7, 11], instrument: 'flute', tempo: 66, octave: 12, motif: [[0, 1.5], [4, 0.5], [7, 1], [11, 1], [12, 3]] },
     wall: { overlays: ['veins'], ledgeTop: 'rock4' },
     rest: { discovery: 'sea-of-clouds', viewpoints: ['SEA OF CLOUDS', 'MOON TERRACE', 'STAR LEDGE', 'THE QUIET EDGE'] },
     backdrop: {
@@ -121,7 +124,7 @@ export const BIOMES = {
     hazards: { loose: 0.12, icy: 0.05 },
     weather: { wind: 0.8, snow: 0.1, leaves: 0, mist: 0.2 },
     ambience: { birds: 0, stream: 0, wind: 0.85 },
-    music: { root: 50, scale: [0, 3, 5, 6, 10] },
+    music: { root: 50, scale: [0, 3, 5, 6, 10], instrument: 'cello', tempo: 60, octave: 0, motif: [[0, 2], [3, 1], [6, 1], [5, 2], [0, 2]], drum: true },
     wall: { overlays: ['veins'], ledgeTop: 'rock4' },
     rest: { viewpoints: ['DARK GLASS PLINTH', 'EMBER BALCONY', 'NIGHT SPIRE'] },
     backdrop: {
@@ -145,7 +148,7 @@ export const BIOMES = {
     hazards: { loose: 0.04, icy: 0.25 },
     weather: { wind: 0.7, snow: 0.6, leaves: 0, mist: 0.15 },
     ambience: { birds: 0, stream: 0, wind: 0.8 },
-    music: { root: 62, scale: [0, 2, 4, 6, 9] },
+    music: { root: 62, scale: [0, 2, 4, 6, 9], instrument: 'glass', tempo: 80, octave: 24, motif: [[9, 0.5], [6, 0.5], [4, 0.5], [2, 0.5], [4, 1], [6, 1], [9, 2]] },
     wall: { overlays: ['frost', 'veins'], ledgeTop: 'accentB' },
     rest: { viewpoints: ['PRISM LEDGE', 'GLASS GARDEN', 'THE LANTERN'] },
     backdrop: {

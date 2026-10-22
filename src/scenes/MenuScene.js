@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR } from '../config/gameConfig.js';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, PX_PER_METER } from '../config/gameConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
 import { DayNightSystem } from '../systems/DayNightSystem.js';
 import { WeatherSystem } from '../systems/WeatherSystem.js';
@@ -15,6 +15,21 @@ import { BIOMES, biomeMixAt } from '../data/biomes.js';
 import { POSES, FRAME_H } from '../render/climberArt.js';
 import { BALANCE } from '../config/balanceConfig.js';
 import { toggleFullscreen, isFullscreen } from '../utils/fullscreen.js';
+import { STAMPS } from '../data/logbook.js';
+import { measureLine } from '../utils/pixelFont.js';
+import { toCss } from '../utils/color.js';
+
+// Breaks text into lines that fit `maxW` pixels in the pixel font.
+function wrap(text, maxW) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (measureLine(next) > maxW && line) { lines.push(line); line = word; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
+}
 
 
 export class MenuScene extends Phaser.Scene {
@@ -33,8 +48,9 @@ export class MenuScene extends Phaser.Scene {
     const camp = this.mountain.getLevel(0).nodes[0];
     this.climber = this.add.sprite(camp.x, camp.y, 'climber', 'look').setOrigin(0.5, POSES.look.anchor / FRAME_H).setDepth(DEPTH.climber);
     this.camY = camp.y - 50 - GAME_HEIGHT * CAMERA_ANCHOR;
+    this.homeY = this.camY;
     this.cameras.main.setScroll(0, Math.round(this.camY));
-    this.wall.update(0, 30, this.camY - 200, this.camY + GAME_HEIGHT);
+    this.wall.update(0, 30, this.camY - 600, this.camY + GAME_HEIGHT);
     this.wall.flush();
     this.t = 0;
 
@@ -42,12 +58,19 @@ export class MenuScene extends Phaser.Scene {
     this.list = null;
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
     this.input.keyboard.on('keydown', this.onKey, this);
-    this.input.on('pointerdown', () => Audio.init());
+    Audio.setMusicMode(BIOMES.green.music);
+    this.input.on('pointerdown', () => { Audio.init(); if (this.introRunning) this.endIntro(); });
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown', this.onKey, this);
       this.wall.destroy();
     });
+    this.introRunning = false;
+    if (!this.registry.get('introShown')) {
+      this.registry.set('introShown', true);
+      this.playIntro();
+    }
     this.showMain();
+    if (this.introRunning && this.list) this.list.texts.forEach((t) => t.setAlpha(0));
   }
 
   clearUI() {
@@ -64,37 +87,116 @@ export class MenuScene extends Phaser.Scene {
     return g;
   }
 
+  // Title, a mode switch and the menu on the left, your records on the right;
+  // the climber and Bram stay visible at base camp in the middle.
   showMain() {
     this.clearUI();
     const d = this.prog.data;
-    this.add2(new PixelText(this, GAME_WIDTH / 2 + 1, 26, 'ABOVE THE CLOUDS', { color: '#ffffff', shadow: '#2a2440' }).setOrigin(0.5, 0).setScale(3));
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 48, 'AN ENDLESS CLIMB', { color: COLORS.dim }).setOrigin(0.5, 0));
+    const W = GAME_WIDTH / 2;
+    const logo = this.add2(new PixelText(this, W, 14, 'ABOVE THE CLOUDS', { color: '#ffffff', shadow: '#2a2440' }).setOrigin(0.5, 0).setScale(3));
+    logo.setTint(0xffffff, 0xffffff, 0x9fd8ff, 0x9fd8ff);
+    this.logo = logo;
+    this.add2(new PixelText(this, W, 38, 'AN ENDLESS CLIMB TO THE BEAT', { color: '#dfe8ff', shadow: '#2a2440' }).setOrigin(0.5, 0));
+
+    // Mode pills.
     const modes = BALANCE.modeOrder;
     const curMode = () => (modes.includes(this.prog.settings.mode) ? this.prog.settings.mode : 'normal');
-    const cycle = (d) => {
-      const i = (modes.indexOf(curMode()) + d + modes.length) % modes.length;
-      this.prog.setSetting('mode', modes[i]);
-      blurb.setText(BALANCE.modes[modes[i]].blurb).setColor(modes[i] === 'normal' ? COLORS.dim : COLORS.red);
+    const dev = !!(d.cheats && d.cheats.devTeleport);
+    const px = 14, py = 60, pw = 134, ph = dev ? 146 : 134;
+    this.panel(px, py, pw, ph);
+    const pills = this.add2(this.add.graphics());
+    const pillW = Math.floor((pw - 8) / modes.length);
+    const pillTexts = modes.map((m, i) => {
+      const t = this.add2(new PixelText(this, px + 4 + i * pillW + pillW / 2, py + 7, BALANCE.modes[m].label).setOrigin(0.5, 0));
+      t.setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.prog.setSetting('mode', m); drawPills(); Audio.play('ui'); });
+      return t;
+    });
+    const blurb = this.add2(new PixelText(this, px + pw / 2, py + 21, '', { color: COLORS.dim }).setOrigin(0.5, 0));
+    const drawPills = () => {
+      pills.clear();
+      modes.forEach((m, i) => {
+        const sel = m === curMode();
+        const col = m === 'normal' ? 0x8fd16a : m === 'hard' ? 0xf2c14e : 0xf0644b;
+        drawPanel(pills, px + 4 + i * pillW, py + 4, pillW - 2, 13, { alpha: sel ? 1 : 0.5, fill: sel ? 0x2e2a3c : 0x16141f, highlight: sel ? col : null });
+        pillTexts[i].setColor(sel ? toCss(col) : COLORS.faint);
+      });
+      const cfg = BALANCE.modes[curMode()];
+      blurb.setText(wrap(cfg.blurb, pw - 10)).setColor(curMode() === 'normal' ? COLORS.dim : COLORS.red);
     };
-    this.panel(GAME_WIDTH / 2 - 70, 64, 140, 94);
-    const blurb = this.add2(new PixelText(this, GAME_WIDTH / 2, 140, BALANCE.modes[curMode()].blurb, { color: curMode() === 'normal' ? COLORS.dim : COLORS.red }).setOrigin(0.5, 0));
-    blurb.setY(162);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 72, [
-      { label: () => `MODE < ${BALANCE.modes[curMode()].label} >`, onLeft: () => cycle(-1), onRight: () => cycle(1), onSelect: () => cycle(1) },
-      { label: 'CLIMB', onSelect: () => this.startClimb() },
-      { label: () => (d.tutorialDone ? 'TUTORIAL' : 'TUTORIAL (NEW!)'), onSelect: () => this.startClimb(true) },
-      ...(d.cheats && d.cheats.devTeleport ? [{ label: 'DEV: TELEPORT', onSelect: () => this.showTeleport() }] : []),
+    const cycle = (dd) => {
+      const i = (modes.indexOf(curMode()) + dd + modes.length) % modes.length;
+      this.prog.setSetting('mode', modes[i]);
+      drawPills();
+    };
+    drawPills();
+
+    this.list = new MenuList(this, px + 12, py + 44, [
+      { label: 'CLIMB', onSelect: () => this.startClimb(), onLeft: () => cycle(-1), onRight: () => cycle(1) },
+      { label: () => `LOGBOOK  ${d.stamps.length}/${STAMPS.length}`, onSelect: () => this.openLogbook(), onLeft: () => cycle(-1), onRight: () => cycle(1) },
+      ...(dev ? [{ label: 'DEV: TELEPORT', onSelect: () => this.showTeleport() }] : []),
       { label: 'WARDROBE', onSelect: () => this.openWardrobe() },
       { label: 'SETTINGS', onSelect: () => this.showSettings() },
       { label: 'CONTROLS', onSelect: () => this.showControls() },
-      { label: () => (isFullscreen() ? 'EXIT FULLSCREEN (F)' : 'FULLSCREEN (F)'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
-    ], { depth: DEPTH.hud + 1, start: d.tutorialDone ? 1 : 2 });
-    const biomes = d.biomes.map((b) => BIOMES[b] && BIOMES[b].name.replace('THE ', '')).filter(Boolean).join(', ') || 'NONE YET';
+      { label: () => (isFullscreen() ? 'WINDOWED (F)' : 'FULLSCREEN (F)'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
+    ], { depth: DEPTH.hud + 1, align: 'left', spacing: 12 });
+    this.add2(new PixelText(this, px + pw / 2, py + ph - 11, '← → MODE   ↑ ↓ MENU', { color: COLORS.faint }).setOrigin(0.5, 0));
+
+    // Records card.
+    const rx = GAME_WIDTH - 14 - 134, ry = 60, rw = 134;
+    this.panel(rx, ry, rw, 134);
     const bm = d.bestByMode || {};
-    this.add2(new PixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, `RECORDS  NORMAL ${Math.floor(bm.normal || 0)} M   HARD ${Math.floor(bm.hard || 0)} M   SUMMIT ${Math.floor(bm.summit || 0)} M`, { color: COLORS.gold }).setOrigin(0.5, 0));
-    const stats = `BEST ${Math.floor(d.bestHeight)} M   CLIMBED ${Math.floor(d.totalClimbed)} M   STREAK ${d.bestStreak || 0}   GEMS ◆${this.prog.gems}   VIEWPOINTS ${d.viewpoints.length}   FINDS ${d.discoveries.length}`;
-    this.add2(new PixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 26, stats, { color: COLORS.text }).setOrigin(0.5, 0));
-    this.add2(new PixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 16, `AREAS: ${biomes}`, { color: COLORS.faint }).setOrigin(0.5, 0));
+    const row = (y, label, value, color = COLORS.text) => {
+      this.add2(new PixelText(this, rx + 8, ry + y, label, { color: COLORS.dim }));
+      this.add2(new PixelText(this, rx + rw - 8, ry + y, value, { color }).setOrigin(1, 0));
+    };
+    this.add2(new PixelText(this, rx + rw / 2, ry + 6, 'RECORDS', { color: COLORS.gold }).setOrigin(0.5, 0));
+    row(18, 'NORMAL', `${Math.floor(bm.normal || 0)} M`, COLORS.green);
+    row(28, 'HARD', `${Math.floor(bm.hard || 0)} M`, COLORS.gold);
+    row(38, 'SUMMIT', `${Math.floor(bm.summit || 0)} M`, COLORS.red);
+    const g = this.add2(this.add.graphics());
+    g.fillStyle(0x4a4560, 1).fillRect(rx + 8, ry + 50, rw - 16, 1);
+    row(56, 'BEST STREAK', `${d.bestStreak || 0}`);
+    row(66, 'CLIMBED', `${Math.floor(d.totalClimbed)} M`);
+    row(76, 'GEMS', `◆${this.prog.gems}`, '#9fe8ff');
+    row(86, 'FINDS', `${d.discoveries.length + d.viewpoints.length}`);
+    row(96, 'STAMPS', `${d.stamps.length}/${STAMPS.length}`, COLORS.gold);
+    // The areas you have seen, as coloured pips.
+    this.add2(new PixelText(this, rx + 8, ry + 110, 'AREAS', { color: COLORS.dim }));
+    const order = Object.values(BIOMES).sort((a, b) => a.from - b.from);
+    order.forEach((b, i) => {
+      const seen = d.biomes.includes(b.id);
+      const x = rx + rw - 8 - (order.length - i) * 11 + 2;
+      g.fillStyle(seen ? b.accentA : 0x2e2a3c, 1).fillRect(x, ry + 110, 8, 6);
+      g.lineStyle(1, seen ? 0xf4efe4 : 0x4a4560, seen ? 0.5 : 1).strokeRect(x - 0.5, ry + 109.5, 9, 7);
+    });
+    this.add2(new PixelText(this, rx + rw / 2, ry + 122, d.runs ? `${d.runs} RUNS SO FAR` : 'THE MOUNTAIN IS WAITING', { color: COLORS.faint }).setOrigin(0.5, 0));
+
+    if (this.introRunning) this.ui.forEach((o) => o.setAlpha(0));
+  }
+
+  // First visit: the camera starts up in the clouds and drifts down to base camp.
+  playIntro() {
+    this.introRunning = true;
+    const to = this.camY;
+    this.camY = to - 520;
+    this.cameras.main.setScroll(0, Math.round(this.camY));
+    const st = { y: this.camY };
+    this.introTween = this.tweens.add({
+      targets: st, y: to, duration: 3200, ease: 'Sine.easeInOut',
+      onUpdate: () => { this.camY = st.y; this.cameras.main.setScroll(0, Math.round(st.y)); },
+      onComplete: () => this.endIntro(),
+    });
+  }
+
+  endIntro() {
+    if (!this.introRunning) return;
+    this.introRunning = false;
+    if (this.introTween) this.introTween.stop();
+    this.camY = this.homeY;
+    this.cameras.main.setScroll(0, Math.round(this.camY));
+    this.ui.forEach((o) => { o.setAlpha(0); this.tweens.add({ targets: o, alpha: 1, duration: 500 }); });
+    if (this.list) this.list.texts.forEach((t) => { t.setAlpha(0); this.tweens.add({ targets: t, alpha: 1, duration: 500 }); });
+    Audio.play('titlecard');
   }
 
   // Dev only (code WARPZONE): start a run at the beginning of any biome.
@@ -133,6 +235,11 @@ export class MenuScene extends Phaser.Scene {
     this.list = new MenuList(this, GAME_WIDTH / 2, 156, [{ label: 'BACK', onSelect: () => this.showMain() }], { depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
   }
 
+  openLogbook() {
+    this.scene.launch('Logbook', { returnTo: 'Menu' });
+    this.scene.pause();
+  }
+
   openWardrobe() {
     this.scene.launch('Shop', { mode: 'wardrobe', returnTo: 'Menu' });
     this.scene.pause();
@@ -146,6 +253,7 @@ export class MenuScene extends Phaser.Scene {
 
   onKey(event) {
     Audio.init();
+    if (this.introRunning) { this.endIntro(); return; }
     if (event.repeat || !this.list) return;
     this.list.handleKey(event.code);
   }
@@ -154,11 +262,13 @@ export class MenuScene extends Phaser.Scene {
     this.t += delta;
     this.dayNight.update(delta);
     const day = this.dayNight.state();
-    const alt = 3 + Math.sin(this.t / 9000) * 3;
+    // During the intro the scenery follows the camera down from up high.
+    const alt = 3 + Math.sin(this.t / 9000) * 3 + Math.max(0, (this.homeY - this.camY) / PX_PER_METER);
     this.background.update(delta, alt, day, { birds: 1 }, { mix: biomeMixAt(alt) });
     this.weather.update(delta, { biome: BIOMES.green, alt, light: day.light, reduced: this.prog.settings.reducedParticles });
     this.overlay.fillColor = day.light;
     this.wall.update(delta, 30, this.camY - 200, this.camY + GAME_HEIGHT);
+    if (this.logo && !this.introRunning) this.logo.y = 14 + Math.round(Math.sin(this.t / 900));
     this.climber.setFrame(Math.floor(this.t / 2600) % 2 ? 'look2' : 'look');
     Audio.setAmbience({ wind: 0.25, stream: 0, birds: day.night < 0.4 ? 1 : 0 });
     Audio.update();

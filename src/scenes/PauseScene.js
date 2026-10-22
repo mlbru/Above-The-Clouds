@@ -42,10 +42,11 @@ export class PauseScene extends Phaser.Scene {
     const stats = c ? `${c.modeCfg.label} MODE   HEIGHT ${h.toFixed(0)} M   BEST ${Math.floor(this.prog.bestFor(c.mode))} M   CLIMBED THIS RUN ${c.run.climbed.toFixed(0)} M` : '';
     this.add2(new PixelText(this, GAME_WIDTH / 2, 56, stats, { color: COLORS.dim }).setOrigin(0.5, 0));
     if (c) this.add2(new PixelText(this, GAME_WIDTH / 2, 65, `SLIPS ${c.run.slips}   FALLS ${c.run.falls}   PERFECTS ${c.run.perfects}   BEST STREAK ${c.run.bestStreak}   GEMS +${c.run.gems || 0}   SEED ${c.seed}`, { color: COLORS.faint }).setOrigin(0.5, 0));
-    this.panel(GAME_WIDTH / 2 - 70, 80, 140, this.climb && this.climb.tutorial ? 99 : 88);
+    this.panel(GAME_WIDTH / 2 - 70, 80, 140, this.climb && this.climb.tutorial ? 110 : 99);
     this.list = new MenuList(this, GAME_WIDTH / 2, 88, [
       { label: 'RESUME', onSelect: () => this.resume() },
       { label: 'WARDROBE', onSelect: () => this.openWardrobe() },
+      { label: "BRAM'S LOGBOOK", onSelect: () => this.openLogbook() },
       { label: 'SETTINGS', onSelect: () => this.showSettings() },
       { label: 'CONTROLS', onSelect: () => this.showControls() },
       { label: () => (isFullscreen() ? 'EXIT FULLSCREEN' : 'FULLSCREEN'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
@@ -57,6 +58,11 @@ export class PauseScene extends Phaser.Scene {
 
   openWardrobe() {
     this.scene.launch('Shop', { mode: 'wardrobe', returnTo: 'Pause' });
+    this.scene.pause();
+  }
+
+  openLogbook() {
+    this.scene.launch('Logbook', { returnTo: 'Pause' });
     this.scene.pause();
   }
 

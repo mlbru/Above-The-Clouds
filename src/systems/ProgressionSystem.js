@@ -1,6 +1,7 @@
 import { COSMETICS, DEFAULT_LOOK, describeRequirement } from '../data/cosmetics.js';
 import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, PACK_SLOTS } from '../data/shop.js';
+import { STAMPS } from '../data/logbook.js';
 
 const KEY = 'above-the-clouds-save-v1';
 
@@ -42,6 +43,11 @@ function freshData() {
     perks: [],
     activePerk: null,
     cheats: {},
+    // Bram's logbook: earned stamp ids and the lifetime counters stamps read.
+    stamps: [],
+    counters: {},
+    // Bram's one-line tips already shown.
+    tipsSeen: [],
   };
 }
 
@@ -65,7 +71,7 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw);
       // Items without a requirement (including ones added in later versions) are always owned.
       const unlocked = [...new Set([...(parsed.unlocked || []), ...base.unlocked])];
-      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory } };
+      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters } };
     } catch {
       return base;
     }
@@ -252,6 +258,31 @@ export class ProgressionSystem {
     this.save();
   }
   addPhoto() { this.data.photos++; this.save(); }
+
+  // ---------- Bram's logbook ----------
+  bump(counter, n = 1) {
+    const c = this.data.counters;
+    c[counter] = (c[counter] || 0) + n;
+    this.save();
+  }
+
+  hasStamp(id) { return this.data.stamps.includes(id); }
+
+  // Checks every unearned stamp against the save and the current run (or
+  // null). Earned stamps are recorded and paid out; returns them.
+  checkStamps(run = null) {
+    const d = this.data;
+    const ctx = { d, run, c: d.counters };
+    const earned = STAMPS.filter((s) => !d.stamps.includes(s.id) && s.test(ctx));
+    if (!earned.length) return [];
+    for (const s of earned) {
+      d.stamps.push(s.id);
+      d.gems += s.gems;
+      d.gemsEarned += s.gems;
+    }
+    this.save();
+    return earned;
+  }
 }
 
 // A throwaway copy for dev runs: plays like the real save but never writes it.

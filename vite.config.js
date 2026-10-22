@@ -28,5 +28,5 @@ export default defineConfig({
   base: './',
   plugins: [screenshotSaver()],
   server: { port: 5183, strictPort: true },
-  build: { chunkSizeWarningLimit: 2000 },
+  build: { chunkSizeWarningLimit: 2600 },
 });

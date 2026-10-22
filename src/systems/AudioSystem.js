@@ -1,5 +1,8 @@
 // Procedural Web Audio: synthesized SFX, layered ambience and sparse generative
-// music. Real samples (see data/audioManifest.js) override synth sounds by key.
+// music. Recorded samples (see data/audioManifest.js) replace synth sounds by
+// key; a key can have several takes, one is picked at random and its pitch
+// nudged a little so repeats don't sound identical.
+// Every biome's music has its own lead instrument and motif (data/biomes.js).
 // Every method is a safe no-op until init() runs after a user gesture.
 
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -11,7 +14,10 @@ class AudioSystemImpl {
     this.sfxVolume = 0.8;
     this.phaserSound = null;
     this.phaserCache = null;
-    this.music = { root: 57, scale: [0, 2, 4, 7, 9], intensity: 0.3, swellUntil: 0, nextAt: 0 };
+    this.music = { root: 57, scale: [0, 2, 4, 7, 9], instrument: 'pluck', tempo: 96, octave: 12, motif: null, drum: false, intensity: 0.3, swellUntil: 0, nextAt: 0 };
+    this.samples = {};
+    this.sampleSources = [];
+    this.plucks = {};
     this.amb = { wind: 0.2, stream: 0, birds: 0, nextBirdAt: 0 };
     this.paused = false;
     this.lastPlay = {};
@@ -50,9 +56,49 @@ class AudioSystemImpl {
     this.brown = this.makeNoise(4, 'brown');
     this.applyVolumes();
     this.startAmbience();
+    this.decodeSamples();
   }
 
   setSampleSource(sound, cache) { this.phaserSound = sound; this.phaserCache = cache; }
+
+  // entries: [{ key, url, gain?, rate?, reverb? }] (url may be a data: URL). Several
+  // entries with the same key are takes of one sound. Decoded once the
+  // AudioContext exists; anything that fails to load keeps the synth sound.
+  loadSamples(entries) {
+    this.sampleSources.push(...entries);
+    if (this.ctx) this.decodeSamples();
+  }
+
+  decodeSamples() {
+    const pending = this.sampleSources.splice(0);
+    for (const e of pending) {
+      fetch(e.url)
+        .then((r) => r.arrayBuffer())
+        .then((ab) => new Promise((res, rej) => this.ctx.decodeAudioData(ab, res, rej)))
+        .then((buffer) => {
+          (this.samples[e.key] || (this.samples[e.key] = [])).push({ buffer, gain: e.gain ?? 1, rate: e.rate ?? 1, reverb: e.reverb || 0 });
+          if (e.key === 'wind') this.useWindSample();
+        })
+        .catch(() => console.warn(`[audio] could not decode ${e.key}, using synth fallback`));
+    }
+  }
+
+  // Plays one take of a recorded sound. Returns false if there is none.
+  playSample(key, { volume = 1, rate = 1, t = 0, bus = this.sfxBus } = {}) {
+    const takes = this.samples[key];
+    if (!takes || !takes.length) return false;
+    const take = takes[Math.floor(Math.random() * takes.length)];
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = take.buffer;
+    src.playbackRate.value = take.rate * rate * (0.94 + Math.random() * 0.12);
+    const g = ctx.createGain();
+    g.gain.value = take.gain * volume;
+    src.connect(g).connect(bus);
+    if (take.reverb) { const rg = ctx.createGain(); rg.gain.value = take.reverb; g.connect(rg).connect(this.reverb); }
+    src.start(ctx.currentTime + t);
+    return true;
+  }
 
   setVolumes(music, sfx) {
     this.musicVolume = music;
@@ -143,11 +189,41 @@ class AudioSystemImpl {
     const now = this.ctx.currentTime;
     if (this.lastPlay[name] && now - this.lastPlay[name] < 0.025) return;
     this.lastPlay[name] = now;
+    if (this.playRecorded(name, opts)) return;
     if (this.phaserCache && this.phaserCache.exists(name) && this.phaserSound) {
       try { this.phaserSound.play(name, { volume: this.sfxVolume }); return; } catch { /* fall back */ }
     }
     const fn = this.sfx[name];
     if (fn) fn.call(this, opts);
+  }
+
+  // Sounds that have recordings. Some synth sounds are built from others
+  // (slip = slide + pebbles), so those pick their recorded parts here.
+  playRecorded(name, o) {
+    if (!Object.keys(this.samples).length) return false;
+    switch (name) {
+      case 'grab': {
+        const ok = this.playSample(o.icy ? 'grab-ice' : 'grab') || (o.icy && this.playSample('grab'));
+        if (ok && o.icy && !this.samples['grab-ice']) this.tone({ t: 0.01, freq: 2600, toFreq: 2400, dur: 0.25, peak: 0.05, reverb: 0.4 });
+        return ok;
+      }
+      case 'boot': return this.playSample(o.snow ? 'boot-snow' : 'boot') || this.playSample('boot');
+      case 'pebble': {
+        if (!this.samples.pebble) return false;
+        const n = Math.min(3, Math.ceil((o.count || 4) / 2));
+        for (let i = 0; i < n; i++) this.playSample('pebble', { t: i * (0.08 + Math.random() * 0.1), volume: (o.volume || 1) * (1 - i * 0.25) });
+        return true;
+      }
+      case 'crumble': return this.playSample('rockfall') && (this.play('pebble', { count: 4 }), true);
+      case 'rockhit': return this.playSample('rockhit');
+      case 'crystal': {
+        const n = { L: 0.89, U: 1, R: 1.12 }[o.dir] || 1;
+        return this.playSample('crystal', { rate: n });
+      }
+      case 'gem': return this.playSample('crystal', { rate: 1.3 + Math.min(0.5, Math.log2(o.value || 1) * 0.12), volume: 0.7 }) && (this.tone({ t: 0.05, freq: midiToHz(95), dur: 0.3, type: 'triangle', peak: 0.03, reverb: 0.5 }), true);
+      case 'slip': return this.playSample('slide') && (this.play('pebble', { count: 6 }), true);
+      default: return this.playSample(name);
+    }
   }
 
   get sfx() {
@@ -214,10 +290,13 @@ class AudioSystemImpl {
         this.noiseHit({ t: 0.5, dur: 0.9, type: 'highpass', freq: 6000, peak: 0.05, reverb: 0.6 });
       },
       // Sting under a new biome title card.
+      // The new biome introduces itself: a held chord, then its motif.
       titlecard() {
         const r = this.music.root;
         [0, 7, 12, 16, 19].forEach((s, i) => this.tone({ t: i * 0.03, freq: midiToHz(r + s), dur: 2.6, attack: 0.3, peak: 0.035, reverb: 0.9, bus: this.musicBus }));
         this.tone({ freq: midiToHz(r - 12), dur: 2.4, attack: 0.05, peak: 0.08, reverb: 0.6, bus: this.musicBus });
+        if (this.music.motif) this.playMotif(this.music.motif, 0.5, 0.055);
+        this.music.nextAt = Math.max(this.music.nextAt, this.ctx.currentTime + 6);
       },
       // Bright chime; rarer stones ring higher and longer.
       gem(o) {
@@ -291,6 +370,24 @@ class AudioSystemImpl {
         [7, 3, 0, -5].forEach((s, i) => this.tone({ t: i * 0.35, freq: midiToHz(r + s), dur: 2, attack: 0.05, peak: 0.05, reverb: 0.9, bus: this.musicBus }));
       },
       wing() { this.noiseHit({ dur: 0.5, freq: 500, q: 0.7, peak: 0.08, attack: 0.15 }); },
+      // Bram clears his throat: two short voiced blips.
+      bram() {
+        [[0, 196, 220], [0.12, 247, 233]].forEach(([t, f, to]) => {
+          this.tone({ t, freq: f, toFreq: to, dur: 0.09, type: 'sawtooth', peak: 0.02, attack: 0.01 });
+          this.noiseHit({ t, dur: 0.08, type: 'bandpass', freq: 750, q: 6, peak: 0.03, attack: 0.01 });
+        });
+      },
+      // A rubber stamp hits the logbook, then a little bell.
+      stamp() {
+        this.tone({ freq: 110, toFreq: 55, dur: 0.12, peak: 0.3 });
+        this.noiseHit({ dur: 0.08, type: 'lowpass', freq: 1400, peak: 0.25 });
+        this.noiseHit({ t: 0.02, dur: 0.18, freq: 3000, q: 0.5, peak: 0.05 });
+        [0, 7, 12].forEach((s2, i) => this.tone({ t: 0.18 + i * 0.07, freq: midiToHz(84 + s2), dur: 0.6, type: 'triangle', peak: 0.045, reverb: 0.6 }));
+      },
+      rockhit() {
+        this.tone({ freq: 90, toFreq: 40, dur: 0.18, peak: 0.35 });
+        this.noiseHit({ dur: 0.15, type: 'lowpass', freq: 1200, peak: 0.3 });
+      },
     };
   }
 
@@ -313,11 +410,27 @@ class AudioSystemImpl {
     stream.start();
   }
 
+  // A recorded wind loop takes over from the filtered noise (same gain curve).
+  useWindSample() {
+    if (this.windSample || !this.samples.wind) return;
+    const ctx = this.ctx;
+    const take = this.samples.wind[0];
+    const src = ctx.createBufferSource();
+    src.buffer = take.buffer; src.loop = true;
+    const g = ctx.createGain(); g.gain.value = take.gain * 3.2;
+    src.connect(g).connect(this.windGain);
+    this.windFilter.disconnect();
+    src.start(0, Math.random() * take.buffer.duration);
+    this.windSample = src;
+  }
+
   setAmbience({ wind = 0.2, stream = 0, birds = 0 }) {
     this.amb.wind = wind; this.amb.stream = stream; this.amb.birds = birds;
   }
 
-  setMusicMode({ root, scale }) { this.music.root = root; this.music.scale = scale; }
+  setMusicMode({ root, scale, instrument = 'pluck', tempo = 90, octave = 12, motif = null, drum = false }) {
+    Object.assign(this.music, { root, scale, instrument, tempo, octave, motif, drum });
+  }
 
   swell(seconds = 25) {
     if (!this.ctx) return;
@@ -330,7 +443,8 @@ class AudioSystemImpl {
     const t = this.ctx.currentTime;
     const gust = 0.6 + 0.4 * Math.sin(t * 0.23) * Math.sin(t * 0.071 + 1);
     this.windGain.gain.setTargetAtTime(0.04 + this.amb.wind * 0.22 * gust, t, 0.8);
-    this.windFilter.frequency.setTargetAtTime(300 + this.amb.wind * 500 * gust, t, 0.8);
+    if (!this.windSample) this.windFilter.frequency.setTargetAtTime(300 + this.amb.wind * 500 * gust, t, 0.8);
+    else this.windSample.playbackRate.setTargetAtTime(0.85 + gust * 0.3, t, 0.8);
     this.streamGain.gain.setTargetAtTime(this.amb.stream * 0.07, t, 1.0);
     if (this.amb.birds > 0 && t > this.amb.nextBirdAt) {
       this.amb.nextBirdAt = t + 3 + Math.random() * 9 / this.amb.birds;
@@ -366,12 +480,166 @@ class AudioSystemImpl {
       this.tone({ t: i * 0.08, freq: midiToHz(note), dur: 4.5, attack: 1.6, type: 'sine', peak: 0.05 * (0.5 + intensity * 0.5), bus: this.musicBus, reverb: 0.7 });
       this.tone({ t: i * 0.08, freq: midiToHz(note), dur: 4, attack: 1.8, type: 'triangle', peak: 0.012, detune: 7, bus: this.musicBus, reverb: 0.7 });
     });
-    // A few bell notes when the music is "present"
-    const bells = intensity > 0.6 ? 3 + Math.floor(Math.random() * 3) : Math.random() < 0.5 ? 1 : 0;
-    for (let i = 0; i < bells; i++) {
-      this.tone({ t: 0.6 + i * (0.45 + Math.random() * 0.3), freq: midiToHz(pick(1)), dur: 1.6, attack: 0.01, peak: 0.03, bus: this.musicBus, reverb: 0.9 });
+    // The biome's motif (or a variation of it) on its own instrument, when the
+    // music is "present"; otherwise a few loose notes on that instrument.
+    const m = this.music;
+    if (m.motif && Math.random() < 0.25 + intensity * 0.55) {
+      this.playMotif(this.vary(m.motif), 0.6);
+    } else {
+      const n = intensity > 0.6 ? 2 + Math.floor(Math.random() * 3) : Math.random() < 0.5 ? 1 : 0;
+      for (let i = 0; i < n; i++) this.note(m.instrument, { t: 0.6 + i * (0.45 + Math.random() * 0.3), midi: pick(0) + m.octave, dur: 1.4, peak: 0.03 });
+    }
+    if (m.drum && intensity > 0.4) {
+      const beat = 60 / m.tempo;
+      for (let i = 0; i < 4; i++) this.drum(0.6 + i * beat * 2, i === 0 ? 1 : 0.6);
     }
   }
+
+  // Motif variations: as written, a scale step up, only its second half, or backwards.
+  vary(motif) {
+    const r = Math.random();
+    if (r < 0.45) return motif;
+    if (r < 0.65) {
+      const { scale } = this.music;
+      const step = (st) => {
+        const oct = Math.floor(st / 12), deg = ((st % 12) + 12) % 12;
+        const i = scale.indexOf(deg);
+        if (i < 0) return st;
+        return i + 1 < scale.length ? oct * 12 + scale[i + 1] : (oct + 1) * 12 + scale[0];
+      };
+      return motif.map(([st, b]) => [step(st), b]);
+    }
+    if (r < 0.85) return motif.slice(Math.floor(motif.length / 2));
+    const rev = motif.map(([st]) => st).reverse();
+    return motif.map(([, b], i) => [rev[i], b]);
+  }
+
+  playMotif(motif, t = 0, peak = 0.045) {
+    const m = this.music;
+    const beat = 60 / m.tempo;
+    let at = t;
+    for (const [st, beats] of motif) {
+      this.note(m.instrument, { t: at, midi: m.root + m.octave + st, dur: Math.max(0.25, beats * beat * 1.4), peak });
+      at += beats * beat;
+    }
+    return at;
+  }
+
+  // Low pulse for the darker biomes (a soft taiko).
+  drum(t, v = 1) {
+    this.tone({ t, freq: 70, toFreq: 42, dur: 0.5, peak: 0.12 * v, attack: 0.005, bus: this.musicBus, reverb: 0.3 });
+    this.noiseHit({ t, dur: 0.12, type: 'lowpass', freq: 400, peak: 0.06 * v, bus: this.musicBus });
+  }
+
+  // ---------- instruments ----------
+  note(instrument, o) {
+    const fn = INSTRUMENTS[instrument] || INSTRUMENTS.bell;
+    fn.call(this, { bus: this.musicBus, ...o });
+  }
+
+  // Karplus-Strong plucked string, one cached buffer per pitch.
+  pluckBuffer(midi) {
+    if (this.plucks[midi]) return this.plucks[midi];
+    const sr = this.ctx.sampleRate;
+    const buf = this.ctx.createBuffer(1, Math.floor(sr * 2.2), sr);
+    const d = buf.getChannelData(0);
+    const n = Math.max(2, Math.round(sr / midiToHz(midi)));
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    for (let i = n; i < d.length; i++) d[i] = 0.4985 * (d[i - n] + d[i - n + 1]);
+    this.plucks[midi] = buf;
+    return buf;
+  }
 }
+
+// Lead instruments for the biome music. Called with the AudioSystem as `this`;
+// o: { t, midi, dur, peak, bus }.
+const INSTRUMENTS = {
+  // The Green Rise: a plucked string, like a little harp or guitar.
+  pluck({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.pluckBuffer(midi);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600;
+    const g = ctx.createGain(); g.gain.value = peak * 2.4;
+    src.connect(f).connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.35; g.connect(rg).connect(this.reverb);
+    const start = ctx.currentTime + t;
+    g.gain.setValueAtTime(peak * 2.4, start + Math.min(dur, 1.8));
+    g.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 1.8) + 0.3);
+    src.start(start);
+    src.stop(start + 2.2);
+  },
+  // The Stone Wall: a wooden marimba, dry and knocking.
+  marimba({ t = 0, midi, peak = 0.04, bus }) {
+    const f = midiToHz(midi);
+    this.tone({ t, freq: f, dur: 0.6, type: 'sine', peak: peak * 1.4, attack: 0.003, bus, reverb: 0.25 });
+    this.tone({ t, freq: f * 3.93, dur: 0.08, type: 'sine', peak: peak * 0.5, attack: 0.002, bus });
+    this.tone({ t, freq: f * 9.2, dur: 0.03, type: 'sine', peak: peak * 0.2, attack: 0.001, bus });
+  },
+  // The Frozen Reach: a music box, high and glassy.
+  musicbox({ t = 0, midi, peak = 0.04, bus }) {
+    const f = midiToHz(midi);
+    this.tone({ t, freq: f, dur: 1.6, type: 'sine', peak: peak * 0.9, attack: 0.002, bus, reverb: 0.8 });
+    this.tone({ t, freq: f * 2, dur: 0.5, type: 'sine', peak: peak * 0.35, attack: 0.002, bus, reverb: 0.8 });
+    this.tone({ t, freq: f * 5.4, dur: 0.12, type: 'sine', peak: peak * 0.12, attack: 0.001, bus });
+  },
+  // Above the Clouds: a breathy flute with a slow vibrato.
+  flute({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = midiToHz(midi);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 5; const lg = ctx.createGain(); lg.gain.value = midiToHz(midi) * 0.006;
+    lfo.connect(lg).connect(o.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak * 1.1, start + 0.12);
+    g.gain.setValueAtTime(peak * 1.1, start + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur + 0.25);
+    o.connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.6; g.connect(rg).connect(this.reverb);
+    o.start(start); lfo.start(start);
+    o.stop(start + dur + 0.3); lfo.stop(start + dur + 0.3);
+    this.noiseHit({ t, dur: Math.min(0.3, dur), type: 'bandpass', freq: midiToHz(midi) * 2, q: 3, peak: peak * 0.25, attack: 0.05, bus });
+  },
+  // The Obsidian Spires: a low bowed string, dark and slow.
+  cello({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiToHz(midi);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 4.5; const lg = ctx.createGain(); lg.gain.value = midiToHz(midi) * 0.008;
+    lfo.connect(lg).connect(o.frequency);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; f.Q.value = 2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak * 0.9, start + 0.35);
+    g.gain.setValueAtTime(peak * 0.9, start + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur + 0.6);
+    o.connect(f).connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.5; g.connect(rg).connect(this.reverb);
+    o.start(start); lfo.start(start);
+    o.stop(start + dur + 0.7); lfo.stop(start + dur + 0.7);
+  },
+  // The Crystal Heights: an FM glass bell that shimmers as it fades.
+  glass({ t = 0, midi, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const f = midiToHz(midi);
+    const car = ctx.createOscillator(); car.frequency.value = f;
+    const mod = ctx.createOscillator(); mod.frequency.value = f * 3.5;
+    const mg = ctx.createGain();
+    mg.gain.setValueAtTime(f * 2.2, start);
+    mg.gain.exponentialRampToValueAtTime(f * 0.05, start + 1.2);
+    mod.connect(mg).connect(car.frequency);
+    const g = ctx.createGain();
+    this.env(g, start, 0.003, peak * 0.8, 2.2);
+    car.connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.9; g.connect(rg).connect(this.reverb);
+    car.start(start); mod.start(start);
+    car.stop(start + 2.4); mod.stop(start + 2.4);
+  },
+  bell({ t = 0, midi, peak = 0.03, bus }) {
+    this.tone({ t, freq: midiToHz(midi), dur: 1.6, attack: 0.01, peak, bus, reverb: 0.9 });
+  },
+};
 
 export const Audio = new AudioSystemImpl();

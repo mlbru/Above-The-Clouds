@@ -392,3 +392,40 @@ test('tutorial: every lesson route targets a real hold above its start, lines fi
   // After the crag the mountain continues normally.
   assert.ok(m.getLevel(100).nodes.length >= 0 && m.segments.size > 3);
 });
+
+test("Bram's tips: one or two lines that fit the bubble, and every tag tip exists", async () => {
+  const { BRAM_TIPS, TAG_TIPS } = await import('../src/data/bramTips.js');
+  const { measureLine, hasGlyph } = await import('../src/utils/pixelFont.js');
+  const { COACH } = await import('../src/ui/coachLayout.js');
+  for (const [id, text] of Object.entries(BRAM_TIPS)) {
+    const lines = text.split('\n');
+    assert.ok(lines.length <= 2, `${id}: max 2 lines`);
+    for (const line of lines) {
+      assert.ok(measureLine(line) <= COACH.textW, `${id} too wide: ${line}`);
+      for (const ch of line) assert.ok(hasGlyph(ch), `${id}: no glyph for "${ch}"`);
+    }
+  }
+  for (const id of Object.values(TAG_TIPS)) assert.ok(BRAM_TIPS[id], id);
+});
+
+test("Bram's logbook: stamps pay once, read the run and the lifetime counters", async () => {
+  const { ProgressionSystem } = await import('../src/systems/ProgressionSystem.js');
+  const { STAMPS, LOGBOOK_PAGES } = await import('../src/data/logbook.js');
+  const { measureLine, hasGlyph } = await import('../src/utils/pixelFont.js');
+  assert.equal(new Set(STAMPS.map((s) => s.id)).size, STAMPS.length);
+  for (const s of STAMPS) {
+    assert.ok(LOGBOOK_PAGES.some((p) => p.id === s.page), s.id);
+    assert.ok(measureLine(s.text) <= 320, `${s.id} text too wide`);
+    for (const ch of s.name + s.text) assert.ok(hasGlyph(ch), `${s.id}: no glyph for "${ch}"`);
+  }
+  const p = new ProgressionSystem({ getItem: () => null, setItem: () => {} });
+  const run = { maxHeight: 130, mode: 'normal', bestStreak: 3, perfects: 0, flawless: 0, gems: 0, falls: 1, riskyRow: 0, whiteoutClimbs: 0, bare: false };
+  const first = p.checkStamps(run).map((s) => s.id).sort();
+  assert.deepEqual(first, ['first-pitch', 'stone-wall']);
+  assert.equal(p.data.gems, 13);
+  assert.deepEqual(p.checkStamps(run), []);
+  for (let i = 0; i < 9; i++) p.bump('dodges');
+  assert.deepEqual(p.checkStamps(null), []);
+  p.bump('dodges');
+  assert.deepEqual(p.checkStamps(null).map((s) => s.id), ['rock-dodger']);
+});

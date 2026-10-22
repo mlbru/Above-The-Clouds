@@ -8,12 +8,6 @@ import { PixelText, COLORS } from '../ui/PixelText.js';
 export class BootScene extends Phaser.Scene {
   constructor() { super('Boot'); }
 
-  preload() {
-    // Optional real audio; missing files must never break the game.
-    this.load.on('loaderror', (file) => console.warn(`[audio] could not load ${file.key}, using synth fallback`));
-    for (const a of AUDIO_MANIFEST) this.load.audio(a.key, a.url);
-  }
-
   create() {
     const prog = new ProgressionSystem();
     this.registry.set('progression', prog);
@@ -22,6 +16,8 @@ export class BootScene extends Phaser.Scene {
     this.time.delayedCall(30, () => {
       buildAllTextures(this, prog.data.look);
       Audio.setSampleSource(this.sound, this.cache.audio);
+      // Recorded sounds; missing or broken files keep the synth sound.
+      Audio.loadSamples(AUDIO_MANIFEST);
       Audio.setVolumes(prog.settings.music, prog.settings.sfx);
       const params = new URLSearchParams(window.location.search);
       if (params.has('tutorial')) this.scene.start('Climb', { tutorial: true });
