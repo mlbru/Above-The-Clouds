@@ -10,7 +10,7 @@ import { Rockfall, ROCKFALL } from '../src/systems/mechanics/Rockfall.js';
 import { addThermal, THERMALS } from '../src/systems/mechanics/Thermals.js';
 import { Mountain } from '../src/systems/SegmentGenerator.js';
 import { Darkness, DARKNESS, darkAlpha } from '../src/systems/mechanics/Darkness.js';
-import { addEcho, echoCallMs, ECHO } from '../src/systems/mechanics/Echo.js';
+import { CrystalGrowth, CRYSTAL_GROWTH, growthOf } from '../src/systems/mechanics/CrystalGrowth.js';
 import { ProgressionSystem, sandboxCopy } from '../src/systems/ProgressionSystem.js';
 
 test('every biome definition is complete', () => {
@@ -114,17 +114,21 @@ test('darkness marks routes and flashes notes on the beat', () => {
   assert.equal(darkAlpha(DARKNESS, 1600, 1000, 600, true), 1);
 });
 
-test('echo picks a short route without hold notes and times the call', () => {
-  const routes = [
-    { type: 'safe', notes: [{ dir: 'L' }, { dir: 'U', gap: 1 }, { dir: 'R', gap: 0.5 }], beatMs: 600 },
-    { type: 'normal', notes: [{ dir: 'L' }, { dir: 'U', hold: 1 }], beatMs: 600 },
-    { type: 'risky', notes: [{ dir: 'L' }], beatMs: 600 },
-  ];
-  const r = addEcho(routes, new SeededRandom(1), { ...ECHO, chance: 1 });
-  assert.equal(r, routes[0]);
-  assert.equal(routes.filter((x) => x.echo).length, 1);
-  // 1.5 beats of notes + 1.5 beats of silence + 1 beat.
-  assert.equal(echoCallMs(r), Math.round(4 * 600));
+test('crystals grow over risky first, then normal; safe stays open', () => {
+  const c = new CrystalGrowth(new SeededRandom(1));
+  const routes = [{ type: 'safe' }, { type: 'normal' }, { type: 'risky' }];
+  c.decorateRoutes(routes);
+  assert.equal(routes[2].seal, undefined);
+  c.update(100, 1);
+  c.decorateRoutes(routes);
+  assert.equal(routes[0].seal, undefined);
+  const { risky, normal } = CRYSTAL_GROWTH.sealMs;
+  assert.ok(risky < normal);
+  assert.equal(growthOf(routes[2], risky), 1);
+  assert.ok(growthOf(routes[1], risky) < 1);
+  assert.equal(growthOf(routes[1], normal), 1);
+  assert.equal(growthOf(routes[0], 99999), 0);
+  assert.equal(growthOf(routes[2], risky * CRYSTAL_GROWTH.fastScale, CRYSTAL_GROWTH.fastScale), 1);
 });
 
 test('dev save copy never writes the real save', () => {
@@ -135,7 +139,7 @@ test('dev save copy never writes the real save', () => {
   const before = store.get([...store.keys()][0]);
   const dev = sandboxCopy(real);
   dev.recordHeight(900);
-  dev.discover('crystal-echo');
+  dev.discover('crystal-sealed');
   assert.equal(store.get([...store.keys()][0]), before);
   assert.ok(dev.data.bestHeight >= 900);
   assert.ok(real.data.bestHeight < 900);

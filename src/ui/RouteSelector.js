@@ -2,9 +2,12 @@ import { PixelText, COLORS, drawPanel } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { toCss } from '../utils/color.js';
-import { THERMAL_TINT, ECHO_TINT } from './ComboPrompt.js';
+import { THERMAL_TINT } from './ComboPrompt.js';
 
 const CARD_W = 104, CARD_H = 34;
+const CRYSTAL = [0xe8fffb, 0xb8fff4, 0x3e7488, 0xffc8f0];
+// Shards on a card: [x as a share of the width, width, height as a share of the card, lean].
+const SHARDS = [[0.02, 9, 0.9, -0.6], [0.1, 7, 0.55, 0.4], [0.17, 10, 1.0, 0.2], [0.27, 6, 0.45, -0.3], [0.33, 9, 0.75, 0.5], [0.43, 7, 0.5, -0.5], [0.5, 10, 0.95, 0.1], [0.6, 6, 0.4, 0.6], [0.66, 9, 0.8, -0.2], [0.76, 7, 0.55, 0.4], [0.83, 10, 1.0, -0.4], [0.92, 7, 0.6, 0.3]];
 
 // Shows the available routes on the rock (markers + dotted path) and as compact
 // cards at the bottom of the screen.
@@ -18,6 +21,8 @@ export class RouteSelector {
     this.time = 0;
     this.path = scene.add.graphics().setDepth(DEPTH.routeMarks);
     this.cards = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
+    // Crystal Heights: crystals growing over cards and holds.
+    this.grow = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 2);
   }
 
   colorOf(route) { return route.toLedge ? ROUTE_COLORS.ledge : ROUTE_COLORS[route.type]; }
@@ -50,19 +55,16 @@ export class RouteSelector {
       zone.on('pointerdown', () => this.onPick(i, true));
       zone.on('pointermove', () => { if (this.selected !== i) this.onPick(i, false); });
       const gem = r.gem ? this.scene.add.image(cx + CARD_W - 30, cy + 7, `gem_${r.gem.type}`).setScrollFactor(0).setDepth(DEPTH.hud + 1) : null;
-      // Mechanic badges (thermal up-arrow, echo crystal) on the card and next to the target hold.
-      const badge = r.thermal ? { key: 'arrow_s_U', tint: THERMAL_TINT } : r.echo ? { key: 'spark', tint: ECHO_TINT } : null;
-      const thermal = badge ? [
-        this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, badge.key).setTint(badge.tint).setScrollFactor(0).setDepth(DEPTH.hud + 1),
-        r.echo
-          ? this.scene.add.image(r.target.x + 11, r.target.y + 2, 'decor_crystals').setOrigin(0.5, 1).setDepth(DEPTH.routeMarks)
-          : this.scene.add.image(r.target.x + 9, r.target.y - 14, badge.key).setTint(badge.tint).setDepth(DEPTH.routeMarks),
+      // Thermal routes: a warm up-arrow on the card and next to the target hold.
+      const thermal = r.thermal ? [
+        this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(THERMAL_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+        this.scene.add.image(r.target.x + 9, r.target.y - 14, 'arrow_s_U').setTint(THERMAL_TINT).setDepth(DEPTH.routeMarks),
       ] : [];
       this.objects.push({ ring, num, head, gain, sub, zone, cx, cy, route: r, gem, thermal });
     });
     const mods = routes[0] && routes[0].mods;
-    const echoAt = routes.findIndex((r) => r.echo);
-    const hint = mods ? mods.hint : echoAt >= 0 ? `ECHO CRYSTAL ON ROUTE ${echoAt + 1}: LISTEN, THEN PLAY IT BACK` : null;
+    const growing = routes.some((r) => r.seal);
+    const hint = mods ? mods.hint : growing ? 'CRYSTALS ARE GROWING: CHOOSE BEFORE THEY SEAL' : null;
     this.mods = hint ? { hint } : null;
     this.hint = new PixelText(this.scene, GAME_WIDTH / 2, GAME_HEIGHT - 8 - CARD_H - 13, hint || '← → CHOOSE    ↑ / SPACE CLIMB', { color: hint ? (mods ? COLORS.blue : '#b8fff4') : COLORS.faint }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
     this.redraw();
@@ -71,6 +73,24 @@ export class RouteSelector {
   setSelected(i) {
     this.selected = i;
     this.redraw();
+  }
+
+  isSealed(i) { return !!(this.objects[i] && this.objects[i].sealed); }
+
+  // Crystal growth over route i (0..1). At 1 the route is sealed: its card dims
+  // and says so, and its ring gives way to crystal.
+  setGrowth(i, growth, sealed) {
+    const o = this.objects[i];
+    if (!o) return;
+    o.growth = growth;
+    if (sealed && !o.sealed) {
+      o.sealed = true;
+      o.sub.setText('SEALED BY CRYSTAL').setColor('#e8fffb').setDepth(DEPTH.hud + 3);
+      o.ring.setVisible(false);
+      o.num.setVisible(false);
+      if (o.gem) o.gem.setVisible(false);
+      this.redraw();
+    }
   }
 
   redraw() {
@@ -88,7 +108,7 @@ export class RouteSelector {
         g.fillStyle(p < o.route.difficulty ? color : 0x3a3550, 1);
         g.fillRect(o.cx + CARD_W - 20 + p * 5, o.cy + 6 + dy, 3, 3);
       }
-      [o.head, o.gain, o.sub].forEach((t, k) => t.setY(o.cy + [5, 15, 24][k] + dy).setAlpha(sel ? 1 : 0.75));
+      [o.head, o.gain, o.sub].forEach((t, k) => t.setY(o.cy + [5, 15, 24][k] + dy).setAlpha(o.sealed ? (k === 2 ? 1 : 0.35) : sel ? 1 : 0.75));
       if (o.gem) o.gem.setY(o.cy + 7 + dy);
       o.num.setAlpha(sel ? 1 : 0.6);
     });
@@ -100,7 +120,9 @@ export class RouteSelector {
     if (from) this.from = from;
     const g = this.path;
     g.clear();
+    this.drawGrowth(g);
     this.objects.forEach((o, i) => {
+      if (o.sealed) return;
       const sel = i === this.selected;
       const pulse = sel ? 1 + 0.15 * Math.sin(this.time / 140) : 1;
       o.ring.setScale(Math.round(pulse * 4) / 4).setAlpha(sel ? 1 : 0.55);
@@ -120,13 +142,54 @@ export class RouteSelector {
     });
   }
 
+  // Crystal shards creep over each card from below and close in around the hold.
+  drawGrowth(world) {
+    const g = this.grow;
+    g.clear();
+    this.objects.forEach((o, i) => {
+      const p = o.growth || 0;
+      if (p <= 0) return;
+      const dy = i === this.selected ? -3 : 0;
+      const bottom = o.cy + dy + CARD_H - 1;
+      if (o.sealed) { g.fillStyle(0x66a2b4, 0.35); g.fillRect(o.cx + 1, o.cy + dy + 1, CARD_W - 2, CARD_H - 2); }
+      // A row of leaning shards, the tall ones first; each grows in with the card's progress.
+      for (let k = 0; k < SHARDS.length; k++) {
+        const [fx, fw, fh, lean] = SHARDS[k];
+        const h = Math.round(fh * CARD_H * Math.min(1, p * 1.25 - k * 0.02));
+        if (h < 2) continue;
+        const x = o.cx + Math.round(fx * CARD_W), w = fw, tipX = x + w / 2 + lean * h * 0.3;
+        g.fillStyle(CRYSTAL[2], o.sealed ? 0.85 : 0.6);
+        g.fillTriangle(x, bottom, x + w, bottom, tipX, bottom - h);
+        g.fillStyle(CRYSTAL[k % 2 ? 3 : 1], o.sealed ? 0.9 : 0.7);
+        g.fillTriangle(x, bottom, x + w / 2, bottom, tipX, bottom - h);
+        g.fillStyle(0xffffff, 0.9);
+        g.fillRect(Math.round(tipX), bottom - h, 1, 2);
+      }
+      // On the wall: shards close in around the target hold, and cover it once sealed.
+      const t = o.route.target, n = Math.ceil(p * 7);
+      for (let k = 0; k < n; k++) {
+        const a = Math.PI * (0.15 + 0.7 * (k / 6)), r = o.sealed ? 6 : 13 - p * 5;
+        const sx = Math.round(t.x - Math.cos(a) * r * 1.4), sy = Math.round(t.y + 7);
+        const len = Math.round((o.sealed ? 12 : 4 + p * 7) * (k % 2 ? 0.75 : 1));
+        const tip = sx + Math.round((sx - t.x) * 0.25);
+        world.fillStyle(CRYSTAL[2], 1);
+        world.fillTriangle(sx - 3, sy, sx + 3, sy, tip, sy - len);
+        world.fillStyle(CRYSTAL[k % 2 ? 3 : 1], 1);
+        world.fillTriangle(sx - 3, sy, sx, sy, tip, sy - len);
+        world.fillStyle(0xffffff, 1);
+        world.fillRect(tip, sy - len, 1, 1);
+      }
+    });
+  }
+
   hide() {
     this.objects.forEach((o) => [o.ring, o.num, o.head, o.gain, o.sub, o.zone, o.gem, ...(o.thermal || [])].forEach((x) => x && x.destroy()));
     this.objects = [];
     if (this.hint) { this.hint.destroy(); this.hint = null; }
     this.cards.clear();
     this.path.clear();
+    this.grow.clear();
   }
 
-  destroy() { this.hide(); this.path.destroy(); this.cards.destroy(); }
+  destroy() { this.hide(); this.path.destroy(); this.cards.destroy(); this.grow.destroy(); }
 }

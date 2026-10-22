@@ -23,7 +23,7 @@ import { biomeAt, biomeMixAt, biomeStretchAt } from '../data/biomes.js';
 import { BiomeMechanics } from '../systems/mechanics/index.js';
 import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
 import { DARKNESS } from '../systems/mechanics/Darkness.js';
-import { echoCallMs } from '../systems/mechanics/Echo.js';
+import { CRYSTAL_GROWTH, growthOf } from '../systems/mechanics/CrystalGrowth.js';
 import { sandboxCopy } from '../systems/ProgressionSystem.js';
 import { DISCOVERIES } from '../data/discoveries.js';
 import { SeededRandom, hashInts, randomSeed } from '../utils/seededRandom.js';
@@ -127,11 +127,6 @@ export class ClimbScene extends Phaser.Scene {
     this.hud = new HUD(this);
     this.routeUI = new RouteSelector(this, (i, confirm) => this.pickRoute(i, confirm));
     this.comboUI = new ComboPrompt(this);
-    // Crystal Heights: each note of the crystal's call chimes and glints.
-    this.comboUI.onEchoCall = (note) => {
-      Audio.play('crystal', { dir: note.dir });
-      this.effects.sparkle(this.climber.x + (note.dir === 'L' ? -12 : note.dir === 'R' ? 12 : 0), this.climber.y - 26, 3);
-    };
     this.restUI = new RestMenu(this, (a) => this.restAction(a));
     this.floaters = [];
     this.director = null;
@@ -349,6 +344,37 @@ export class ClimbScene extends Phaser.Scene {
     if (rf && rf.due && node.kind !== 'ledge' && node.hazard !== 'crumbling') { this.startRockfall(); return; }
     this.routeUI.show(this.routes, sel, { x: this.climber.x, y: this.climber.y });
     if (this.director) this.director.onRouteSelect(node);
+    this.growStart = this.routes.some((r) => r.seal) ? this.clock : 0;
+  }
+
+  // ---------------------------------------------------------------- crystal growth (Crystal Heights)
+  updateGrowth() {
+    const scale = this.mode === 'normal' ? 1 : CRYSTAL_GROWTH.fastScale;
+    const elapsed = this.clock - this.growStart;
+    this.routes.forEach((r, i) => {
+      const g = growthOf(r, elapsed, scale);
+      // Never seal the last open route.
+      const othersOpen = this.routes.some((o, j) => j !== i && !o.sealed);
+      if (g >= 1 && !r.sealed && othersOpen) this.sealRoute(r, i);
+      this.routeUI.setGrowth(i, r.sealed ? 1 : Math.min(g, 0.97), r.sealed);
+    });
+  }
+
+  sealRoute(route, i) {
+    route.sealed = true;
+    Audio.play('crystal', { dir: route.type === 'risky' ? 'R' : 'U' });
+    this.effects.sparkle(route.target.x, route.target.y, 6);
+    const gem = this.routeGems.find((g) => g.route === route);
+    if (gem) { this.fadeGem(gem); this.routeGems = this.routeGems.filter((g) => g !== gem); }
+    this.discover('crystal-sealed');
+    if (this.selected === i) {
+      let j = i;
+      while (j > 0 && this.routes[j].sealed) j--;
+      if (this.routes[j].sealed) j = this.routes.findIndex((r) => !r.sealed);
+      this.selected = j;
+    }
+    this.routeUI.setGrowth(i, 1, true);
+    this.routeUI.setSelected(this.selected);
   }
 
   // ---------------------------------------------------------------- rockfall (Stone Wall)
@@ -437,13 +463,19 @@ export class ClimbScene extends Phaser.Scene {
 
   cycleRoute(d) {
     const n = this.routes.length;
-    this.selected = (this.selected + d + n) % n;
+    let next = this.selected;
+    for (let k = 0; k < n; k++) {
+      next = (next + d + n) % n;
+      if (!this.routes[next].sealed) break;
+    }
+    this.selected = next;
     this.routeUI.setSelected(this.selected);
     Audio.play('ui');
   }
 
   pickRoute(i, confirm) {
     if (this.state !== STATE.ROUTE_SELECT || !this.routes[i]) return;
+    if (this.routes[i].sealed) { Audio.play('denied'); return; }
     if (this.director && this.director.holdRoutes) return;
     if (i !== this.selected) {
       this.selected = i;
@@ -515,10 +547,10 @@ export class ClimbScene extends Phaser.Scene {
     this.routeUI.hide();
     this.clearCrumble();
     this.state = STATE.CLIMBING_COMBO;
+    this.growStart = 0;
     this.thermalEarned = false;
     this.gustAnnounced = null;
-    let windowScale = route.windowScale * (route.echo ? route.echo.windowScale : 1);
-    const echoMs = route.echo ? echoCallMs(route) : 0;
+    let windowScale = route.windowScale;
     if (this.gear.crampons && route.hazard === 'icy') windowScale /= BALANCE.hazards.icy.windowScale;
     if (this.gear.chalk && levelToMeters(this.node.level) < GEAR_FX.chalkUntil) windowScale *= GEAR_FX.chalkWindow;
     const w = timingWindows(BALANCE, { windowScale, forgiving: this.forgiving });
@@ -534,10 +566,10 @@ export class ClimbScene extends Phaser.Scene {
       perfectMs: w.perfectMs,
       goodMs: w.goodMs,
       earlyGraceMs: BALANCE.timing.earlyGraceMs,
-      leadInMs: BALANCE.timing.leadInMs + echoMs,
+      leadInMs: BALANCE.timing.leadInMs,
       startTime: this.now(),
     });
-    this.comboUI.show(this.combo, route, { echoOffset: echoMs });
+    this.comboUI.show(this.combo, route);
     this.clearTargetMark();
     this.targetMark = this.add.image(route.target.x, route.target.y + 3, 'ring').setDepth(DEPTH.routeMarks).setTint(route.toLedge ? 0x9fd8ff : this.routeUI.colorOf(route)).setAlpha(0.8);
     this.from = { x: this.climber.x, y: this.climber.y };
@@ -668,7 +700,7 @@ export class ClimbScene extends Phaser.Scene {
     this.clearRouteGems();
     const scale = this.perk === 'gemsense' ? GEAR_FX.gemSense : 1;
     for (const r of this.routes) {
-      r.gem = this.mountain.routeGem(r, scale * ((r.mods && r.mods.gemScale) || 1) * (r.echo ? r.echo.gemScale : 1));
+      r.gem = this.mountain.routeGem(r, scale * ((r.mods && r.mods.gemScale) || 1));
       if (!r.gem) continue;
       const y = r.target.y - 6;
       const img = this.add.image(r.target.x, y, `gem_${r.gem.type}`).setDepth(DEPTH.holds + 2).setScale(0);
@@ -904,12 +936,6 @@ export class ClimbScene extends Phaser.Scene {
 
   async completeClimb(route, s) {
     const t = route.target;
-    if (route.echo && s.allPerfect) {
-      this.grip.change(route.echo.perfectGrip);
-      this.floatText(`PERFECT ECHO +${route.echo.perfectGrip} GRIP`, '#b8fff4', 22);
-      Audio.play('streakmilestone');
-      this.discover('crystal-echo');
-    }
     if (route.mods && route.mods.discovery) this.discover(route.mods.discovery);
     if (s.miss === 1) {
       this.floatText('SHAKY...', COLORS.dim, 10);
@@ -1386,6 +1412,7 @@ export class ClimbScene extends Phaser.Scene {
     if (cardOpen && this.state === STATE.ROUTE_SELECT && this.node.kind === 'jug') this.grip.hang(dt / 1000, { onJug: true });
     switch (cardOpen ? null : this.state) {
       case STATE.ROUTE_SELECT: {
+        if (this.growStart) this.updateGrowth();
         const biome = biomeAt(levelToMeters(this.node.level));
         const icy = this.node.hazard === 'icy' && !this.gear.crampons ? 1.4 : 1;
         this.grip.hang(dt / 1000, {
@@ -1538,8 +1565,8 @@ export class ClimbScene extends Phaser.Scene {
       if (this.clock > b.wait) {
         b.wait = 0;
         const want = this.grip.value > 65 ? 'risky' : this.grip.value > 35 ? 'normal' : 'safe';
-        let i = this.routes.findIndex((r) => r.type === want);
-        if (i < 0) i = 0;
+        let i = this.routes.findIndex((r) => r.type === want && !r.sealed);
+        if (i < 0) i = this.routes.findIndex((r) => !r.sealed);
         this.pickRoute(i, true);
       }
       return;

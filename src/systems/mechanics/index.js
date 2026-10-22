@@ -5,9 +5,9 @@ import { Whiteout } from './Whiteout.js';
 import { Rockfall } from './Rockfall.js';
 import { Thermals } from './Thermals.js';
 import { Darkness } from './Darkness.js';
-import { Echo } from './Echo.js';
+import { CrystalGrowth } from './CrystalGrowth.js';
 
-const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, echo: Echo };
+const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, crystalGrowth: CrystalGrowth };
 
 export class BiomeMechanics {
   constructor(rng) {

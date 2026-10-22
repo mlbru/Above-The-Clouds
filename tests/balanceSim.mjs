@@ -8,7 +8,7 @@ import { biomeAt, biomeStretchAt } from '../src/data/biomes.js';
 import { WHITEOUT } from '../src/systems/mechanics/Whiteout.js';
 import { ROCKFALL } from '../src/systems/mechanics/Rockfall.js';
 import { addThermal } from '../src/systems/mechanics/Thermals.js';
-import { addEcho } from '../src/systems/mechanics/Echo.js';
+
 import { SeededRandom } from '../src/utils/seededRandom.js';
 
 // Share of time a whiteout is raging while you climb in the Frozen Reach.
@@ -36,7 +36,6 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
     const routes = m.computeRoutes(node);
     const biome = biomeAt(node.level * 1.5);
     if (!NO_MECHANICS && biome.mechanic === 'thermals') addThermal(routes, m, mrng);
-    if (!NO_MECHANICS && biome.mechanic === 'echo') addEcho(routes, mrng);
     // Rockfall: dodge one or two rocks; each hit costs grip.
     if (!NO_MECHANICS && biome.mechanic === 'rockfall' && node.kind !== 'ledge' && Math.random() < ROCK_PER_MOVE) {
       const n = node.level * 1.5 >= ROCKFALL.doubleFrom ? 2 : 1;
@@ -46,22 +45,27 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
       }
     }
     grip.hang(decide, { drainMultiplier: 1, onJug: node.kind === 'jug' });
-    const want = grip.value > 65 ? 'risky' : grip.value > 35 ? 'normal' : 'safe';
+    let want = grip.value > 65 ? 'risky' : grip.value > 35 ? 'normal' : 'safe';
+    // Crystal growth: a player who hesitates finds the risky (and sometimes the normal) route sealed.
+    if (!NO_MECHANICS && biome.mechanic === 'crystalGrowth') {
+      const u = mrng.next();
+      if (want === 'risky' && u < 0.35) want = u < 0.12 ? 'safe' : 'normal';
+      else if (want === 'normal' && u < 0.12) want = 'safe';
+    }
     const route = routes.find((r) => r.type === want) || routes[0];
     if (node.hazard === 'crumbling' && decide * 1000 > modeCfg.crumbleMs) { grip.set(0); }
     // Whiteout: notes appear late (read less accurately) but blind notes stay visible.
     const whiteout = !NO_MECHANICS && biome.mechanic === 'whiteout' && Math.random() < STORM_SHARE;
-    // Darkness: notes only flash on the beat. Echo: played from memory, wider windows.
+    // Darkness: notes only flash on the beat.
     const dark = !NO_MECHANICS && biome.mechanic === 'darkness';
-    const echo = !NO_MECHANICS && route.echo;
-    const w = timingWindows(BALANCE, { windowScale: route.windowScale * (echo ? route.echo.windowScale : 1) });
+    const w = timingWindows(BALANCE, { windowScale: route.windowScale });
     const r = BALANCE.ramp;
     const c = new ComboSystem({ notes: route.notes, beatMs: route.beatMs, ...w, leadInMs: 900, minGapMs: r.minGapMs, gustWindowScale: r.gustWindowScale });
     let empty = grip.isEmpty;
     for (const n of c.notes) {
       if (empty) break;
       // Blind notes and off-beats are read less accurately.
-      const spread = sd * (n.hidden && !whiteout && !dark ? 1.35 : 1) * (whiteout ? 1.15 : 1) * (dark ? 1.12 : 1) * (echo ? 1.25 : 1) * (route.tags.includes('OFFBEAT') ? 1.1 : 1);
+      const spread = sd * (n.hidden && !whiteout && !dark ? 1.35 : 1) * (whiteout ? 1.15 : 1) * (dark ? 1.12 : 1) * (route.tags.includes('OFFBEAT') ? 1.1 : 1);
       const dir = Math.random() < wrong ? (n.dir === 'L' ? 'R' : 'L') : n.dir;
       const res = c.press(dir, n.time + gauss() * spread);
       [...res.auto, res.judged].filter(Boolean).forEach((x) => grip.applyNote(route, x.result));
@@ -74,7 +78,6 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
       grip.applyComboEnd(s, ok);
       if (ok) node = route.target;
       if (ok && route.thermal && c.notes[route.thermal.note].result === 'perfect') node = route.thermal.to;
-      if (ok && echo && s.allPerfect) grip.change(route.echo.perfectGrip);
       if (grip.isEmpty) empty = true;
     }
     if (empty) {

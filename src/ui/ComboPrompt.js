@@ -5,7 +5,6 @@ import { darkAlpha } from '../systems/mechanics/Darkness.js';
 
 const PX_PER_MS = 0.085;
 export const THERMAL_TINT = 0xffb45a;
-export const ECHO_TINT = 0xb8fff4;
 const TRACK_W = 200;
 const TRACK_X = Math.round(GAME_WIDTH / 2 - TRACK_W / 2);
 export const HIT_X = TRACK_X + 30;
@@ -32,10 +31,8 @@ export class ComboPrompt {
     this.flash = 0;
   }
 
-  // echoOffset: the crystal plays every note this many ms earlier, then you answer.
-  show(combo, route, { echoOffset = 0 } = {}) {
+  show(combo, route) {
     this.hide();
-    this.echoOffset = echoOffset;
     this.dark = (route.mods && route.mods.dark) || null;
     this.combo = combo;
     this.mode = 'combo';
@@ -50,15 +47,12 @@ export class ComboPrompt {
       const small = this.scene.add.image(seqX + i * 10 + 4, TRACK_Y - 20, `arrow_s_${note.dir}`).setScrollFactor(0).setDepth(DEPTH.hud + 2);
       // A short bar under the small arrow marks a hold note in the sequence.
       const holdBar = note.holdMs ? this.scene.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, 7, 1, 0xf2c14e).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2) : null;
-      // Echo: the sequence stays hidden; a crystal copy of each note plays first.
-      const call = echoOffset ? this.scene.add.image(0, TRACK_Y, `arrow_${note.dir}`).setTint(ECHO_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false) : null;
-      if (echoOffset) small.setVisible(false);
-      this.items.push({ note, big, small, mark: null, holdBar, call, called: false });
+      this.items.push({ note, big, small, mark: null, holdBar });
     });
     if (combo.notes.some((n) => n.gust)) {
       this.gustIcon = this.scene.add.image(TRACK_X + TRACK_W - 6, TRACK_Y - 33, 'icon_wind').setOrigin(1, 0).setTint(0x9fd8ff).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false);
     }
-    const tags = [...(route.tags || []), ...(route.mods ? [route.mods.tag] : []), ...(route.thermal ? ['THERMAL'] : []), ...(route.echo ? ['ECHO: LISTEN, THEN PLAY'] : [])];
+    const tags = [...(route.tags || []), ...(route.mods ? [route.mods.tag] : []), ...(route.thermal ? ['THERMAL'] : [])];
     this.label = new PixelText(this.scene, TRACK_X, TRACK_Y - 33, `${route.label} ROUTE${tags.length ? '  \u2022 ' + tags.join(' ') : ''}`, { color: COLORS.dim }).setScrollFactor(0).setDepth(DEPTH.hud + 1);
   }
 
@@ -118,7 +112,7 @@ export class ComboPrompt {
       const isCur = note === c.current;
       const x = HIT_X + (note.time - now) * PX_PER_MS;
       // Gust notes ride on a pale wind band with tighter zones.
-      if (note.gust && !note.result && !this.echoOffset) {
+      if (note.gust && !note.result) {
         const gw = Math.round(note.goodMs * PX_PER_MS);
         const bx = Math.max(TRACK_X, Math.round(x - gw)), ex = Math.min(clipR, Math.round(x + gw));
         if (ex > bx) { g.fillStyle(0x9fd8ff, 0.28); g.fillRect(bx, TRACK_Y - 8, ex - bx, 17); }
@@ -144,7 +138,6 @@ export class ComboPrompt {
         if (this.revealMs) alpha *= Math.max(0, Math.min(1, (this.revealMs - (note.time - now)) / 160));
         // Darkness: every note is a faint shape that flashes up on the beat.
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
-        if (this.echoOffset) alpha = 0;
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
         it.big.setTint(note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : isCur ? 0xf2c14e : 0xf4efe4);
         // A thermal note trails a small updraft under it.
@@ -155,16 +148,6 @@ export class ComboPrompt {
         it.small.setTint(note.thermal ? THERMAL_TINT : isCur ? 0xf2c14e : note.gust ? 0x9fd8ff : 0xa8a3b8).setY(TRACK_Y - 20 - (isCur ? Math.round(1 + Math.sin(t / 90)) : 0));
       }
       if (it.holdBar) it.holdBar.setVisible(!note.result || note.holding);
-      if (it.call) {
-        const callT = note.time - this.echoOffset;
-        const cx = HIT_X + (callT - now) * PX_PER_MS;
-        it.call.setVisible(cx < clipR && now < callT + 90).setX(Math.round(cx)).setAlpha(now >= callT ? 1 - (now - callT) / 90 : 0.9);
-        if (!it.called && now >= callT) {
-          it.called = true;
-          this.flash = 120;
-          if (this.onEchoCall) this.onEchoCall(note);
-        }
-      }
     });
     if (this.gustIcon) this.gustIcon.setVisible(gustSoon && Math.floor(t / 200) % 2 === 0);
   }
@@ -196,7 +179,6 @@ export class ComboPrompt {
       it.big.setVisible(false);
       if (it.mark) it.mark.destroy();
       const icon = note.result === 'miss' ? 'icon_cross' : 'icon_check';
-      it.small.setVisible(true);
       it.mark = this.scene.add.image(it.small.x, it.small.y, icon).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
       it.small.setAlpha(0.25);
       const pop = this.scene.add.image(HIT_X, TRACK_Y, `arrow_${note.dir}`).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
@@ -208,7 +190,7 @@ export class ComboPrompt {
   }
 
   hide() {
-    this.items.forEach((it) => { it.big.destroy(); if (it.small) it.small.destroy(); if (it.mark) it.mark.destroy(); if (it.holdBar) it.holdBar.destroy(); if (it.call) it.call.destroy(); });
+    this.items.forEach((it) => { it.big.destroy(); if (it.small) it.small.destroy(); if (it.mark) it.mark.destroy(); if (it.holdBar) it.holdBar.destroy(); });
     if (this.gustIcon) { this.gustIcon.destroy(); this.gustIcon = null; }
     this.items = [];
     if (this.label) { this.label.destroy(); this.label = null; }

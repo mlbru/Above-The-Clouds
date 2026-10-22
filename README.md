@@ -21,7 +21,7 @@ highest biomes take turns, forever.
 | ![The Frozen Reach in a whiteout](docs/screenshots/frozen-reach.png) | **The Frozen Reach**<br>300 m | **Whiteout.** Blizzards roll in. Notes only appear just before the line, but gems turn up twice as often. Wait it out on a ledge, or climb on by feel. |
 | ![Above the Clouds with a thermal route](docs/screenshots/above-the-clouds.png) | **Above the Clouds**<br>480 m | **Thermals.** Some routes ride warm air. Hit the orange up-note perfectly and the updraft lifts you 3 m higher. |
 | ![The Obsidian Spires in the dark](docs/screenshots/obsidian-spires.png) | **The Obsidian Spires**<br>800 m | **Darkness.** The black glass swallows the light. Notes are faint shapes that flash up on every beat, and your headlamp comes on. |
-| ![The Crystal Heights during an echo](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>1050 m | **Echo crystals.** A crystal sings the rhythm first; then you play it back from memory. A perfect echo pays out grip. |
+| ![The Crystal Heights: the risky route sealed by crystal, the normal one growing over](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>1050 m | **Growing crystals.** While you decide, crystal grows over the holds: the risky route seals first, then the normal one. Choose fast or only the safe way is left. |
 
 ## How it plays
 
@@ -89,10 +89,10 @@ URL flag: `?tutorial` jumps straight in.
 - **Darkness** (Obsidian Spires): the black glass swallows the light. Notes on the track are
   faint shapes that flash up on every beat (blind notes flash too) and the headlamp comes on
   (`DARKNESS` in `src/systems/mechanics/Darkness.js`).
-- **Echo** (Crystal Heights): some shorter routes carry an echo crystal (cyan spark on the
-  card). The crystal first plays the rhythm with chimes; then you play it back with the notes
-  and sequence hidden, with slightly wider windows. A fully perfect echo gives +15 grip, and
-  echo routes carry gems more often (`ECHO` in `src/systems/mechanics/Echo.js`).
+- **Growing crystals** (Crystal Heights): while you hang and decide, crystal grows over the
+  holds. The risky route seals after 2.6 s, the normal route after 4.6 s (20% faster in Hard
+  and Summit); the safe route always stays open. A sealed route cannot be chosen and its gem
+  is lost (`CRYSTAL_GROWTH` in `src/systems/mechanics/CrystalGrowth.js`).
 - **Whiteout** (Frozen Reach): now and then a blizzard rolls in, announced by a toast. During
   the storm the scene washes out and notes only appear shortly before the line (blind notes
   stay visible), but gems turn up twice as often. Wait it out on a ledge or climb through it
