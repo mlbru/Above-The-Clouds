@@ -10,7 +10,7 @@ import { Rockfall, ROCKFALL } from '../src/systems/mechanics/Rockfall.js';
 import { addThermal, THERMALS } from '../src/systems/mechanics/Thermals.js';
 import { Mountain } from '../src/systems/SegmentGenerator.js';
 import { Darkness, DARKNESS, darkAlpha } from '../src/systems/mechanics/Darkness.js';
-import { CrystalGrowth, CRYSTAL_GROWTH, growthOf } from '../src/systems/mechanics/CrystalGrowth.js';
+import { PrismLight, PRISM_LIGHT, litIndex } from '../src/systems/mechanics/PrismLight.js';
 import { ProgressionSystem, sandboxCopy } from '../src/systems/ProgressionSystem.js';
 
 test('every biome definition is complete', () => {
@@ -114,21 +114,21 @@ test('darkness marks routes and flashes notes on the beat', () => {
   assert.equal(darkAlpha(DARKNESS, 1600, 1000, 600, true), 1);
 });
 
-test('crystals grow over risky first, then normal; safe stays open', () => {
-  const c = new CrystalGrowth(new SeededRandom(1));
+test('prism light sweeps across the routes and bounces at the ends', () => {
+  const p = new PrismLight(new SeededRandom(1));
   const routes = [{ type: 'safe' }, { type: 'normal' }, { type: 'risky' }];
-  c.decorateRoutes(routes);
-  assert.equal(routes[2].seal, undefined);
-  c.update(100, 1);
-  c.decorateRoutes(routes);
-  assert.equal(routes[0].seal, undefined);
-  const { risky, normal } = CRYSTAL_GROWTH.sealMs;
-  assert.ok(risky < normal);
-  assert.equal(growthOf(routes[2], risky), 1);
-  assert.ok(growthOf(routes[1], risky) < 1);
-  assert.equal(growthOf(routes[1], normal), 1);
-  assert.equal(growthOf(routes[0], 99999), 0);
-  assert.equal(growthOf(routes[2], risky * CRYSTAL_GROWTH.fastScale, CRYSTAL_GROWTH.fastScale), 1);
+  p.decorateRoutes(routes);
+  assert.equal(routes[0].prism, undefined);
+  p.update(100, 1);
+  p.decorateRoutes(routes);
+  assert.ok(routes.every((r) => r.prism && r.prism.start === routes[0].prism.start));
+  const d = PRISM_LIGHT.dwellMs;
+  const seq = [0, 1, 2, 3, 4, 5, 6].map((k) => litIndex(k * d + 1, 3, 0));
+  assert.deepEqual(seq, [0, 1, 2, 1, 0, 1, 2]);
+  assert.equal(litIndex(0, 3, 2), 2);
+  assert.equal(litIndex(5000, 1, 0), 0);
+  // Two routes just alternate.
+  assert.deepEqual([0, 1, 2, 3].map((k) => litIndex(k * d, 2, 0)), [0, 1, 0, 1]);
 });
 
 test('dev save copy never writes the real save', () => {

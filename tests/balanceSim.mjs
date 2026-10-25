@@ -46,13 +46,9 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
     }
     grip.hang(decide, { drainMultiplier: 1, onJug: node.kind === 'jug' });
     let want = grip.value > 65 ? 'risky' : grip.value > 35 ? 'normal' : 'safe';
-    // Crystal growth: a player who hesitates finds the risky (and sometimes the normal) route sealed.
-    if (!NO_MECHANICS && biome.mechanic === 'crystalGrowth') {
-      const u = mrng.next();
-      if (want === 'risky' && u < 0.35) want = u < 0.12 ? 'safe' : 'normal';
-      else if (want === 'normal' && u < 0.12) want = 'safe';
-    }
     const route = routes.find((r) => r.type === want) || routes[0];
+    // Prism light: about one climb in three starts on the lit route and pays no note grip.
+    const lit = !NO_MECHANICS && biome.mechanic === 'prismLight' && mrng.next() < 0.33;
     if (node.hazard === 'crumbling' && decide * 1000 > modeCfg.crumbleMs) { grip.set(0); }
     // Whiteout: notes appear late (read less accurately) but blind notes stay visible.
     const whiteout = !NO_MECHANICS && biome.mechanic === 'whiteout' && Math.random() < STORM_SHARE;
@@ -68,7 +64,7 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
       const spread = sd * (n.hidden && !whiteout && !dark ? 1.35 : 1) * (whiteout ? 1.15 : 1) * (dark ? 1.12 : 1) * (route.tags.includes('OFFBEAT') ? 1.1 : 1);
       const dir = Math.random() < wrong ? (n.dir === 'L' ? 'R' : 'L') : n.dir;
       const res = c.press(dir, n.time + gauss() * spread);
-      [...res.auto, res.judged].filter(Boolean).forEach((x) => grip.applyNote(route, x.result));
+      [...res.auto, res.judged].filter(Boolean).forEach((x) => { if (!lit || x.result === 'miss') grip.applyNote(route, x.result); });
       if (res.judged && res.judged.holding && Math.random() < wrong * 2) { c.release(n.dir, n.time + 50); grip.applyNote(route, 'miss'); }
       if (grip.isEmpty) { empty = true; break; }
     }

@@ -4,8 +4,8 @@
 //   d    the save data (records, finds, gems found...)
 //   run  the current run (maxHeight, perfects, bestStreak, flawless, gems,
 //        falls, riskyRow, whiteoutClimbs, mode, bare); null outside a run
-//   c    lifetime counters (progression.bump): dodges, thermals, quickHands,
-//        darkLedges, greatCatches, nightPhotos
+//   c    lifetime counters (progression.bump): dodges, thermals, prisms,
+//        darkLedges, greatCatches, nightPhotos, summits
 // perRun stamps count within one run; the logbook shows your best run so far.
 // `secret` stamps show as ??? until earned.
 import { BIOMES } from './biomes.js';
@@ -43,7 +43,7 @@ export const STAMPS = [
   { id: 'by-feel', page: 'mountain', name: 'BY FEEL', text: 'MAKE 15 CLIMBS DURING WHITEOUTS IN ONE RUN.', gems: 15, goal: 15, ...perRun((r) => r.whiteoutClimbs) },
   { id: 'hawk', page: 'mountain', name: 'HAWK', text: 'RIDE 15 THERMALS.', gems: 18, goal: 15, ...counter('thermals') },
   { id: 'headlamp', page: 'mountain', name: 'HEADLAMP', text: 'REACH 5 LEDGES IN THE OBSIDIAN SPIRES.', gems: 22, goal: 5, ...counter('darkLedges') },
-  { id: 'quick-hands', page: 'mountain', name: 'QUICK HANDS', text: 'TAKE 15 RISKY ROUTES BEFORE THE CRYSTAL SEALS THEM.', gems: 25, goal: 15, ...counter('quickHands') },
+  { id: 'prism-climber', page: 'mountain', name: 'PRISM CLIMBER', text: 'CLIMB 15 ROUTES IN THE PRISM LIGHT.', gems: 25, goal: 15, ...counter('prisms') },
   { id: 'great-catch', page: 'mountain', name: 'GREAT CATCH', text: 'CATCH 5 SLIPS WITH A PERFECT GRAB.', gems: 10, goal: 5, ...counter('greatCatches') },
 
   { id: 'gem-pockets', page: 'finds', name: 'GEM POCKETS', text: 'FIND 50 GEMS IN ONE RUN.', gems: 10, goal: 50, ...perRun((r) => r.gems) },
@@ -56,6 +56,7 @@ export const STAMPS = [
   { id: 'clean-ascent', page: 'daring', name: 'CLEAN ASCENT', text: `REACH ${BIOMES.obsidian.from} M WITHOUT A SINGLE FALL.`, gems: 35, goal: BIOMES.obsidian.from, unit: 'M', ...height((r) => r.falls === 0) },
   { id: 'hard-as-rock', page: 'daring', name: 'HARD AS ROCK', text: 'REACH 500 M IN HARD MODE.', gems: 25, goal: 500, unit: 'M', ...height((r) => r.mode === 'hard') },
   { id: 'summit-fever', page: 'daring', name: 'SUMMIT FEVER', text: `REACH ${BIOMES.obsidian.from} M IN SUMMIT MODE.`, gems: 60, goal: BIOMES.obsidian.from, unit: 'M', ...height((r) => r.mode === 'summit') },
+  { id: 'brams-summit', page: 'daring', name: 'FOR BRAM', text: "STAND ON THE SUMMIT OF BRAM'S ROUTE.", gems: 30, goal: 1, ...counter('summits') },
   { id: 'bare-hands', page: 'daring', name: 'BARE HANDS', text: 'REACH 300 M IN NORMAL WITH NO GEAR OR PERK.', gems: 15, goal: 300, unit: 'M', secret: true, ...height((r) => r.mode === 'normal' && r.bare) },
 ];
 

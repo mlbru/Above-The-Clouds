@@ -158,7 +158,7 @@ export const BIOMES = {
         { key: 'bg_crystal_isles', paint: 'crystalIsles', seed: 171, h: 100, E: 1200, f: 0.15, haze: 0.08, fill: null, depth: DEPTH.far + 8 },
       ],
     },
-    mechanic: 'crystalGrowth',
+    mechanic: 'prismLight',
   },
 };
 

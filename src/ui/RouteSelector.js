@@ -5,9 +5,8 @@ import { toCss } from '../utils/color.js';
 import { THERMAL_TINT } from './ComboPrompt.js';
 
 const CARD_W = 104, CARD_H = 34;
-const CRYSTAL = [0xe8fffb, 0xb8fff4, 0x3e7488, 0xffc8f0];
-// Shards on a card: [x as a share of the width, width, height as a share of the card, lean].
-const SHARDS = [[0.02, 9, 0.9, -0.6], [0.1, 7, 0.55, 0.4], [0.17, 10, 1.0, 0.2], [0.27, 6, 0.45, -0.3], [0.33, 9, 0.75, 0.5], [0.43, 7, 0.5, -0.5], [0.5, 10, 0.95, 0.1], [0.6, 6, 0.4, 0.6], [0.66, 9, 0.8, -0.2], [0.76, 7, 0.55, 0.4], [0.83, 10, 1.0, -0.4], [0.92, 7, 0.6, 0.3]];
+// The prism beam's colours, cycling along its length.
+const PRISM = [0xffc8f0, 0xfff1a8, 0xb8fff4, 0xa8c8ff, 0xd8b8ff];
 
 // Shows the available routes on the rock (markers + dotted path) and as compact
 // cards at the bottom of the screen.
@@ -21,8 +20,9 @@ export class RouteSelector {
     this.time = 0;
     this.path = scene.add.graphics().setDepth(DEPTH.routeMarks);
     this.cards = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    // Crystal Heights: crystals growing over cards and holds.
+    // Crystal Heights: the prism beam over the lit card (screen space).
     this.grow = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 2);
+    this.lit = -1;
   }
 
   colorOf(route) { return route.toLedge ? ROUTE_COLORS.ledge : ROUTE_COLORS[route.type]; }
@@ -50,6 +50,7 @@ export class RouteSelector {
       const tag = crampons ? 'ICY: CRAMPONS ON' : r.hazard ? HAZ[r.hazard] : r.target.kind === 'jug' ? 'JUG: SHAKE OUT' : tricks ? `${r.inputs} ${tricks}` : r.toLedge ? 'REST AHEAD' : `${r.inputs} MOVES`;
       const tagColor = crampons ? COLORS.green : r.hazard ? COLORS.red : r.target.kind === 'jug' ? COLORS.green : tricks ? COLORS.blue : COLORS.dim;
       const sub = new PixelText(this.scene, cx + 6, cy + 24, tag, { color: tagColor });
+      sub.subText = tag; sub.subColor = tagColor;
       [head, gain, sub].forEach((t) => t.setScrollFactor(0).setDepth(DEPTH.hud + 1));
       const zone = this.scene.add.zone(cx, cy, CARD_W, CARD_H).setOrigin(0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => this.onPick(i, true));
@@ -63,8 +64,9 @@ export class RouteSelector {
       this.objects.push({ ring, num, head, gain, sub, zone, cx, cy, route: r, gem, thermal });
     });
     const mods = routes[0] && routes[0].mods;
-    const growing = routes.some((r) => r.seal);
-    const hint = mods ? mods.hint : growing ? 'CRYSTALS ARE GROWING: CHOOSE BEFORE THEY SEAL' : null;
+    const prism = routes.some((r) => r.prism);
+    this.lit = -1;
+    const hint = mods ? mods.hint : prism ? 'PRISM LIGHT: CLIMB THE LIT ROUTE FOR FREE' : null;
     this.mods = hint ? { hint } : null;
     this.hint = new PixelText(this.scene, GAME_WIDTH / 2, GAME_HEIGHT - 8 - CARD_H - 13, hint || '← → CHOOSE    ↑ / SPACE CLIMB', { color: hint ? (mods ? COLORS.blue : '#b8fff4') : COLORS.faint }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
     this.redraw();
@@ -75,22 +77,14 @@ export class RouteSelector {
     this.redraw();
   }
 
-  isSealed(i) { return !!(this.objects[i] && this.objects[i].sealed); }
-
-  // Crystal growth over route i (0..1). At 1 the route is sealed: its card dims
-  // and says so, and its ring gives way to crystal.
-  setGrowth(i, growth, sealed) {
-    const o = this.objects[i];
-    if (!o) return;
-    o.growth = growth;
-    if (sealed && !o.sealed) {
-      o.sealed = true;
-      o.sub.setText('SEALED BY CRYSTAL').setColor('#e8fffb').setDepth(DEPTH.hud + 3);
-      o.ring.setVisible(false);
-      o.num.setVisible(false);
-      if (o.gem) o.gem.setVisible(false);
-      this.redraw();
-    }
+  // Crystal Heights: route i is now in the prism light.
+  setLit(i) {
+    this.lit = i;
+    this.objects.forEach((o, k) => {
+      if (k === i) o.sub.setText('LIT: NO GRIP COST').setColor('#ffc8f0');
+      else if (o.sub.text === 'LIT: NO GRIP COST') o.sub.setText(o.sub.subText).setColor(o.sub.subColor);
+    });
+    this.redraw();
   }
 
   redraw() {
@@ -108,7 +102,7 @@ export class RouteSelector {
         g.fillStyle(p < o.route.difficulty ? color : 0x3a3550, 1);
         g.fillRect(o.cx + CARD_W - 20 + p * 5, o.cy + 6 + dy, 3, 3);
       }
-      [o.head, o.gain, o.sub].forEach((t, k) => t.setY(o.cy + [5, 15, 24][k] + dy).setAlpha(o.sealed ? (k === 2 ? 1 : 0.35) : sel ? 1 : 0.75));
+      [o.head, o.gain, o.sub].forEach((t, k) => t.setY(o.cy + [5, 15, 24][k] + dy).setAlpha(sel || i === this.lit ? 1 : 0.75));
       if (o.gem) o.gem.setY(o.cy + 7 + dy);
       o.num.setAlpha(sel ? 1 : 0.6);
     });
@@ -120,9 +114,8 @@ export class RouteSelector {
     if (from) this.from = from;
     const g = this.path;
     g.clear();
-    this.drawGrowth(g);
+    this.drawPrism(g);
     this.objects.forEach((o, i) => {
-      if (o.sealed) return;
       const sel = i === this.selected;
       const pulse = sel ? 1 + 0.15 * Math.sin(this.time / 140) : 1;
       o.ring.setScale(Math.round(pulse * 4) / 4).setAlpha(sel ? 1 : 0.55);
@@ -142,44 +135,44 @@ export class RouteSelector {
     });
   }
 
-  // Crystal shards creep over each card from below and close in around the hold.
-  drawGrowth(world) {
+  // A slanted beam of split light falls from the top of the screen onto the
+  // lit hold, and the lit card shimmers along its edge.
+  drawPrism(world) {
     const g = this.grow;
     g.clear();
-    this.objects.forEach((o, i) => {
-      const p = o.growth || 0;
-      if (p <= 0) return;
-      const dy = i === this.selected ? -3 : 0;
-      const bottom = o.cy + dy + CARD_H - 1;
-      if (o.sealed) { g.fillStyle(0x66a2b4, 0.35); g.fillRect(o.cx + 1, o.cy + dy + 1, CARD_W - 2, CARD_H - 2); }
-      // A row of leaning shards, the tall ones first; each grows in with the card's progress.
-      for (let k = 0; k < SHARDS.length; k++) {
-        const [fx, fw, fh, lean] = SHARDS[k];
-        const h = Math.round(fh * CARD_H * Math.min(1, p * 1.25 - k * 0.02));
-        if (h < 2) continue;
-        const x = o.cx + Math.round(fx * CARD_W), w = fw, tipX = x + w / 2 + lean * h * 0.3;
-        g.fillStyle(CRYSTAL[2], o.sealed ? 0.85 : 0.6);
-        g.fillTriangle(x, bottom, x + w, bottom, tipX, bottom - h);
-        g.fillStyle(CRYSTAL[k % 2 ? 3 : 1], o.sealed ? 0.9 : 0.7);
-        g.fillTriangle(x, bottom, x + w / 2, bottom, tipX, bottom - h);
-        g.fillStyle(0xffffff, 0.9);
-        g.fillRect(Math.round(tipX), bottom - h, 1, 2);
-      }
-      // On the wall: shards close in around the target hold, and cover it once sealed.
-      const t = o.route.target, n = Math.ceil(p * 7);
-      for (let k = 0; k < n; k++) {
-        const a = Math.PI * (0.15 + 0.7 * (k / 6)), r = o.sealed ? 6 : 13 - p * 5;
-        const sx = Math.round(t.x - Math.cos(a) * r * 1.4), sy = Math.round(t.y + 7);
-        const len = Math.round((o.sealed ? 12 : 4 + p * 7) * (k % 2 ? 0.75 : 1));
-        const tip = sx + Math.round((sx - t.x) * 0.25);
-        world.fillStyle(CRYSTAL[2], 1);
-        world.fillTriangle(sx - 3, sy, sx + 3, sy, tip, sy - len);
-        world.fillStyle(CRYSTAL[k % 2 ? 3 : 1], 1);
-        world.fillTriangle(sx - 3, sy, sx, sy, tip, sy - len);
-        world.fillStyle(0xffffff, 1);
-        world.fillRect(tip, sy - len, 1, 1);
-      }
-    });
+    const o = this.objects[this.lit];
+    if (!o) return;
+    const t = o.route.target;
+    const cam = this.scene.cameras.main;
+    const top = cam.scrollY - 4;
+    const shift = Math.floor(this.time / 90);
+    for (let y = top; y < t.y - 2; y += 3) {
+      const k = (y - top) / Math.max(1, t.y - top);
+      const x = Math.round(t.x - (1 - k) * 46);
+      const w = Math.round(6 + k * 12);
+      world.fillStyle(0x16141f, 0.18);
+      world.fillRect(x - Math.floor(w / 2) - 1, y, w + 2, 3);
+      world.fillStyle(PRISM[(Math.floor(y / 3) + shift) % PRISM.length], 0.35 + k * 0.4);
+      world.fillRect(x - Math.floor(w / 2), y, w, 3);
+      world.fillStyle(0xffffff, 0.5 + k * 0.4);
+      world.fillRect(x, y, 1, 3);
+    }
+    const pulse = 9 + Math.round(2 * Math.sin(this.time / 120));
+    world.lineStyle(2, 0x16141f, 0.5).strokeCircle(t.x, t.y + 3, pulse + 1);
+    world.lineStyle(1, 0xffffff, 1).strokeCircle(t.x, t.y + 3, pulse);
+    world.lineStyle(2, PRISM[shift % PRISM.length], 1).strokeCircle(t.x, t.y + 3, pulse + 3);
+    const dy = this.lit === this.selected ? -3 : 0;
+    const perim = 2 * (CARD_W + CARD_H);
+    for (let s = 0; s < perim; s += 4) {
+      const d = (s + shift * 2) % perim;
+      let x, y;
+      if (d < CARD_W) { x = o.cx + d; y = o.cy + dy; }
+      else if (d < CARD_W + CARD_H) { x = o.cx + CARD_W - 1; y = o.cy + dy + d - CARD_W; }
+      else if (d < 2 * CARD_W + CARD_H) { x = o.cx + CARD_W - (d - CARD_W - CARD_H); y = o.cy + dy + CARD_H - 1; }
+      else { x = o.cx; y = o.cy + dy + CARD_H - (d - 2 * CARD_W - CARD_H); }
+      g.fillStyle(PRISM[Math.floor(s / 4) % PRISM.length], 1);
+      g.fillRect(Math.round(x) - (d >= CARD_W && d < CARD_W + CARD_H ? 1 : 0), Math.round(y) - (d >= CARD_W + CARD_H && d < 2 * CARD_W + CARD_H ? 1 : 0), 2, 2);
+    }
   }
 
   hide() {

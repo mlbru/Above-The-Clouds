@@ -16,6 +16,8 @@ import { POSES, FRAME_H } from '../render/climberArt.js';
 import { BALANCE } from '../config/balanceConfig.js';
 import { toggleFullscreen, isFullscreen } from '../utils/fullscreen.js';
 import { STAMPS } from '../data/logbook.js';
+import { EXPEDITIONS, EXPEDITION_ORDER } from '../data/expeditions.js';
+import { ExpeditionMountain } from '../systems/ExpeditionMountain.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { toCss } from '../utils/color.js';
 
@@ -132,6 +134,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.list = new MenuList(this, px + 12, py + 44, [
       { label: 'CLIMB', onSelect: () => this.startClimb(), onLeft: () => cycle(-1), onRight: () => cycle(1) },
+      { label: 'EXPEDITIONS', onSelect: () => this.showExpeditions() },
       { label: () => `LOGBOOK  ${d.stamps.length}/${STAMPS.length}`, onSelect: () => this.openLogbook(), onLeft: () => cycle(-1), onRight: () => cycle(1) },
       ...(dev ? [{ label: 'DEV: TELEPORT', onSelect: () => this.showTeleport() }] : []),
       { label: 'WARDROBE', onSelect: () => this.openWardrobe() },
@@ -245,10 +248,37 @@ export class MenuScene extends Phaser.Scene {
     this.scene.pause();
   }
 
-  startClimb(tutorial = false, devStart = null) {
+  startClimb(tutorial = false, devStart = null, expedition = null) {
     Audio.init();
     this.cameras.main.fadeOut(400, 10, 12, 20);
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Climb', { tutorial, devStart }));
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Climb', { tutorial, devStart, expedition }));
+  }
+
+  // Hand-built mountains with a summit. One card per expedition.
+  showExpeditions() {
+    this.clearUI();
+    const W = GAME_WIDTH / 2;
+    this.add2(new PixelText(this, W, 28, 'EXPEDITIONS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
+    this.add2(new PixelText(this, W, 46, 'HAND-BUILT MOUNTAINS WITH A REAL SUMMIT. NO FALL LIMIT.', { color: COLORS.dim }).setOrigin(0.5, 0));
+    const items = [];
+    EXPEDITION_ORDER.forEach((id, i) => {
+      const exp = EXPEDITIONS[id];
+      const st = this.prog.expedition(id);
+      const y = 62 + i * 58;
+      this.panel(W - 150, y, 300, 52);
+      const top = new ExpeditionMountain(exp).summitLevel * 1.5;
+      this.add2(new PixelText(this, W - 140, y + 22, exp.blurb, { color: COLORS.dim }));
+      const pages = `JOURNAL ${st.pages.length}/${exp.pitches.length - 1}`;
+      const status = st.summits ? `SUMMITED X${st.summits}  •  BEST TIME ${Math.floor(st.bestTime / 60000)}:${String(Math.floor((st.bestTime % 60000) / 1000)).padStart(2, '0')}` : st.best ? `BEST ${Math.floor(st.best)} / ${Math.floor(top)} M` : `${Math.floor(top)} M  •  NOT CLIMBED YET`;
+      this.add2(new PixelText(this, W - 140, y + 33, `${status}   ${pages}`, { color: st.summits ? COLORS.gold : COLORS.text }));
+      // Progress up the mountain.
+      const g = this.add2(this.add.graphics());
+      g.fillStyle(0x2e2a3c, 1).fillRect(W - 140, y + 44, 280, 2);
+      g.fillStyle(st.summits ? 0xf2c14e : 0x9fd8ff, 1).fillRect(W - 140, y + 44, Math.round(280 * Math.min(1, (st.summits ? top : st.best) / top)), 2);
+      items.push({ label: exp.name, onSelect: () => this.startClimb(false, null, id) });
+    });
+    items.push({ label: 'BACK', onSelect: () => this.showMain() });
+    this.list = new MenuList(this, W - 140, 70, items, { depth: DEPTH.hud + 1, align: 'left', spacing: 58, onCancel: () => this.showMain() });
   }
 
   onKey(event) {

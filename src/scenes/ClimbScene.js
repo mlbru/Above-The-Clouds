@@ -23,7 +23,7 @@ import { biomeAt, biomeMixAt, biomeStretchAt } from '../data/biomes.js';
 import { BiomeMechanics } from '../systems/mechanics/index.js';
 import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
 import { DARKNESS } from '../systems/mechanics/Darkness.js';
-import { CRYSTAL_GROWTH, growthOf } from '../systems/mechanics/CrystalGrowth.js';
+import { PRISM_LIGHT, litIndex } from '../systems/mechanics/PrismLight.js';
 import { sandboxCopy } from '../systems/ProgressionSystem.js';
 import { DISCOVERIES } from '../data/discoveries.js';
 import { SeededRandom, hashInts, randomSeed } from '../utils/seededRandom.js';
@@ -34,6 +34,9 @@ import { TutorialDirector } from '../systems/TutorialDirector.js';
 import { TutorialCoach } from '../ui/TutorialCoach.js';
 import { BramTip } from '../ui/BramTip.js';
 import { RunSummary } from '../ui/RunSummary.js';
+import { JournalCard } from '../ui/JournalCard.js';
+import { EXPEDITIONS } from '../data/expeditions.js';
+import { ExpeditionMountain } from '../systems/ExpeditionMountain.js';
 import { TAG_TIPS } from '../data/bramTips.js';
 import { POSES } from '../render/climberArt.js';
 import { GEMS } from '../data/gems.js';
@@ -78,9 +81,11 @@ export class ClimbScene extends Phaser.Scene {
 
   init(data) {
     this.tutorial = !!(data && data.tutorial);
-    this.seed = this.tutorial ? TUTORIAL_SEED : (data && data.seed) ?? urlSeed() ?? randomSeed();
+    // Expeditions: a hand-built mountain with a summit (data/expeditions.js).
+    this.expedition = (!this.tutorial && data && EXPEDITIONS[data.expedition]) || null;
+    this.seed = this.tutorial ? TUTORIAL_SEED : this.expedition ? this.expedition.seed : (data && data.seed) ?? urlSeed() ?? randomSeed();
     // Dev teleport (code WARPZONE): start at this height on a save copy that is never written.
-    this.devStart = this.tutorial ? null : (data && data.devStart) ?? null;
+    this.devStart = this.tutorial || this.expedition ? null : (data && data.devStart) ?? null;
     this.devRun = this.devStart !== null;
   }
 
@@ -111,9 +116,9 @@ export class ClimbScene extends Phaser.Scene {
     this.gustAnnounced = null;
     this.runOverUI = null;
 
-    this.mode = this.tutorial ? 'normal' : BALANCE.modes[this.settings.mode] ? this.settings.mode : 'normal';
+    this.mode = this.tutorial || this.expedition ? 'normal' : BALANCE.modes[this.settings.mode] ? this.settings.mode : 'normal';
     this.modeCfg = modeConfig(this.mode);
-    this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
+    this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : this.expedition ? new ExpeditionMountain(this.expedition, BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
     this.mountain.ensureLevel(GENERATE_AHEAD_LEVELS);
     this.grip = new GripSystem(BALANCE, this.modeCfg);
     this.dayNight = new DayNightSystem({ dayLengthSec: 600, startT: 0.09 });
@@ -139,6 +144,7 @@ export class ClimbScene extends Phaser.Scene {
     }
     this.tips = this.tutorial ? null : new BramTip(this, this.prog, { onOpen: () => this.freezeForTip(), onClose: () => this.unfreezeForTip() });
     this.frozenTweens = null;
+    this.journal = new JournalCard(this);
 
     this.cam = this.cameras.main;
     this.cam.setRoundPixels(true);
@@ -152,7 +158,8 @@ export class ClimbScene extends Phaser.Scene {
     this.run = { climbed: 0, slips: 0, falls: 0, perfects: 0, flawless: 0, firstSlip: true, newBestShown: false, startBest: this.tutorial ? 0 : this.prog.bestFor(this.mode), streak: 0, bestStreak: 0 };
     this.run.gems = 0;
     // For the run summary and the logbook.
-    this.run.mode = this.mode;
+    this.run.mode = this.expedition ? 'expedition' : this.mode;
+    if (this.expedition) this.run.startBest = this.prog.expedition(this.expedition.id).best;
     this.run.stones = {};
     this.run.finds = [];
     this.run.stamps = [];
@@ -244,6 +251,11 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (this.state === STATE.RUN_OVER && code === 'Escape') { this.scene.start('Menu'); return; }
+    if (this.journal.open) {
+      if (code === 'Escape' || code === 'KeyP') this.pauseGame();
+      else if (DIR_KEYS[code] || code === 'Space' || code === 'Enter') this.journal.close();
+      return;
+    }
     if (this.tipOpen) {
       if (code === 'Escape' || code === 'KeyP') this.pauseGame();
       else if (DIR_KEYS[code] || code === 'Space' || code === 'Enter') this.tips.skip();
@@ -389,7 +401,8 @@ export class ClimbScene extends Phaser.Scene {
     if (rf && rf.due && node.kind !== 'ledge' && node.hazard !== 'crumbling') { this.startRockfall(); return; }
     this.routeUI.show(this.routes, sel, { x: this.climber.x, y: this.climber.y });
     if (this.director) this.director.onRouteSelect(node);
-    this.growStart = this.routes.some((r) => r.seal) ? this.clock : 0;
+    this.prismStart = this.routes.some((r) => r.prism) ? this.clock : 0;
+    this.prismLit = -1;
     this.routeTips(node);
   }
 
@@ -399,7 +412,7 @@ export class ClimbScene extends Phaser.Scene {
     if (node.kind === 'jug') this.tip('jug');
     if (this.routeGems.length) this.tip('gems');
     if (this.routes.some((r) => r.thermal)) this.tip('thermals');
-    if (this.growStart) this.tip('crystal');
+    if (this.prismStart) this.tip('crystal');
     if (this.routes.some((r) => r.mods && r.mods.dark)) this.tip('darkness');
   }
 
@@ -410,34 +423,17 @@ export class ClimbScene extends Phaser.Scene {
     if (this.tips) this.tips.setVisible(v);
   }
 
-  // ---------------------------------------------------------------- crystal growth (Crystal Heights)
-  updateGrowth() {
-    const scale = this.mode === 'normal' ? 1 : CRYSTAL_GROWTH.fastScale;
-    const elapsed = this.clock - this.growStart;
-    this.routes.forEach((r, i) => {
-      const g = growthOf(r, elapsed, scale);
-      // Never seal the last open route.
-      const othersOpen = this.routes.some((o, j) => j !== i && !o.sealed);
-      if (g >= 1 && !r.sealed && othersOpen) this.sealRoute(r, i);
-      this.routeUI.setGrowth(i, r.sealed ? 1 : Math.min(g, 0.97), r.sealed);
-    });
-  }
-
-  sealRoute(route, i) {
-    route.sealed = true;
-    Audio.play('crystal', { dir: route.type === 'risky' ? 'R' : 'U' });
-    this.effects.sparkle(route.target.x, route.target.y, 6);
-    const gem = this.routeGems.find((g) => g.route === route);
-    if (gem) { this.fadeGem(gem); this.routeGems = this.routeGems.filter((g) => g !== gem); }
-    this.discover('crystal-sealed');
-    if (this.selected === i) {
-      let j = i;
-      while (j > 0 && this.routes[j].sealed) j--;
-      if (this.routes[j].sealed) j = this.routes.findIndex((r) => !r.sealed);
-      this.selected = j;
-    }
-    this.routeUI.setGrowth(i, 1, true);
-    this.routeUI.setSelected(this.selected);
+  // ---------------------------------------------------------------- prism light (Crystal Heights)
+  // The beam moves across the routes; a climb started on the lit one is free.
+  updatePrism() {
+    const r0 = this.routes[0];
+    const lit = litIndex(this.clock - this.prismStart, this.routes.length, r0.prism.start);
+    if (lit === this.prismLit) return;
+    this.prismLit = lit;
+    this.routeUI.setLit(lit);
+    const t = this.routes[lit].target;
+    this.effects.sparkle(t.x, t.y, 4);
+    Audio.play('crystal', { dir: ['L', 'U', 'R'][lit] || 'U' });
   }
 
   // ---------------------------------------------------------------- rockfall (Stone Wall)
@@ -468,6 +464,7 @@ export class ClimbScene extends Phaser.Scene {
       earlyGraceMs: 150, leadInMs, startTime: this.now(),
     });
     this.comboUI.showRecovery(this.dodge, { label: `DODGE ${dir === 'L' ? 'LEFT' : 'RIGHT'}!` });
+    this.climber.setPose('brace');
     // The rock drops onto the climber and lands exactly on the beat.
     const rock = this.add.image(this.climber.x + (dir === 'L' ? 5 : -5), this.camY - 14, 'rock_fall').setDepth(DEPTH.fx + 2).setScale(2);
     let trail = 0;
@@ -476,6 +473,24 @@ export class ClimbScene extends Phaser.Scene {
       onUpdate: () => { if (++trail % 6 === 0) this.effects.pebbleFall(rock.x, rock.y - 8, 1, 0xa8743e); },
     });
     this.dodgeRock = rock;
+  }
+
+  // The dodge itself: swing the body out on one hand, let the rock pass, swing back.
+  async swingClear(dir) {
+    const c = this.climber;
+    const hx = c.x, hy = c.y, side = dir === 'L' ? -1 : 1;
+    c.busy++;
+    c.setPose(dir === 'L' ? 'reachL_mid' : 'reachR_mid');
+    this.time.delayedCall(40, () => { if (this.state === STATE.DODGING) c.setPose(dir === 'L' ? 'dodgeL' : 'dodgeR'); });
+    this.effects.chalk(hx, hy);
+    Audio.play('cloth');
+    await c.tweenTo(hx + side * 4, hy + 1, 90, 'Quad.easeOut');
+    await new Promise((r) => this.time.delayedCall(170, r));
+    if (this.state !== STATE.DODGING) { c.busy--; return; }
+    c.setPose(dir === 'L' ? 'reachL_mid' : 'reachR_mid');
+    await c.tweenTo(hx, hy, 150, 'Back.easeOut');
+    c.busy--;
+    if (this.state === STATE.DODGING) c.setPose(this.dodge ? 'brace' : 'hang');
   }
 
   dodgeInput(dir, t) {
@@ -496,7 +511,7 @@ export class ClimbScene extends Phaser.Scene {
     }
     const biome = biomeAt(levelToMeters(this.node.level));
     if (note.result !== 'miss') {
-      this.climber.hold(note.dir === 'L' ? 'perfectL' : 'perfectR', 280);
+      this.swingClear(note.dir);
       this.addStreak();
       this.floatText(note.result === 'perfect' ? 'DODGED!' : 'CLOSE ONE!', COLORS.green, 12);
       Audio.play('good');
@@ -524,6 +539,7 @@ export class ClimbScene extends Phaser.Scene {
       this.grip.resetHang();
       this.climber.setPose('hang');
       this.routeUI.show(this.routes, this.selected, { x: this.climber.x, y: this.climber.y });
+      if (this.prismStart) { this.prismStart = this.clock; this.prismLit = -1; }
     });
   }
 
@@ -532,7 +548,7 @@ export class ClimbScene extends Phaser.Scene {
     let next = this.selected;
     for (let k = 0; k < n; k++) {
       next = (next + d + n) % n;
-      if (!this.routes[next].sealed) break;
+      break;
     }
     this.selected = next;
     this.routeUI.setSelected(this.selected);
@@ -541,7 +557,6 @@ export class ClimbScene extends Phaser.Scene {
 
   pickRoute(i, confirm) {
     if (this.state !== STATE.ROUTE_SELECT || !this.routes[i] || this.tipOpen) return;
-    if (this.routes[i].sealed) { Audio.play('denied'); return; }
     if (this.director && this.director.holdRoutes) return;
     if (i !== this.selected) {
       this.selected = i;
@@ -614,7 +629,15 @@ export class ClimbScene extends Phaser.Scene {
     this.routeUI.hide();
     this.clearCrumble();
     this.state = STATE.CLIMBING_COMBO;
-    this.growStart = 0;
+    // Started in the prism light: this climb's hits cost no grip.
+    this.prismed = !!this.prismStart && this.selected === this.prismLit;
+    route.prismed = this.prismed;
+    this.prismStart = 0;
+    if (this.prismed) {
+      this.floatText('PRISM LIGHT: FREE CLIMB!', '#ffc8f0', 18, true);
+      this.effects.sparkle(route.target.x, route.target.y, 10);
+      if (!this.director) { this.prog.bump('prisms'); this.discover('prism-light'); }
+    }
     this.thermalEarned = false;
     this.gustAnnounced = null;
     let windowScale = route.windowScale;
@@ -661,7 +684,7 @@ export class ClimbScene extends Phaser.Scene {
     if (this.perk === 'steady' && note.result === 'miss' && !this.combo.steadyUsed) {
       this.combo.steadyUsed = true;
       this.grip.change(-this.grip.noteCost(route, note.result) * 0.5);
-    } else this.grip.applyNote(route, note.result);
+    } else if (!(this.prismed && note.result !== 'miss')) this.grip.applyNote(route, note.result);
     const style = this.comboUI.judge(note);
     this.lastJudge = `${note.result.toUpperCase()}${note.reason ? ' ' + note.reason.toUpperCase() : ''} ${Math.round(note.offset)}MS`;
     const n = this.combo.notes.length;
@@ -807,7 +830,7 @@ export class ClimbScene extends Phaser.Scene {
     const firstOfKind = this.prog.found(gem.id) === 0;
     const lucky = this.gear.charm > 0;
     if (lucky) { this.gear.charm--; this.updateGearHud(); }
-    const value = Math.round(gem.value * this.gemScale * (lucky ? 2 : 1));
+    const value = Math.round(gem.value * this.gemScale * (lucky ? 2 : 1) * (route.prismed ? PRISM_LIGHT.gemScale : 1));
     this.prog.addGems(value, gem.id);
     this.run.gems += value;
     this.run.stones[gem.id] = (this.run.stones[gem.id] || 0) + 1;
@@ -1014,7 +1037,6 @@ export class ClimbScene extends Phaser.Scene {
       this.run.riskyRow = route.type === 'risky' ? this.run.riskyRow + 1 : 0;
       this.run.riskyBest = Math.max(this.run.riskyBest || 0, this.run.riskyRow);
       if (this.mechanics && this.mechanics.get('whiteout').active) this.run.whiteoutClimbs++;
-      if (route.seal && route.type === 'risky') this.prog.bump('quickHands');
     }
     if (route.mods && route.mods.discovery) this.discover(route.mods.discovery);
     if (s.miss === 1) {
@@ -1103,7 +1125,9 @@ export class ClimbScene extends Phaser.Scene {
     this.run.maxHeight = Math.max(this.run.maxHeight || 0, h);
     if (this.director) this.director.onArrive(node);
     else this.prog.addClimbed(gain);
-    const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] } : this.prog.recordHeight(h, this.mode);
+    const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] }
+      : this.expedition ? { newBest: this.prog.recordExpeditionHeight(this.expedition.id, h), unlocks: [] }
+        : this.prog.recordHeight(h, this.mode);
     if (newBest && !this.run.newBestShown && this.run.startBest > 0) {
       this.run.newBestShown = true;
       this.celebrateRecord();
@@ -1118,7 +1142,8 @@ export class ClimbScene extends Phaser.Scene {
     this.mountain.ensureLevel(node.level + GENERATE_AHEAD_LEVELS);
     this.mountain.prune(Math.min(this.checkpoint.level, node.level - KEEP_BELOW_LEVELS));
     if (stay) return;
-    if (node.kind === 'ledge') this.enterRest(node);
+    if (node.summit) this.reachSummit(node);
+    else if (node.kind === 'ledge') this.enterRest(node);
     else this.enterRouteSelect();
   }
 
@@ -1229,8 +1254,9 @@ export class ClimbScene extends Phaser.Scene {
     const cp = this.checkpoint;
     const dist = cp.y - this.climber.y;
     const stretch = biomeStretchAt(levelToMeters(this.node.level));
-    const fallsHere = this.director ? 0 : (this.run.biomeFalls[stretch] || 0) + 1;
-    if (!this.director) this.run.biomeFalls[stretch] = fallsHere;
+    // Expeditions have no fall limit: every fall goes back to the last ledge.
+    const fallsHere = this.director || this.expedition ? 0 : (this.run.biomeFalls[stretch] || 0) + 1;
+    if (!this.director && !this.expedition) this.run.biomeFalls[stretch] = fallsHere;
     this.runOverReason = this.modeCfg.permadeath ? null : fallsHere >= 2 ? `A SECOND FALL IN ${biomeAt(levelToMeters(this.node.level)).name}` : null;
     const ending = this.modeCfg.permadeath || this.runOverReason;
     await this.peelOff();
@@ -1285,9 +1311,72 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   warnLastFall() {
-    if (this.director) return;
+    if (this.director || this.expedition) return;
     this.tip('fall');
     this.hud.toast('FALL USED: THE NEXT ONE HERE SENDS YOU BACK TO 0 M', COLORS.red);
+  }
+
+  // ---------------------------------------------------------------- expeditions
+  // "PITCH 4/12  BRAM'S CRACK" for the HUD.
+  pitchLabel() {
+    const seg = this.mountain.segmentForLevel(this.node.level);
+    const n = this.expedition.pitches.length;
+    let pi = seg && seg.pitchIndex != null ? seg.pitchIndex : 0;
+    if (this.node.kind === 'ledge' && !this.node.summit && this.node.level > 0) pi = Math.min(n - 1, pi + 1);
+    return `PITCH ${pi + 1}/${n}  ${this.expedition.pitches[pi].name}`;
+  }
+
+  // Bram's page from the cairn on this ledge.
+  showJournalPage(pi) {
+    if (this.state !== STATE.RESTING || this.journal.open) return;
+    const exp = this.expedition;
+    const isNew = this.devRun ? false : this.prog.findJournalPage(exp.id, pi);
+    const found = this.prog.expedition(exp.id).pages.length;
+    const total = exp.pitches.length - 1;
+    this.journal.show({ title: `BRAM'S JOURNAL  •  PAGE ${pi + 1}`, lines: exp.pitches[pi].page, footer: isNew ? `NEW PAGE  •  ${found}/${total} FOUND` : `${found}/${total} PAGES FOUND` });
+    if (isNew) Audio.play('discovery');
+  }
+
+  // The top of an expedition: celebrate, read the last page, then the summary.
+  async reachSummit(node) {
+    const exp = this.expedition;
+    this.state = STATE.RUN_OVER;
+    this.routeUI.hide();
+    this.comboUI.hide();
+    this.climber.setPose('look');
+    const ms = this.clock - (this.run.departedAt || 0);
+    const res = this.prog.recordSummit(exp.id, ms);
+    if (res.first) this.awardGems(exp.reward);
+    this.prog.bump('summits');
+    this.checkLogbook();
+    Audio.play('fanfare');
+    Audio.swell(30);
+    this.hud.flashScreen(0xfff1d6, 0.35, 600);
+    const v = this.cam.worldView;
+    this.effects.confettiBurst(v.x + 50, v.y + 30, 34);
+    this.effects.confettiBurst(v.right - 50, v.y + 30, 34);
+    this.effects.confettiBurst(node.x, node.y - 40, 24);
+    this.hud.celebrate({ title: 'SUMMIT!', sub: `${exp.name}  •  ${Math.floor(levelToMeters(node.level))} M`, color: COLORS.gold });
+    await new Promise((r) => this.time.delayedCall(2200, r));
+    this.journal.show({ title: 'UNDER THE SUMMIT STONE', lines: exp.summitPage, footer: "NOT BRAM'S HANDWRITING" }, () => this.summitSummary(ms, res));
+  }
+
+  summitSummary(ms, res) {
+    const fmt = (t) => `${Math.floor(t / 60000)}:${String(Math.floor((t % 60000) / 1000)).padStart(2, '0')}`;
+    this.setHudVisible(false);
+    const reached = levelToMeters(this.node.level);
+    this.runOverUI = new RunSummary(this, {
+      title: 'SUMMIT!', titleColor: COLORS.gold,
+      modeLabel: this.expedition.name,
+      reached, best: reached, isRecord: false,
+      recordLine: `TIME ${fmt(ms)}  •  BEST ${fmt(res.bestTime)}  •  FALLS ${this.run.falls}`,
+      reason: res.first ? `FIRST ASCENT!  +${this.expedition.reward}◆` : '',
+      strandedLabel: 'STOOD ON THE SUMMIT', stripTop: reached,
+      perfects: this.run.perfects, bestStreak: this.run.bestStreak,
+      caught: Math.max(0, this.run.slips - this.run.falls),
+      finds: this.run.finds, stones: this.run.stones, gems: this.run.gems,
+      wallet: this.prog.gems, stamps: this.run.stamps,
+    }, { onAgain: () => this.climbAgain(), onTitle: () => this.scene.start('Menu') });
   }
 
   // Summit mode: one fall ends the run. Other modes: a second fall in one biome.
@@ -1320,7 +1409,7 @@ export class ClimbScene extends Phaser.Scene {
     this.cam.fadeIn(500, 10, 12, 20);
   }
 
-  climbAgain() { this.scene.restart(this.devRun ? { devStart: this.devStart } : {}); }
+  climbAgain() { this.scene.restart(this.expedition ? { expedition: this.expedition.id } : this.devRun ? { devStart: this.devStart } : {}); }
 
   respawnAt(cp, message, snap) {
     this.climber.stopTweens();
@@ -1370,6 +1459,7 @@ export class ClimbScene extends Phaser.Scene {
         if (r) detail = DISCOVERIES[rest.discovery].text;
       }
     }
+    if (this.expedition && rest.journal != null && !opts.respawn) this.time.delayedCall(450, () => this.showJournalPage(rest.journal));
     this.restInfo = { title, subtitle, detail, trader: this.atTrader() };
     this.restUI.show({ ...this.restInfo, sitting: false });
     this.showTraderTag();
@@ -1402,7 +1492,7 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   restAction(a) {
-    if (this.state !== STATE.RESTING) return;
+    if (this.state !== STATE.RESTING || this.journal.open) return;
     if (a === 'continue' && this.director && this.director.holdRest && !this.director.finished) { this.tutorialCard.next(); return; }
     if (a === 'rest') {
       this.sitting = !this.sitting;
@@ -1419,7 +1509,7 @@ export class ClimbScene extends Phaser.Scene {
     this.grip.restoreFull();
     this.restUI.hide();
     this.hideTraderTag();
-    if (!this.run.departed && this.node.level === 0) { this.run.departed = true; this.activateLoadout(); }
+    if (!this.run.departed && this.node.level === 0) { this.run.departed = true; this.run.departedAt = this.clock; this.activateLoadout(); }
     this.sitting = false;
     Audio.setMusicIntensity(0.3);
     Audio.play('cloth');
@@ -1551,7 +1641,7 @@ export class ClimbScene extends Phaser.Scene {
     if (cardOpen && this.state === STATE.ROUTE_SELECT && this.node.kind === 'jug') this.grip.hang(dt / 1000, { onJug: true });
     switch (cardOpen || frozen ? null : this.state) {
       case STATE.ROUTE_SELECT: {
-        if (this.growStart) this.updateGrowth();
+        if (this.prismStart) this.updatePrism();
         const biome = biomeAt(levelToMeters(this.node.level));
         const icy = this.node.hazard === 'icy' && !this.gear.crampons ? 1.4 : 1;
         this.grip.hang(dt / 1000, {
@@ -1619,9 +1709,9 @@ export class ClimbScene extends Phaser.Scene {
 
     this.hud.update(dt, {
       heightM: climberAlt,
-      best: this.prog.bestFor(this.mode),
-      modeLabel: this.director ? 'TUTORIAL' : this.devRun ? `DEV ${this.mode === 'normal' ? '' : this.modeCfg.label}`.trim() : this.mode === 'normal' ? '' : this.modeCfg.label,
-      biomeName: this.director ? biome.name : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO FALLS LEFT' : '1 FALL LEFT'}`,
+      best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.prog.bestFor(this.mode),
+      modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : this.devRun ? `DEV ${this.mode === 'normal' ? '' : this.modeCfg.label}`.trim() : this.mode === 'normal' ? '' : this.modeCfg.label,
+      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO FALLS LEFT' : '1 FALL LEFT'}`,
       grip: this.grip.value,
       gripLow: this.grip.isLow && this.state !== STATE.RESTING,
       gripCritical: this.grip.isCritical && this.state !== STATE.RESTING,
@@ -1688,6 +1778,11 @@ export class ClimbScene extends Phaser.Scene {
   updateBot(now) {
     const b = this.bot;
     if (!b) return;
+    if (this.journal.open) {
+      if (!b.tipWait) b.tipWait = performance.now() + 600;
+      if (performance.now() > b.tipWait) { b.tipWait = 0; this.journal.close(); }
+      return;
+    }
     if (this.tipOpen) {
       if (!b.tipWait) b.tipWait = performance.now() + 400;
       if (performance.now() > b.tipWait) { b.tipWait = 0; this.tips.skip(); this.tips.skip(); }
@@ -1708,8 +1803,8 @@ export class ClimbScene extends Phaser.Scene {
       if (this.clock > b.wait) {
         b.wait = 0;
         const want = this.grip.value > 65 ? 'risky' : this.grip.value > 35 ? 'normal' : 'safe';
-        let i = this.routes.findIndex((r) => r.type === want && !r.sealed);
-        if (i < 0) i = this.routes.findIndex((r) => !r.sealed);
+        let i = this.routes.findIndex((r) => r.type === want);
+        if (i < 0) i = 0;
         this.pickRoute(i, true);
       }
       return;
@@ -1779,6 +1874,7 @@ export class ClimbScene extends Phaser.Scene {
     this.restUI.hide();
     if (this.tutorialCard) this.tutorialCard.destroy();
     if (this.tips) this.tips.destroy();
+    this.journal.destroy();
     if (this.runOverUI) { this.runOverUI.destroy(); this.runOverUI = null; }
     Audio.setPaused(false);
     Audio.setMusicIntensity(0.3);

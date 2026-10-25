@@ -21,7 +21,7 @@ highest biomes take turns, forever.
 | ![The Frozen Reach in a whiteout](docs/screenshots/frozen-reach.png) | **The Frozen Reach**<br>300 m | **Whiteout.** Blizzards roll in. Notes only appear just before the line, but gems turn up twice as often. Wait it out on a ledge, or climb on by feel. |
 | ![Above the Clouds with a thermal route](docs/screenshots/above-the-clouds.png) | **Above the Clouds**<br>480 m | **Thermals.** Some routes ride warm air. Hit the orange up-note perfectly and the updraft lifts you 3 m higher. |
 | ![The Obsidian Spires in the dark](docs/screenshots/obsidian-spires.png) | **The Obsidian Spires**<br>800 m | **Darkness.** The black glass swallows the light. Notes are faint shapes that flash up on every beat, and your headlamp comes on. |
-| ![The Crystal Heights: the risky route sealed by crystal, the normal one growing over](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>1050 m | **Growing crystals.** While you decide, crystal grows over the holds: the risky route seals first, then the normal one. Choose fast or only the safe way is left. |
+| ![The Crystal Heights](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>1050 m | **Prism light.** A beam of split sunlight sweeps across the routes while you decide. Start a climb on the lit route and its hits cost no grip, and its gem is worth double. |
 
 ## How it plays
 
@@ -65,6 +65,20 @@ rhythm gets a short lead-in again. Each tip is shown once per save
 
 The old Training Crag still exists for testing: `?tutorial` jumps straight in.
 
+## Expeditions
+
+**EXPEDITIONS** on the title screen: hand-built mountains with a real summit. The first is
+**Bram's Route** (about 600 m, 12 pitches), the climb Bram and his partner Elsa never
+finished. Every hold, every rhythm and every ledge is written by hand in
+`src/data/expeditions.js` and laid out by `src/systems/ExpeditionMountain.js`: from a hold,
+SAFE climbs to the next hold on the line, NORMAL skips one, RISKY skips two. The biomes and
+their twists follow the height as usual (rockfall, whiteout, thermals).
+
+- No fall limit: a fall always takes you back to the last ledge (falls are counted).
+- At each ledge a cairn holds a page of Bram's journal; the summit has one last page.
+- The summit gives a summary with your time, best time and falls; the first ascent pays gems
+  and the logbook stamp FOR BRAM.
+
 ## Bram's logbook
 
 28 stamps on five pages (height, rhythm, mountain, finds, daring), from "climb 50 m" to
@@ -106,7 +120,8 @@ run earned (`src/ui/RunSummary.js`).
   New biomes get a typed title card, every 100 m shows a banner, and beating your record
   sets off a fanfare with confetti.
 - **Rockfall** (Stone Wall): every 30-50 s a rockfall greets you as you grab a hold. A rock
-  drops onto you on the beat; press the shown direction (left/right) to dodge. From 210 m two
+  drops onto you on the beat; the climber braces and ducks, and pressing the shown direction
+  (left/right) swings the body clear on one hand while the rock passes. From 210 m two
   rocks come in a row. A hit costs 12 grip, a clean dodge counts towards your perfect streak
   (`ROCKFALL` in `src/systems/mechanics/Rockfall.js`).
 - **Thermals** (Above the Clouds): sometimes one route carries a thermal (warm up-arrow on
@@ -116,10 +131,10 @@ run earned (`src/ui/RunSummary.js`).
 - **Darkness** (Obsidian Spires): the black glass swallows the light. Notes on the track are
   faint shapes that flash up on every beat (blind notes flash too) and the headlamp comes on
   (`DARKNESS` in `src/systems/mechanics/Darkness.js`).
-- **Growing crystals** (Crystal Heights): while you hang and decide, crystal grows over the
-  holds. The risky route seals after 2.6 s, the normal route after 4.6 s (20% faster in Hard
-  and Summit); the safe route always stays open. A sealed route cannot be chosen and its gem
-  is lost (`CRYSTAL_GROWTH` in `src/systems/mechanics/CrystalGrowth.js`).
+- **Prism light** (Crystal Heights): while you decide, a beam of split light moves from route
+  to route (1.1 s each, bouncing at the ends). Start a climb on the lit route and its hits cost
+  no grip (misses still do) and a gem on it is worth double. Nothing is ever taken away
+  (`PRISM_LIGHT` in `src/systems/mechanics/PrismLight.js`).
 - **Whiteout** (Frozen Reach): now and then a blizzard rolls in, announced by a toast. During
   the storm the scene washes out and notes only appear shortly before the line (blind notes
   stay visible), but gems turn up twice as often. Wait it out on a ledge or climb through it

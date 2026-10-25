@@ -129,7 +129,15 @@ export class WallRenderer {
       }
     } else if (type === 'tool') {
       add(this.scene.add.image(spot(40), node.y - 14, 'decor_axe_stuck').setDepth(DEPTH.decor));
+    } else if (type === 'summit') {
+      // The top of an expedition: a cairn, prayer flags and a flag on the very top.
+      add(this.scene.add.image(node.x - side * 22, node.y, 'decor_cairn').setOrigin(0.5, 1).setDepth(DEPTH.decor));
+      const flags = add(this.scene.add.sprite(node.x + side * 26, node.y - 30, 'decor_flags', 0).setDepth(DEPTH.decor));
+      this.animated.push({ type: 'flags', obj: flags, phase: rng.next() * 2, seg: seg.index });
+      add(this.scene.add.image(node.x - side * 22, node.y - 14, 'flag').setOrigin(0.1, 1).setDepth(DEPTH.decor + 1));
     }
+    // An expedition ledge with one of Bram's journal pages: a little cairn holds it down.
+    if (seg.rest.journal != null) add(this.scene.add.image(spot(36), node.y, 'decor_cairn').setOrigin(0.5, 1).setDepth(DEPTH.decor).setScale(0.75));
   }
 
   finishWall(v, job) {

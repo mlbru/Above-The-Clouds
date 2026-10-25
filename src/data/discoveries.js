@@ -8,7 +8,9 @@ export const DISCOVERIES = {
   'northern-lights': { name: 'NORTHERN LIGHTS', text: 'GREEN CURTAINS RIPPLE ACROSS THE STARS.' },
   'floating-stones': { name: 'FLOATING STONES', text: 'BOULDERS DRIFT IN THE THIN AIR. NOBODY WILL BELIEVE THIS.' },
   'rockfall-dodged': { name: 'ROCKFALL', text: 'STONES THUNDER PAST. NOT ONE OF THEM TOUCHED YOU.' },
+  // Kept for old saves (the growing crystals are gone).
   'crystal-sealed': { name: 'LIVING CRYSTAL', text: 'CRYSTAL GREW OVER A HOLD WHILE YOU WATCHED. IT RINGS WHEN IT CLOSES.' },
+  'prism-light': { name: 'PRISM LIGHT', text: 'SUNLIGHT SPLIT IN THE CRYSTAL AND CARRIED YOU UP FOR FREE.' },
   'thermal-ride': { name: 'RIDING THE THERMAL', text: 'WARM AIR LIFTS YOU UP THE WALL LIKE A HAWK.' },
   whiteout: { name: 'WHITEOUT', text: 'THE WORLD TURNED WHITE. YOU CLIMBED ON BY FEEL.' },
   'prayer-flags': { name: 'PRAYER FLAGS', text: 'FADED FLAGS SNAP IN THE WIND ON A FORGOTTEN LEDGE.' },

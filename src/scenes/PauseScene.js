@@ -90,7 +90,8 @@ export class PauseScene extends Phaser.Scene {
   confirmRestart() {
     this.clear();
     this.add2(new PixelText(this, GAME_WIDTH / 2, 70, 'RESTART THIS RUN?', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 90, 'YOU START AGAIN FROM BASE CAMP ON A NEW MOUNTAIN.\nRECORDS, DISCOVERIES AND UNLOCKS ARE KEPT.', { color: COLORS.dim, align: 'center' }).setOrigin(0.5, 0));
+    const where = this.climb && this.climb.expedition ? 'AT THE FOOT OF THE EXPEDITION' : 'FROM BASE CAMP ON A NEW MOUNTAIN';
+    this.add2(new PixelText(this, GAME_WIDTH / 2, 90, `YOU START AGAIN ${where}.\nRECORDS, DISCOVERIES AND UNLOCKS ARE KEPT.`, { color: COLORS.dim, align: 'center' }).setOrigin(0.5, 0));
     this.panel(GAME_WIDTH / 2 - 50, 112, 100, 30);
     this.list = new MenuList(this, GAME_WIDTH / 2, 118, [
       { label: 'NO, KEEP CLIMBING', onSelect: () => this.showMain() },
@@ -112,9 +113,10 @@ export class PauseScene extends Phaser.Scene {
 
   restart() {
     const tutorial = !!(this.climb && this.climb.tutorial);
+    const expedition = this.climb && this.climb.expedition ? this.climb.expedition.id : null;
     this.scene.stop('Climb');
     const devStart = this.climb && this.climb.devRun ? this.climb.devStart : null;
-    this.scene.start('Climb', { tutorial, devStart });
+    this.scene.start('Climb', { tutorial, devStart, expedition });
   }
 
   toTitle() {

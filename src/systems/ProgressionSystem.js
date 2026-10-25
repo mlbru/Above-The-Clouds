@@ -48,6 +48,8 @@ function freshData() {
     counters: {},
     // Bram's one-line tips already shown.
     tipsSeen: [],
+    // Expeditions: { [id]: { best, summits, bestTime, pages: [pitch indexes] } }
+    expeditions: {},
   };
 }
 
@@ -71,7 +73,7 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw);
       // Items without a requirement (including ones added in later versions) are always owned.
       const unlocked = [...new Set([...(parsed.unlocked || []), ...base.unlocked])];
-      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters } };
+      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions } };
     } catch {
       return base;
     }
@@ -258,6 +260,40 @@ export class ProgressionSystem {
     this.save();
   }
   addPhoto() { this.data.photos++; this.save(); }
+
+  // ---------- expeditions ----------
+  expedition(id) {
+    const e = this.data.expeditions;
+    return e[id] || (e[id] = { best: 0, summits: 0, bestTime: null, pages: [] });
+  }
+
+  // Returns true when this is a new best height on that expedition.
+  recordExpeditionHeight(id, h) {
+    const e = this.expedition(id);
+    if (h <= e.best) return false;
+    e.best = Math.floor(h * 10) / 10;
+    this.save();
+    return true;
+  }
+
+  // Returns true if the page was new.
+  findJournalPage(id, page) {
+    const e = this.expedition(id);
+    if (e.pages.includes(page)) return false;
+    e.pages.push(page);
+    this.save();
+    return true;
+  }
+
+  // Returns { first, bestTime } for the summit summary.
+  recordSummit(id, ms) {
+    const e = this.expedition(id);
+    const first = e.summits === 0;
+    e.summits++;
+    if (e.bestTime === null || ms < e.bestTime) e.bestTime = Math.round(ms);
+    this.save();
+    return { first, bestTime: e.bestTime };
+  }
 
   // ---------- Bram's logbook ----------
   bump(counter, n = 1) {

@@ -437,3 +437,44 @@ test("Bram's logbook: stamps pay once, read the run and the lifetime counters", 
   p.checkStamps({ ...run, bestStreak: 8 });
   assert.deepEqual(stampProgress(groove, p.data), { now: 12, goal: 30 });
 });
+
+test("expeditions: Bram's route is a climbable hand-built mountain with a summit", async () => {
+  const { EXPEDITIONS } = await import('../src/data/expeditions.js');
+  const { ExpeditionMountain, parseRhythm } = await import('../src/systems/ExpeditionMountain.js');
+  const { measureLine, hasGlyph } = await import('../src/utils/pixelFont.js');
+  const { levelToMeters } = await import('../src/config/gameConfig.js');
+  const exp = EXPEDITIONS['brams-route'];
+  const m = new ExpeditionMountain(exp);
+  const summitM = levelToMeters(m.summitLevel);
+  assert.ok(summitM >= 580 && summitM <= 640, `summit at ${summitM} m`);
+  m.ensureLevel(m.summitLevel + 5);
+  // Walk the line with SAFE routes only: every hold is reachable and routes go up.
+  let node = m.getLevel(0).nodes[0];
+  let ledges = 0, guard = 0;
+  while (!node.summit && guard++ < 500) {
+    const routes = m.computeRoutes(node);
+    assert.ok(routes.length >= 1, `routes from ${node.id}`);
+    for (const r of routes) {
+      assert.ok(r.target.level > node.level, `${node.id} -> ${r.target.id} goes up`);
+      assert.ok(r.notes.length >= 3 && r.notes.every((n) => 'LUR'.includes(n.dir)));
+      const b = m.getLevel(r.target.level).bounds;
+      assert.ok(r.target.x > b.l + 10 && r.target.x < b.r - 10, `${r.target.id} inside the wall`);
+    }
+    if (node.kind === 'ledge') assert.ok(routes[0].target.level - node.level >= 3, 'room above a ledge');
+    node = routes[0].target;
+    if (node.kind === 'ledge') ledges++;
+  }
+  assert.ok(node.summit, 'reached the summit');
+  assert.equal(ledges, exp.pitches.length);
+  // The risky route skips holds and never goes past a ledge.
+  const r = m.computeRoutes(m.getLevel(0).nodes[0]);
+  assert.deepEqual(r.map((x) => x.type), ['safe', 'normal', 'risky']);
+  // Journal pages fit the paper and the font has every glyph.
+  const pages = [...exp.pitches.filter((p) => p.page).map((p) => p.page), exp.summitPage];
+  assert.equal(pages.length, exp.pitches.length);
+  for (const page of pages) for (const line of page) {
+    assert.ok(measureLine(line) <= 276, `too wide: ${line}`);
+    for (const ch of line) assert.ok(hasGlyph(ch), `no glyph "${ch}" in ${line}`);
+  }
+  for (const p of exp.pitches) for (const bank of Object.values(p.rhythm)) bank.forEach((s) => parseRhythm(s));
+});

@@ -32,6 +32,11 @@ export const POSES = {
   // Topping out onto a ledge: elbows over the edge, then a knee up.
   mantle: { lh: [13, 30], rh: [35, 30], lf: [18, 50], rf: [31, 46], b: [0, 0], anchor: 30 },
   mantle2: { lh: [14, 36], rh: [34, 36], lf: [17, 53], rf: [31, 44], b: [0, 5], head: 'down', anchor: 36 },
+  // Rockfall: brace and duck while the rock comes, then swing the body clear
+  // on one hand (dodgeL swings left, dodgeR right).
+  brace: { lh: [18, 5], rh: [30, 5], lf: [17, 47], rf: [31, 47], b: [0, 3], head: 'down', anchor: 5 },
+  dodgeL: { lh: [5, 16], rh: [27, 4], lf: [7, 47], rf: [15, 53], b: [-9, 3], head: 'down', anchor: 5 },
+  dodgeR: { lh: [21, 4], rh: [43, 16], lf: [33, 53], rf: [41, 47], b: [9, 3], head: 'down', anchor: 5 },
   // Falling: hands peel off the hold, then arms and legs flail (fall, fall2, fall3).
   fall_peel: { lh: [12, 3], rh: [37, 6], lf: [17, 55], rf: [32, 54], b: [0, 8], head: 'down', anchor: 5 },
   fall3: { lh: [6, 20], rh: [42, 20], lf: [11, 50], rf: [38, 54], b: [0, 4], anchor: 28 },

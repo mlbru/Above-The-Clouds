@@ -25,6 +25,7 @@ function fitList(names, maxW) {
 // stranded, and what the run was worth. Numbers count up one after another.
 // s: { modeLabel, reached, best, isRecord, reason, perfects, bestStreak,
 //      caught, finds[], stones{}, gems, wallet, stamps[] }
+// Optional (expedition summit): title, titleColor, recordLine, strandedLabel.
 export class RunSummary {
   constructor(scene, s, { onAgain, onTitle }) {
     this.scene = scene;
@@ -38,12 +39,13 @@ export class RunSummary {
     add(scene.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0c14, 1).setOrigin(0, 0));
     const g = add(scene.add.graphics());
     if (s.reason) text(W, 16, s.reason, COLORS.dim);
-    text(W, 28, 'THE MOUNTAIN WINS', COLORS.red, 2);
+    text(W, 28, s.title || 'THE MOUNTAIN WINS', s.titleColor || COLORS.red, 2);
     const height = text(W, 48, '0 M', COLORS.text, 4);
-    text(W, 72, s.isRecord ? `${s.modeLabel} RUN  •  A NEW RECORD!` : `${s.modeLabel} RUN  •  RECORD ${Math.floor(s.best)} M`, s.isRecord ? COLORS.gold : COLORS.dim);
+    if (s.recordLine) text(W, 72, s.recordLine, COLORS.dim);
+    else text(W, 72, s.isRecord ? `${s.modeLabel} RUN  •  A NEW RECORD!` : `${s.modeLabel} RUN  •  RECORD ${Math.floor(s.best)} M`, s.isRecord ? COLORS.gold : COLORS.dim);
 
     // The mountain as a strip of biomes, with where you got stuck and your record.
-    const top = Math.max(1300, s.reached * 1.15, s.best * 1.05);
+    const top = s.stripTop || Math.max(1300, s.reached * 1.15, s.best * 1.05);
     const sy = 90 + oy;
     let prev = null, runStart = 0;
     for (let px = 0; px <= STRIP.w; px++) {
@@ -66,7 +68,7 @@ export class RunSummary {
     this.marker = add(scene.add.image(STRIP.x, sy - 3, 'arrow_D').setTint(0xffffff));
     const mx = xAt(s.reached);
     scene.tweens.add({ targets: this.marker, x: mx, duration: 900, ease: 'Cubic.easeOut' });
-    text(W, 102, `STRANDED IN ${biome.name}`, toCss(biome.accentA));
+    text(W, 102, s.strandedLabel || `STRANDED IN ${biome.name}`, toCss(biome.accentA));
 
     // Stat cards.
     const cards = [
