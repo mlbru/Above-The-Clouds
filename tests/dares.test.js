@@ -41,3 +41,12 @@ test('feel settings: every option has a default that is one of its choices', () 
   const p = new ProgressionSystem(memory());
   for (const [key, , values] of FEEL_OPTIONS) assert.ok(values.some(([v]) => v === p.settings[key]), key);
 });
+
+test('codes: the debug code is only a hash, and a wrong code unlocks nothing', async () => {
+  const { codeHash } = await import('../src/systems/ProgressionSystem.js');
+  assert.match(codeHash('ANYTHING'), /^[0-9a-f]{8}$/);
+  const p = new ProgressionSystem(memory());
+  assert.equal(p.redeemCode('DEBUG').ok, false);
+  assert.equal(p.debugUnlocked, false);
+  assert.deepEqual(p.data.cheats, {});
+});

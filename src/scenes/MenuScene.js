@@ -187,7 +187,7 @@ export class MenuScene extends Phaser.Scene {
       { label: 'SETTINGS', icon: 'gear', color: 0xd8a6ff, onSelect: () => this.showSettings() },
       { label: 'CONTROLS', icon: 'keys', color: 0x9fd8ff, onSelect: () => this.showControls() },
       { label: 'FULLSCREEN', icon: 'expand', value: () => (isFullscreen() ? 'ON' : 'OFF'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
-      { label: 'DEBUG OVERLAY', icon: 'bug', color: 0x8fd16a, value: () => (s.debugOverlay ? 'ON' : 'OFF'), onSelect: () => this.prog.setSetting('debugOverlay', !s.debugOverlay) },
+      ...(this.prog.debugUnlocked ? [{ label: 'DEBUG OVERLAY', icon: 'bug', color: 0x8fd16a, value: () => (s.debugOverlay ? 'ON' : 'OFF'), onSelect: () => this.prog.setSetting('debugOverlay', !s.debugOverlay) }] : []),
       ...(dev ? [{ label: 'DEV: TELEPORT', icon: 'flag', color: 0xf0644b, onSelect: () => this.showTeleport() }] : []),
       { label: 'BACK', icon: 'back', onSelect: () => this.showMain() },
     ];

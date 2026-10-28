@@ -290,6 +290,14 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
   also restores the Normal record of 1867 m (already on the online board, so nothing is sent).
 - `GRANDMASTER`: masters every biome at once (all three stars in each), which unlocks all nine
   mastery outfits. It is not switched off by entering it again.
+- `WARPZONE`: DEV: TELEPORT in the options menu, to start a test run at any biome (nothing is saved).
+- `GOLDENCITY`: every new biome you climb into is the Golden City.
+- A secret developer code turns on the debug overlay and the autopilot. Only its hash is in the
+  source (`codeHash` in `ProgressionSystem.js`). It is kept apart from the cheats, so runs with it
+  still count for records and the leaderboard.
+
+Codes that set a cheat (GEMSTORM, WARPZONE, GOLDENCITY) keep that save off the online leaderboard
+while they are on.
 
 ## Controls
 
@@ -301,7 +309,7 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
 | At a ledge | R rest · V view · C photo · T trader (base camp) · Space climb |
 | Trader / wardrobe | ↑ ↓ choose · ← → pack / change · Space buy / wear · Q E tabs · Esc leave |
 | Pause | Esc / P (in fullscreen in Chrome and Edge a tap of Esc pauses; hold Esc to leave fullscreen) |
-| Debug overlay | F3, ` or § (European Mac keyboards), or DEBUG OVERLAY in the pause or options menu; it stays on between runs. Then B cycles the autopilot |
+| Debug overlay | Developer only, after a secret code: F3, ` or § (European Mac keyboards), or DEBUG OVERLAY in the pause or options menu. Then B cycles the autopilot |
 
 ## Deploy
 

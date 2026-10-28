@@ -7,6 +7,14 @@ import { currentSeason } from '../data/seasons.js';
 
 const KEY = 'above-the-clouds-save-v1';
 
+// FNV-1a of a code, as 8 hex digits (see redeemCode).
+export function codeHash(code) {
+  let h = 0x811c9dc5;
+  for (const ch of code) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+const DEBUG_CODE_HASH = 'e17bdefb';
+
 export const DEFAULT_SETTINGS = {
   music: 0.6,
   sfx: 0.8,
@@ -199,10 +207,22 @@ export class ProgressionSystem {
   get infiniteGems() { return !!(this.data.cheats && this.data.cheats.infiniteGems); }
   get gems() { return this.infiniteGems ? 99999 : this.data.gems; }
 
+  // The debug overlay and the autopilot are hidden behind a code that only
+  // the developer knows. Kept apart from the cheats on purpose: those runs
+  // still count for records and the leaderboard (they are for testing).
+  get debugUnlocked() { return !!this.data.debugUnlocked; }
+
   // Cheat codes (settings > ENTER CODE). Entering a code again switches it off.
   redeemCode(raw) {
     const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const cheats = this.data.cheats || (this.data.cheats = {});
+    // Stored as a hash, so the code cannot be read from the published source.
+    if (codeHash(code) === DEBUG_CODE_HASH) {
+      this.data.debugUnlocked = !this.data.debugUnlocked;
+      if (!this.data.debugUnlocked) this.data.settings.debugOverlay = false;
+      this.save();
+      return { ok: true, message: this.data.debugUnlocked ? 'DEBUG TOOLS: ON (F3 OR ` IN A RUN, B: AUTOPILOT)' : 'DEBUG TOOLS: OFF' };
+    }
     if (code === 'GEMSTORM') {
       cheats.infiniteGems = !cheats.infiniteGems;
       this.save();

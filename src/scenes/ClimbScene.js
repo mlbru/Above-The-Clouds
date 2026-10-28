@@ -58,7 +58,7 @@ import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
 import { findCosmetic } from '../data/cosmetics.js';
 import { GEM_TARGET } from '../ui/HUD.js';
-import { toCss, lerpColor, lighten } from '../utils/color.js';
+import { toCss, lerpColor } from '../utils/color.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -248,7 +248,7 @@ export class ClimbScene extends Phaser.Scene {
     this.biomeMark = null;
     this.trailAt = null;
     this.biomeId = null;
-    this.debugVisible = !!this.settings.debugOverlay;
+    this.debugVisible = this.prog.debugUnlocked && !!this.settings.debugOverlay;
     this.bot = null;
     this.lastJudge = '-';
     this.eventT = 0;
@@ -362,8 +362,8 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
-    if (isDebugKey(event)) { this.setDebug(!this.debugVisible); return; }
-    if (code === 'KeyB' && this.debugVisible) {
+    if (isDebugKey(event) && this.prog.debugUnlocked) { this.setDebug(!this.debugVisible); return; }
+    if (code === 'KeyB' && this.debugVisible && this.prog.debugUnlocked) {
       const modes = [null, 'perfect', 'sloppy'];
       const next = modes[(modes.indexOf(this.bot ? this.bot.mode : null) + 1) % modes.length];
       this.bot = next ? { mode: next, wait: 0, plans: null } : null;
@@ -409,7 +409,7 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   // The debug overlay (F3, the ` key, or DEBUG OVERLAY in the pause and
-  // options menus). It stays on between runs until switched off.
+  // options menus), only after the debug code. It stays on between runs.
   setDebug(on) {
     this.debugVisible = on;
     this.prog.setSetting('debugOverlay', on);
@@ -2639,9 +2639,7 @@ export class ClimbScene extends Phaser.Scene {
       heightM: climberAlt,
       best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.recordBest,
       modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
-      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : biome.name,
-      slips: this.director || this.expedition ? '' : this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT',
-      accent: lighten(biome.accentC || 0xf2c14e, 0.3),
+      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT'}`,
       ...this.nextBiomeLine(climberAlt),
       grip: this.grip.value,
       gripLow: this.grip.isLow && this.state !== STATE.RESTING,

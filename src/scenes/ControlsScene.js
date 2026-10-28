@@ -13,8 +13,9 @@ const ROWS = [
   { what: 'AT A LEDGE', keys: [['R'], ['V'], ['C'], ['T']], note: 'REST  VIEW  PHOTO  TRADER' },
   { what: 'PAUSE', keys: [['ESC'], ['P']] },
   { what: 'FULLSCREEN', keys: [['F']] },
-  { what: 'DEBUG OVERLAY', keys: [['F3'], ['`']], note: 'THEN B FOR AUTOPILOT' },
 ];
+// Only listed once the debug code is in.
+const DEBUG_ROW = { what: 'DEBUG OVERLAY', keys: [['F3'], ['`']], note: 'THEN B FOR AUTOPILOT' };
 const TOUCH = [
   { what: 'CLIMB', text: 'SWIPE ← ↑ → ON THE BEAT, ANYWHERE' },
   { what: 'HOLD NOTES', text: 'KEEP YOUR FINGER DOWN' },
@@ -34,7 +35,8 @@ export class ControlsScene extends Phaser.Scene {
     const g = this.add.graphics();
     const text = (x, y, s, color = COLORS.text, opts = {}) => new PixelText(this, x, y, s, { color, ...opts });
     const rowH = 15;
-    const rows = IS_TOUCH ? TOUCH.length : ROWS.length;
+    const keyRows = this.registry.get('progression').debugUnlocked ? [...ROWS, DEBUG_ROW] : ROWS;
+    const rows = IS_TOUCH ? TOUCH.length : keyRows.length;
     const w = Math.min(GAME_WIDTH - 16, 330), h = 30 + rows * rowH + 16;
     const x = Math.round((GAME_WIDTH - w) / 2), y = Math.max(IS_PORTRAIT ? 70 : 34, Math.round((GAME_HEIGHT - h) / 2));
     text(x, y - 20, 'CONTROLS', COLORS.gold).setScale(2);
@@ -48,7 +50,7 @@ export class ControlsScene extends Phaser.Scene {
         ry += rowH;
       }
     } else {
-      for (const r of ROWS) {
+      for (const r of keyRows) {
         text(x + 10, ry + 3, r.what, COLORS.dim);
         let kx = x + 10 + labelW;
         r.keys.forEach((group, gi) => {

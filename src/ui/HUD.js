@@ -1,11 +1,11 @@
-import { PixelText, COLORS, drawPanel, drawFrame } from './PixelText.js';
+import { PixelText, COLORS, drawPanel } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT } from '../config/gameConfig.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { lerpColor } from '../utils/color.js';
 
-const TOAST_Y = 42;
-// The biome title card; upright it drops below the HUD cards, which fill the narrow top.
+const TOAST_Y = 41;
+// The biome title card; upright it drops below the HUD, which fills the narrow top.
 const CARD_Y = IS_PORTRAIT ? 78 : 41;
 export const GEM_COLOR = '#9fe8ff';
 export const GEM_TARGET = { x: 11, y: 50 };
@@ -19,22 +19,17 @@ export class HUD {
     const d = DEPTH.hud;
     this.root = [];
     const add = (o) => { o.setScrollFactor(0).setDepth(d); this.root.push(o); return o; };
-    // The framed cards behind the two clusters, and the backs of the toasts.
-    this.cards = add(scene.add.graphics()).setDepth(d - 0.5);
     this.icon = add(scene.add.image(8, 7, 'icon_mtn').setOrigin(0, 0));
     this.height = add(new PixelText(scene, 20, 6, '0 M').setScale(2));
     this.best = add(new PixelText(scene, 8, 20, '', { color: COLORS.dim }));
-    // Mode / dare tag after the record, and the slips left after the biome, as pills.
-    this.modeTag = add(new PixelText(scene, 0, 20, '', { color: '#16141f', shadow: null }));
     this.biome = add(new PixelText(scene, 8, 29, '', { color: COLORS.faint }));
-    this.slipTag = add(new PixelText(scene, 0, 29, '', { color: '#16141f', shadow: null }));
     // How far to the next area ("FROZEN REACH IN 80 M").
     this.next = add(new PixelText(scene, 8, 38, '', { color: COLORS.faint }));
     this.gripIcon = add(scene.add.image(GAME_WIDTH - 88, 7, 'icon_grip').setOrigin(0, 0));
-    this.gripLabel = add(new PixelText(scene, GAME_WIDTH - 79, 8, 'GRIP', { color: COLORS.dim }));
+    this.gripLabel = add(new PixelText(scene, GAME_WIDTH - 79, 8, 'GRIP'));
     this.gripBar = add(scene.add.graphics());
-    this.gripValue = add(new PixelText(scene, GAME_WIDTH - 9, 8, '100', { color: COLORS.text }).setOrigin(1, 0));
-    this.streak = add(new PixelText(scene, GAME_WIDTH - 8, 29, '', { color: COLORS.gold }).setOrigin(1, 0));
+    this.gripValue = add(new PixelText(scene, GAME_WIDTH - 10, 17, '100', { color: COLORS.dim }).setOrigin(1, 0));
+    this.streak = add(new PixelText(scene, GAME_WIDTH - 10, 27, '', { color: COLORS.gold }).setOrigin(1, 0));
     this.gemIcon = add(scene.add.image(7, 47, 'icon_gem').setOrigin(0, 0));
     this.gemText = add(new PixelText(scene, 18, 48, '0', { color: GEM_COLOR }));
     this.gearIcons = [];
@@ -51,37 +46,31 @@ export class HUD {
     this.banner = new PixelText(scene, GAME_WIDTH / 2, CARD_Y + 5, '').setOrigin(0.5, 0).setScale(2).setScrollFactor(0).setDepth(d).setAlpha(0);
     this.bannerSub = new PixelText(scene, GAME_WIDTH / 2, CARD_Y + 21, '', { color: COLORS.dim }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(d).setAlpha(0);
     this.debug = new PixelText(scene, 8, 62, '', { color: '#c8ffc8' }).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
-    this.toastG = scene.add.graphics().setScrollFactor(0).setDepth(d - 0.5);
     this.toasts = [];
     this.toastQueue = [];
     this.visible = true;
     this.blink = 0;
   }
 
-  // slips: '1 SLIP LEFT' / 'NO SLIPS LEFT' (or ''); accent: the biome's colour for the card rim.
-  update(dt, { heightM, best, biomeName, slips = '', nextLine = '', nextColor = COLORS.faint, grip, gripLow, gripCritical, modeLabel = '', accent = 0xf2c14e }) {
+  update(dt, { heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripLow, gripCritical, modeLabel = '' }) {
     this.next.setText(nextLine).setColor(nextColor);
     this.height.setText(`${Math.max(0, heightM).toFixed(0)} M`);
-    this.best.setText(`BEST ${best.toFixed(0)} M`);
+    this.best.setText(`BEST ${best.toFixed(0)} M${modeLabel ? '  ' + modeLabel : ''}`);
     this.biome.setText(biomeName);
-    this.modeTag.setText(modeLabel).setX(this.best.x + this.best.width + 6);
-    this.slipTag.setText(slips).setX(this.biome.x + this.biome.width + 6);
     this.blink += dt;
-    const ratio = grip / 100;
-    const color = ratio > 0.55 ? 0x8fd16a : ratio > 0.3 ? 0xf2c14e : 0xf0644b;
-    const flash = gripLow && Math.floor(this.blink / (gripCritical ? 140 : 260)) % 2 === 0;
-    this.drawCards(accent, gripLow ? color : null);
     const g = this.gripBar;
     g.clear();
-    const x = GAME_WIDTH - 88, y = 17, segs = 12, sw = 6;
-    g.fillStyle(0x07060e, 1).fillRect(x - 1, y - 1, segs * sw + 1, 8);
+    const x = GAME_WIDTH - 88, y = 17, segs = 12, sw = 5;
+    drawPanel(g, x - 2, y - 2, segs * sw + 3, 9, { alpha: 0.6 });
+    const ratio = grip / 100;
     const filled = Math.ceil(ratio * segs - 0.001);
+    const color = ratio > 0.55 ? 0x8fd16a : ratio > 0.3 ? 0xf2c14e : 0xf0644b;
+    const flash = gripLow && Math.floor(this.blink / (gripCritical ? 140 : 260)) % 2 === 0;
     for (let i = 0; i < segs; i++) {
-      const on = i < filled;
-      g.fillStyle(on ? (flash ? 0xffffff : color) : 0x2e2a3c, 1).fillRect(x + i * sw, y, sw - 1, 6);
-      if (on && !flash) g.fillStyle(0xffffff, 0.35).fillRect(x + i * sw, y, sw - 1, 1);
+      g.fillStyle(i < filled ? (flash ? 0xffffff : color) : 0x2e2a3c, 1);
+      g.fillRect(x + i * sw, y, sw - 1, 5);
     }
-    this.gripValue.setText(`${Math.ceil(grip)}`).setColor(gripLow ? COLORS.red : COLORS.text);
+    this.gripValue.setText(`${Math.ceil(grip)}`).setColor(gripLow ? COLORS.red : COLORS.dim);
     const vTarget = !this.visible ? 0 : gripCritical ? 0.55 + 0.25 * Math.sin(this.blink / 120) : gripLow ? 0.25 + 0.15 * Math.sin(this.blink / 250) : 0;
     this.vignette.setAlpha(this.vignette.alpha + (vTarget - this.vignette.alpha) * Math.min(1, dt / 200));
     if (this.streakValue >= 20) {
@@ -89,46 +78,6 @@ export class HUD {
       this.streak.setColor(FIRE[Math.floor(this.fireT / 110) % FIRE.length]);
     }
     this.updateToasts(dt);
-  }
-
-  // The two framed cards (left: height, record, biome, gems; right: grip),
-  // the pills for mode and slips, and the backs of the toasts.
-  drawCards(accent, gripAccent) {
-    const g = this.cards;
-    g.clear();
-    if (!this.visible) { this.toastG.clear(); return; }
-    const right = (t) => (t.text ? t.x + t.displayWidth : 0);
-    const lines = [right(this.height), right(this.modeTag), right(this.slipTag), right(this.next), right(this.gemText) + 20, right(this.biome), right(this.best)];
-    const gearBottom = this.gearIcons.length ? 69 : 58;
-    const w = Math.min(GAME_WIDTH - 104, Math.max(...lines) + 6 - 3);
-    drawFrame(g, 3, 3, w, gearBottom - 3, { accent, alpha: 0.72 });
-    this.cardBottom = gearBottom;
-    // A thin rule under the height.
-    g.fillStyle(accent, 0.3).fillRect(8, 18, Math.min(w - 10, this.height.x + this.height.displayWidth - 8), 1);
-    const pill = (t, fill) => {
-      if (!t.text) return;
-      const pw = t.width + 6;
-      g.fillStyle(fill, 1).fillRect(t.x - 2, t.y - 2, pw - 2, 9).fillRect(t.x - 3, t.y - 1, pw, 7);
-    };
-    // A dared run wears Bram's seal red; other modes are gold.
-    const dared = this.modeTag.text.includes('DARE');
-    pill(this.modeTag, dared ? 0xd83a3a : 0xf2c14e);
-    this.modeTag.setColor(dared ? '#ffd8c8' : '#16141f');
-    pill(this.slipTag, this.slipTag.text.startsWith('NO') ? 0xf0644b : 0x8fd16a);
-    // Gems sit on a little dark pill of their own.
-    g.fillStyle(0x07060e, 0.7).fillRect(6, 46, this.gemText.width + 16, 10);
-    // The grip card.
-    const gx = GAME_WIDTH - 94;
-    drawFrame(g, gx, 3, 91, 24, { accent: gripAccent || 0x8fd16a, alpha: 0.72, glow: !!gripAccent });
-    // Toast backs, with a stripe in the toast's colour.
-    const tg = this.toastG;
-    tg.clear();
-    for (const t of this.toasts) {
-      if (!t.active || t.alpha <= 0.02) continue;
-      const x0 = t.x - t.width - 5, y0 = t.y - 2;
-      tg.fillStyle(0x07060e, 0.72 * t.alpha).fillRect(x0, y0, t.width + 8, 9);
-      tg.fillStyle(parseInt((t.opts.color || '#f4efe4').slice(1), 16), t.alpha).fillRect(x0, y0, 1, 9);
-    }
   }
 
   // ---------- storm meter ----------
@@ -191,7 +140,6 @@ export class HUD {
     this.visible = v;
     this.root.forEach((o) => o.setVisible(v));
     this.toasts.forEach((t) => t.setVisible(v));
-    this.toastG.setVisible(v);
     [this.banner, this.bannerSub, this.cardLines].forEach((o) => o.setVisible(v));
   }
 
@@ -334,7 +282,7 @@ export class HUD {
   updateToasts() {
     if (this.toastQueue.length && this.toasts.length < 3) {
       const { text, color } = this.toastQueue.shift();
-      const t = new PixelText(this.scene, GAME_WIDTH - 8, TOAST_Y + this.toasts.length * 10, text, { color }).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(0);
+      const t = new PixelText(this.scene, GAME_WIDTH - 8, TOAST_Y + this.toasts.length * 9, text, { color }).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(0);
       t.setVisible(this.visible);
       this.toasts.push(t);
       this.scene.tweens.add({
@@ -342,7 +290,7 @@ export class HUD {
         onComplete: () => {
           this.toasts = this.toasts.filter((o) => o !== t);
           t.destroy();
-          this.toasts.forEach((o, i) => o.setY(TOAST_Y + i * 10));
+          this.toasts.forEach((o, i) => o.setY(TOAST_Y + i * 9));
         },
       });
     }
@@ -350,7 +298,7 @@ export class HUD {
 
   setDebug(text) {
     this.debug.setVisible(text !== null);
-    if (text !== null) this.debug.setText(text).setY((this.cardBottom || 58) + 6);
+    if (text !== null) this.debug.setText(text);
   }
 }
 

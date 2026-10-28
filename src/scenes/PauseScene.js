@@ -49,7 +49,7 @@ export class PauseScene extends Phaser.Scene {
       { label: 'SETTINGS', icon: 'gear', color: 0xd8a6ff, onSelect: () => this.showSettings() },
       { label: 'CONTROLS', icon: 'keys', color: 0x9fd8ff, onSelect: () => this.showControls() },
       { label: 'FULLSCREEN', icon: 'expand', value: () => (isFullscreen() ? 'ON' : 'OFF'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
-      { label: 'DEBUG OVERLAY', icon: 'bug', color: 0x8fd16a, value: () => (c && c.debugVisible ? 'ON' : 'OFF'), onSelect: () => { if (c) c.setDebug(!c.debugVisible); } },
+      ...(this.prog.debugUnlocked ? [{ label: 'DEBUG OVERLAY', icon: 'bug', color: 0x8fd16a, value: () => (c && c.debugVisible ? 'ON' : 'OFF'), onSelect: () => { if (c) c.setDebug(!c.debugVisible); } }] : []),
       { label: tutorial ? 'RESTART TUTORIAL' : 'RESTART RUN', icon: 'restart', color: 0xf0644b, onSelect: () => this.confirmRestart() },
       ...(tutorial ? [{ label: 'SKIP TUTORIAL', icon: 'flag', onSelect: () => this.skipTutorial() }] : []),
       { label: 'TITLE SCREEN', icon: 'home', color: 0xf0644b, onSelect: () => this.toTitle() },
