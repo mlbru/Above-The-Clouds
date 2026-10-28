@@ -243,7 +243,9 @@ export class MenuScene extends Phaser.Scene {
 
   showCodeEntry() {
     this.clearUI();
-    this.list = new CodeEntry(this, this.prog, () => this.showSettings(), { depth: DEPTH.hud + 1 });
+    // Back goes to Settings with the options menu underneath again, so leaving
+    // Settings lands on the options and not back in here.
+    this.list = new CodeEntry(this, this.prog, () => { this.showOptions(); this.showSettings(); }, { depth: DEPTH.hud + 1 });
   }
 
 

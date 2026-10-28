@@ -126,7 +126,9 @@ export class PauseScene extends Phaser.Scene {
 
   showCodeEntry() {
     this.clear();
-    this.list = new CodeEntry(this, this.prog, () => this.showSettings());
+    // Back goes to Settings with the pause menu underneath again, so leaving
+    // Settings lands on the menu and not back in here.
+    this.list = new CodeEntry(this, this.prog, () => { this.showMain(); this.showSettings(); });
   }
 
 
