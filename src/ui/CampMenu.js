@@ -11,7 +11,8 @@ import { JOURNAL_CHAPTERS, journalProgress } from '../data/journal.js';
 //
 // opts: {
 //   camp: the camp ledge node; spots: the wall renderer's campSpots
-//   actions: { climb, collection, expeditions, shop, wardrobe } (omit to hide)
+//   actions: { climb, collection, expeditions, shop, wardrobe, dares } (omit to hide)
+//   dares(): the badge under DARES (what is picked)
 //   subtitle(): the line under the logo
 //   mode(): { text, color } under CLIMB, or null; onDown(): ↓ on CLIMB
 //   onGear(); onBoard() (the leaderboard trophy beside the gear, omit to hide)
@@ -67,6 +68,8 @@ export class CampMenu {
       a.collection && sp.fire && { id: 'collection', label: 'COLLECTION', x: sp.fire.x, y: sp.fire.y - 20, badge: unseen ? `${unseen} NEW` : `${j.seen}/${j.total}`, badgeNew: !!unseen, go: a.collection },
       a.expeditions && sp.sign && { id: 'expeditions', label: 'EXPEDITIONS', x: sp.sign.x, y: sp.sign.y - 34, go: a.expeditions },
       a.climb && { id: 'climb', label: 'CLIMB', x: camp.x, y: camp.y - 62, go: a.climb },
+      // Bram's dares: chalked on the rock beside the start of the climb.
+      a.dares && { id: 'dares', label: 'DARES', x: camp.x + 62, y: camp.y - 96, badge: o.dares ? o.dares() : null, badgeNew: false, go: a.dares },
       a.shop && sp.trader && { id: 'shop', label: 'SHOP', x: sp.trader.x, y: sp.trader.y - 40, badge: `◆${prog.gems}`, go: a.shop },
       a.wardrobe && sp.tent && { id: 'wardrobe', label: 'WARDROBE', x: sp.tent.x, y: sp.tent.y - 22, badge: fresh ? `${fresh} NEW` : null, badgeNew: !!fresh, go: a.wardrobe },
     ].filter(Boolean).sort((p, q) => p.x - q.x);

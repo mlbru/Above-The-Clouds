@@ -10,6 +10,7 @@
 // `secret` stamps show as ??? until earned.
 import { BIOMES } from './biomes.js';
 import { GEM_ORDER } from './gems.js';
+import { DARE, DARE_BY_ID } from './dares.js';
 
 export const LOGBOOK_PAGES = [
   { id: 'height', title: 'HEIGHT', color: 0x9fd8ff },
@@ -61,6 +62,11 @@ export const STAMPS = [
   { id: 'hard-as-rock', page: 'daring', name: 'HARD AS ROCK', text: 'REACH 500 M IN HARD MODE.', gems: 25, goal: 500, unit: 'M', ...height((r) => r.mode === 'hard') },
   { id: 'summit-fever', page: 'daring', name: 'SUMMIT FEVER', text: `REACH ${BIOMES.obsidian.from} M IN SUMMIT MODE.`, gems: 60, goal: BIOMES.obsidian.from, unit: 'M', ...height((r) => r.mode === 'summit') },
   { id: 'brams-summit', page: 'daring', name: 'FOR BRAM', text: "STAND ON THE SUMMIT OF BRAM'S ROUTE.", gems: 30, goal: 1, ...counter('summits') },
+  // Bram's dares (data/dares.js): one stamp each for reaching 500 m with it on.
+  ...[['mirror', 'LOOKING GLASS'], ['night', 'NIGHT OWL'], ['quick', 'QUICKSTEP'], ['light', 'TRAVELLING LIGHT'], ['blind', 'EYES CLOSED']].map(([id, name]) => ({
+    id: `dare-${id}`, page: 'daring', name, text: `REACH ${DARE.stampAt} M WITH THE ${DARE_BY_ID[id].name} DARE.`, gems: 30, goal: DARE.stampAt, unit: 'M',
+    ...height((r) => (r.dares || []).includes(id)),
+  })),
   { id: 'bare-hands', page: 'daring', name: 'BARE HANDS', text: 'REACH 300 M IN NORMAL WITH NO GEAR OR PERK.', gems: 15, goal: 300, unit: 'M', secret: true, ...height((r) => r.mode === 'normal' && r.bare) },
 ];
 

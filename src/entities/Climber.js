@@ -12,6 +12,17 @@ const FIDGETS = {
   look: [['look', 1500], ['stand', 400], ['look2', 1500], ['stand', 0]],
 };
 export const FIDGET_NAMES = Object.keys(FIDGETS);
+// LEDGE LIFE: LIVELY adds these. A step may carry a prop (drawn at the right
+// hand: 'bottle', or between the hands: 'map'); puff 'breath' blows a breath
+// cloud from the hands instead of chalk.
+const LIVELY = {
+  drink: [['drink', 420, null, 'bottle'], ['drink_b', 1100, null, 'bottle'], ['drink', 320, null, 'bottle'], ['stand', 0]],
+  map: [['map', 1900, null, 'map'], ['look', 700], ['map', 1300, null, 'map'], ['stand', 0]],
+  wave: [['wave', 190], ['wave_b', 190], ['wave', 190], ['wave_b', 190], ['wave', 190], ['wave_b', 260], ['stand', 0]],
+  stargaze: [['look', 900], ['point', 1700], ['look', 1400], ['stand', 0]],
+  warm: [['blow', 420, [24, 17, 'breath']], ['blow_b', 420], ['blow', 420, [24, 17, 'breath']], ['blow_b', 420], ['stand', 0]],
+};
+export const LIVELY_NAMES = Object.keys(LIVELY);
 // Moods, played on purpose (not as idle fidgets): cheering after a long
 // perfect streak, panting after arriving with little grip left.
 const MOODS = {
@@ -26,6 +37,12 @@ export class Climber {
     this.scene = scene;
     this.sprite = scene.add.sprite(x, y, 'climber', 'stand').setDepth(DEPTH.climber);
     this.lamp = scene.add.image(x, y, 'glow').setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+    // Props held during ledge idles; the map sits behind the body.
+    this.propFront = scene.add.graphics().setDepth(DEPTH.climber + 0.6);
+    this.propBack = scene.add.graphics().setDepth(DEPTH.climber - 0.6);
+    this.prop = null;
+    // Set by the scene when the beat pulse breathes for the climber.
+    this.beatBreath = false;
     this.pose = null;
     this.mode = 'ledge';
     this.busy = 0;
@@ -62,6 +79,37 @@ export class Climber {
 
   sync() {
     this.sprite.setPosition(Math.round(this.x + this.offsetX), Math.round(this.y));
+    if (this.prop) this.drawProp();
+  }
+
+  setProp(name) {
+    this.prop = name || null;
+    this.propFront.clear();
+    this.propBack.clear();
+    if (this.prop) this.drawProp();
+  }
+
+  drawProp() {
+    const p = POSES[this.pose];
+    if (!p || p.front) return;
+    const ox = Math.round(this.x + this.offsetX) - FRAME_W / 2, oy = Math.round(this.y) - p.anchor;
+    const f = this.propFront, b = this.propBack;
+    f.clear(); b.clear();
+    if (this.prop === 'bottle') {
+      const [hx, hy] = p.rh;
+      const x = ox + hx, y = oy + hy;
+      f.fillStyle(0x16141f, 1).fillRect(x - 1, y - 5, 4, 7);
+      f.fillStyle(0x4f9ad8, 1).fillRect(x, y - 4, 2, 5);
+      f.fillStyle(0x9fd8ff, 1).fillRect(x, y - 4, 1, 2);
+      f.fillStyle(0xd8d0c0, 1).fillRect(x, y - 6, 2, 1);
+    } else if (this.prop === 'map') {
+      // Held up in front of the face: from behind, its back shows round the head.
+      const x0 = ox + p.lh[0] - 1, x1 = ox + p.rh[0] + 1, y = oy + p.lh[1] - 9;
+      b.fillStyle(0x16141f, 1).fillRect(x0 - 1, y - 1, x1 - x0 + 2, 13);
+      b.fillStyle(0xe4d4b0, 1).fillRect(x0, y, x1 - x0, 11);
+      b.fillStyle(0xc8b48a, 1).fillRect(Math.round((x0 + x1) / 2), y, 1, 11).fillRect(x0, y + 5, x1 - x0, 1);
+      b.fillStyle(0x8fb86a, 1).fillRect(x0 + 2, y + 2, 3, 2).fillRect(x1 - 5, y + 7, 3, 2);
+    }
   }
 
   // Where the head is in world space (for breath puffs and the headlamp).
@@ -149,16 +197,21 @@ export class Climber {
   // Plays one of the FIDGETS on a ledge. Idle breathing waits until it ends;
   // anything that moves the climber cancels it (stopFidget).
   fidget(name, effects = null) {
-    const seq = FIDGETS[name] || MOODS[name];
+    const seq = FIDGETS[name] || MOODS[name] || LIVELY[name];
     this.stopFidget();
     let i = 0;
     const step = () => {
       this.fidgetT = null;
-      if (i >= seq.length) return;
-      const [pose, ms, puff] = seq[i++];
+      if (i >= seq.length) { this.setProp(null); return; }
+      const [pose, ms, puff, prop] = seq[i++];
       this.setPose(pose);
-      if (puff && effects) effects.chalk(this.x - FRAME_W / 2 + puff[0], this.y - POSES[pose].anchor + puff[1]);
+      this.setProp(prop);
+      if (puff && effects) {
+        const px = this.x - FRAME_W / 2 + puff[0], py = this.y - POSES[pose].anchor + puff[1];
+        if (puff[2] === 'breath') effects.breathPuff(px, py); else effects.chalk(px, py);
+      }
       if (i < seq.length) this.fidgetT = this.scene.time.delayedCall(ms, step);
+      else this.setProp(null);
     };
     step();
   }
@@ -167,6 +220,7 @@ export class Climber {
 
   stopFidget() {
     if (this.fidgetT) { this.fidgetT.remove(); this.fidgetT = null; }
+    if (this.prop) this.setProp(null);
   }
 
   // Cancels any movement in progress (pending tween promises are abandoned).
@@ -195,7 +249,7 @@ export class Climber {
       this.breathPhase = 1 - this.breathPhase;
       if (this.breathPhase === 1) {
         if (state === 'wall') Audio.play('breath', { intensity: tired ? 1 : gripRatio < 0.6 ? 0.5 : 0.1 });
-        if (cold && effects) { const h = this.head; effects.breathPuff(h.x + 2, h.y + 2); }
+        if (cold && effects && !this.beatBreath) { const h = this.head; effects.breathPuff(h.x + 2, h.y + 2); }
       }
     }
     if (this.busy > 0 || this.fidgetT) return;
@@ -233,5 +287,7 @@ export class Climber {
   destroy() {
     this.sprite.destroy();
     this.lamp.destroy();
+    this.propFront.destroy();
+    this.propBack.destroy();
   }
 }

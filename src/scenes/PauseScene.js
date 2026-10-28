@@ -69,9 +69,10 @@ export class PauseScene extends Phaser.Scene {
 
   showSettings() {
     this.clear();
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 40, 'SETTINGS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.panel(GAME_WIDTH / 2 - 90, 64, 180, 89);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 72, settingsItems(this.prog, () => this.showMain(), undefined, () => this.showCodeEntry()), { onCancel: () => this.showMain() });
+    const items = settingsItems(this.prog, () => this.showMain(), undefined, () => this.showCodeEntry());
+    this.add2(new PixelText(this, GAME_WIDTH / 2, 28, 'SETTINGS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
+    this.panel(GAME_WIDTH / 2 - 90, 50, 180, 12 + items.length * 11);
+    this.list = new MenuList(this, GAME_WIDTH / 2, 57, items, { onCancel: () => this.showMain() });
   }
 
   showCodeEntry() {

@@ -129,6 +129,12 @@ export class Effects {
   snowBurst(x, y) { this.snowPuff.explode(this.n(8), x, y); }
   flameBurst(x, y, count = 10) { this.flames.explode(this.n(count), x, y); }
   breathPuff(x, y) { this.breath.explode(1, x, y); }
+  // A puff of dust under the boots when the climber lands on a ledge.
+  landDust(x, y, tint = 0xd8d0c0) {
+    this.dust.setParticleTint(tint);
+    this.dust.explode(this.n(4), x - 5, y);
+    this.dust.explode(this.n(4), x + 5, y);
+  }
   confettiBurst(x, y, count = 40) { this.confetti.explode(this.n(count), x, y); }
 
   // An expanding pixel ring (impact accent for perfect hits).

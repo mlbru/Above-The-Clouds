@@ -62,6 +62,16 @@ export const POSES = {
   pant_b: { lh: [17, 44], rh: [31, 44], lf: [18, 54], rf: [30, 54], b: [0, 10], pb: 1, head: 'down', anchor: 54 },
   hug: { lh: [27, 31], rh: [21, 31], lf: [21, 54], rf: [27, 54], b: [0, 4], head: 'down', anchor: 54 },
   hug_b: { lh: [27, 32], rh: [21, 32], lf: [21, 54], rf: [27, 54], b: [0, 5], pb: 1, head: 'down', anchor: 54 },
+  // Ledge life (settings LEDGE LIFE: LIVELY): a drink from the bottle, a look
+  // at the map, a wave, pointing at the stars, blowing warm air into the hands.
+  drink: { lh: [15, 34], rh: [27, 19], lf: [20, 54], rf: [28, 54], b: [0, 3], head: 'right', anchor: 54 },
+  drink_b: { lh: [15, 34], rh: [27, 16], lf: [20, 54], rf: [28, 54], b: [0, 2], head: 'right', anchor: 54 },
+  map: { lh: [13, 15], rh: [35, 15], lf: [20, 54], rf: [28, 54], b: [0, 3], anchor: 54 },
+  wave: { lh: [15, 34], rh: [38, 9], lf: [20, 54], rf: [28, 54], b: [0, 3], head: 'right', anchor: 54 },
+  wave_b: { lh: [15, 34], rh: [41, 13], lf: [20, 54], rf: [28, 54], b: [0, 3], head: 'right', anchor: 54 },
+  point: { lh: [15, 34], rh: [36, 10], lf: [20, 54], rf: [28, 54], b: [0, 3], head: 'right', anchor: 54 },
+  blow: { lh: [22, 19], rh: [26, 19], lf: [20, 54], rf: [28, 54], b: [0, 4], head: 'down', anchor: 54 },
+  blow_b: { lh: [22, 20], rh: [26, 20], lf: [20, 54], rf: [28, 54], b: [0, 5], pb: 1, head: 'down', anchor: 54 },
   sit: { front: true, anchor: 40 },
   sit_b: { front: true, breathe: 1, anchor: 40 },
 };

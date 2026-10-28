@@ -51,7 +51,9 @@ import { EXPEDITIONS } from '../data/expeditions.js';
 import { ExpeditionMountain } from '../systems/ExpeditionMountain.js';
 import { TAG_TIPS } from '../data/bramTips.js';
 import { POSES } from '../render/climberArt.js';
-import { FIDGET_NAMES } from '../entities/Climber.js';
+import { FIDGET_NAMES, LIVELY_NAMES } from '../entities/Climber.js';
+import { WeatherCoat } from '../entities/WeatherCoat.js';
+import { DARE, cleanDares, dareKey, dareLabel, dareScale } from '../data/dares.js';
 import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
 import { findCosmetic } from '../data/cosmetics.js';
@@ -143,10 +145,14 @@ export class ClimbScene extends Phaser.Scene {
 
     this.mode = this.tutorial || this.expedition ? 'normal' : BALANCE.modes[this.settings.mode] ? this.settings.mode : 'normal';
     this.modeCfg = modeConfig(this.mode);
+    // Bram's dares (endless runs only, data/dares.js). A dared run keeps its own record.
+    this.dares = this.tutorial || this.expedition ? [] : cleanDares(this.settings.dares);
+    this.dared = this.dares.length > 0;
+    this.dareKey = this.dared ? dareKey(this.dares, this.mode) : null;
     this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : this.expedition ? new ExpeditionMountain(this.expedition, BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
     this.mountain.ensureLevel(GENERATE_AHEAD_LEVELS);
     this.grip = new GripSystem(BALANCE, this.modeCfg);
-    this.dayNight = new DayNightSystem({ dayLengthSec: 600, startT: this.dayT ?? 0.09 });
+    this.dayNight = new DayNightSystem({ dayLengthSec: 600, startT: this.dares.includes('night') ? 0.8 : this.dayT ?? 0.09 });
     this.background = new Background(this);
     this.wall = new WallRenderer(this, this.mountain, this.seed);
     this.wetWall = new WetWall(this, this.mountain);
@@ -164,6 +170,8 @@ export class ClimbScene extends Phaser.Scene {
     const start = this.mountain.getLevel(0).nodes[0];
     this.climber = new Climber(this, start.x, start.y);
     this.outfit = new OutfitFx(this, this.climber);
+    this.coat = new WeatherCoat(this, this.climber);
+    this.lastBeat = null;
     this.hud = new HUD(this);
     this.routeUI = new RouteSelector(this, (i, confirm) => this.pickRoute(i, confirm));
     this.comboUI = new ComboPrompt(this);
@@ -179,7 +187,7 @@ export class ClimbScene extends Phaser.Scene {
         wardrobe: () => this.openOverlay('Shop', { mode: 'wardrobe', returnTo: 'Climb' }),
       },
       subtitle: () => {
-        const best = Math.floor(this.prog.bestFor(this.mode));
+        const best = Math.floor(this.recordBest);
         const used = this.run && this.run.biomeFalls[biomeStretchAt(0)];
         return `BEST ${best} M${used ? '  •  NO SLIPS LEFT HERE' : ''}`;
       },
@@ -209,7 +217,8 @@ export class ClimbScene extends Phaser.Scene {
 
     this.node = start;
     this.checkpoint = start;
-    this.run = { climbed: 0, slips: 0, falls: 0, perfects: 0, flawless: 0, firstSlip: true, newBestShown: false, startBest: this.tutorial ? 0 : this.prog.bestFor(this.mode), streak: 0, bestStreak: 0 };
+    this.run = { climbed: 0, slips: 0, falls: 0, perfects: 0, flawless: 0, firstSlip: true, newBestShown: false, startBest: this.tutorial ? 0 : this.recordBest, streak: 0, bestStreak: 0 };
+    this.run.dares = this.dares;
     this.run.gems = 0;
     // For the run summary and the logbook.
     this.run.mode = this.expedition ? 'expedition' : this.mode;
@@ -651,6 +660,7 @@ export class ClimbScene extends Phaser.Scene {
     const biome = biomeAt(levelToMeters(this.node.level));
     if (note.result !== 'miss') {
       this.swingClear(note.dir, fire ? 12 : 4);
+      if (note.result === 'perfect') this.freezeFrame(fire ? 90 : 60, fire ? 0xff9a3c : 0xffffff);
       this.addStreak();
       this.floatText(fire ? (note.result === 'perfect' ? 'THROUGH THE FIRE!' : 'SINGED!') : note.result === 'perfect' ? 'DODGED!' : 'CLOSE ONE!', COLORS.green, 12);
       Audio.play('good');
@@ -665,6 +675,7 @@ export class ClimbScene extends Phaser.Scene {
       this.climber.sprite.setTintFill(0xffa040);
       this.time.delayedCall(140, () => { if (this.climber.sprite.active) this.climber.sprite.clearTint(); });
       this.effects.flameBurst(this.climber.x, this.climber.y - 8, 16);
+      this.coat.scorch();
       Audio.play('flame');
       Audio.play('miss');
       if (this.settings.shake) this.cam.shake(200, 0.006);
@@ -800,8 +811,20 @@ export class ClimbScene extends Phaser.Scene {
     if (this.perk === 'diamondeye') windowScale *= GEAR_FX.diamondWindow;
     const w = timingWindows(BALANCE, { windowScale, forgiving: this.forgiving });
     const r = BALANCE.ramp;
+    // Dares change the climb itself: mirrored arrows, a quicker beat, blind notes.
+    let notes = route.notes;
+    if (this.dared) {
+      const blind = this.dares.includes('blind') && levelToMeters(this.node.level) >= DARE.blindFrom;
+      const mirror = this.dares.includes('mirror');
+      notes = notes.map((n) => ({
+        ...n,
+        mirror: n.mirror || (mirror && !n.still && !n.chord && (n.dir === 'L' || n.dir === 'R')),
+        hidden: n.hidden || (blind && !n.still),
+      }));
+    }
+    const beatMs = Math.round(route.beatMs * (this.dares.includes('quick') ? DARE.tempo : 1));
     this.combo = new ComboSystem({
-      notes: route.notes,
+      notes,
       minGapMs: r.minGapMs,
       gustWindowScale: r.gustWindowScale,
       holdReleaseGraceMs: r.holdReleaseGraceMs,
@@ -809,7 +832,7 @@ export class ClimbScene extends Phaser.Scene {
       chordSpreadMs: r.chordSpreadMs,
       minPerfectMs: BALANCE.timing.minPerfectMs,
       minGoodMs: BALANCE.timing.minGoodMs,
-      beatMs: route.beatMs,
+      beatMs,
       perfectMs: w.perfectMs,
       goodMs: w.goodMs,
       earlyGraceMs: BALANCE.timing.earlyGraceMs,
@@ -893,7 +916,7 @@ export class ClimbScene extends Phaser.Scene {
       // Hit-stop: on a perfect the climber freezes in the flash for a moment
       // before the move snaps through. Only the body waits; the beat never does.
       const heat = Math.min(20, this.run.streak);
-      const stop = note.result === 'perfect' ? (heat >= 10 ? 55 : 40) : 0;
+      const stop = note.result === 'perfect' ? Math.round((heat >= 10 ? 55 : 40) * this.hitStopScale) : 0;
       this.climber.tweenTo(tx, ty, 150, 'Quad.easeOut', stop);
       const hx = this.climber.x + (note.dir === 'L' ? -10 : note.dir === 'R' ? 10 : 0), hy = this.climber.y - 2;
       if (note.result === 'perfect') {
@@ -905,7 +928,8 @@ export class ClimbScene extends Phaser.Scene {
         this.effects.sparkle(hx, hy, 6 + Math.floor(heat / 2));
         this.effects.hit(hx, hy, heat);
         this.climber.flash(stop + 10);
-        this.climber.squash(0.88, 1.14, 180, stop);
+        if (this.settings.hitStop === 'punchy') this.climber.squash(0.82, 1.2, 200, stop);
+        else this.climber.squash(0.88, 1.14, 180, stop);
         if (this.settings.shake) this.cam.shake(60 + heat * 2, 0.002);
       } else {
         Audio.play('grab');
@@ -948,6 +972,7 @@ export class ClimbScene extends Phaser.Scene {
       this.effects.ring(this.climber.x, this.climber.y - 10, 0xff9a3c, 30, 420);
       this.hud.flashScreen(0xff9a3c, 0.15, 300);
       if (this.settings.shake) this.cam.shake(160, 0.004);
+      this.freezeFrame(80, 0xff9a3c);
       this.floatText(`${n} PERFECT! +${grip} GRIP`, '#ff9a3c', 20, true);
       this.awardGems(GEM_INCOME.streak[n] || GEM_INCOME.streak.later);
     }
@@ -987,7 +1012,10 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- gems
-  get gemScale() { return GEM_INCOME.modeScale[this.mode] || 1; }
+  get gemScale() { return (GEM_INCOME.modeScale[this.mode] || 1) * dareScale(this.dares); }
+
+  // The record this run plays against: the mode's, or the dare set's own.
+  get recordBest() { return this.dared ? this.prog.dareBestFor(this.dareKey) : this.prog.bestFor(this.mode); }
 
   // Each offered route may carry a gem on its target. Only the route you take
   // keeps its gem; the others fade away.
@@ -1303,6 +1331,8 @@ export class ClimbScene extends Phaser.Scene {
       this.climber.squash(1.16, 0.84, 220);
       Audio.play('boot');
       this.effects.chalk(t.x, t.y);
+      if (this.settings.hitStop !== 'off') this.effects.landDust(t.x, t.y, biomeAt(levelToMeters(t.level)).rock[4]);
+      if (this.settings.hitStop === 'punchy') this.freezeFrame(40);
       await this.climber.hold('stand', 150);
     } else if (this.leapAcross) {
       this.climber.setPose(t.x < this.from.x ? 'dodgeL' : 'dodgeR');
@@ -1369,6 +1399,7 @@ export class ClimbScene extends Phaser.Scene {
 
   // stay: record the arrival but leave the next state to the caller.
   arrive(node, gain, { stay = false } = {}) {
+    const prev = this.node;
     this.node = node;
     this.run.climbed += gain;
     const h = levelToMeters(node.level);
@@ -1377,15 +1408,21 @@ export class ClimbScene extends Phaser.Scene {
     else this.prog.addClimbed(gain);
     const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] }
       : this.expedition ? { newBest: this.prog.recordExpeditionHeight(this.expedition.id, h), unlocks: [] }
-        : this.prog.recordHeight(h, this.mode);
-    if (newBest && !this.director && !this.expedition && !this.devRun) queueSubmit(this.prog);
+        : this.dared ? this.prog.recordDareHeight(h, this.dareKey) : this.prog.recordHeight(h, this.mode);
+    if (newBest && !this.director && !this.expedition && !this.devRun && !this.dared) queueSubmit(this.prog);
     if (newBest && !this.run.newBestShown && this.run.startBest > 0) {
       this.run.newBestShown = true;
       this.celebrateRecord();
     }
     unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
     if (this.pendingGem && this.pendingGem.route.target === node) this.collectGem(this.pendingGem);
-    if (node.kind !== 'ledge') this.wall.addChalk(node.id, this.chalkTint());
+    // CHALK MARKS: prints on the holds you used, and with YOUR LINE a dotted trail between them.
+    const chalkMarks = this.settings.chalkMarks || 'line';
+    if (chalkMarks !== 'off') {
+      const tint = this.chalkTint();
+      if (node.kind !== 'ledge') this.wall.addChalk(node.id, tint);
+      if (chalkMarks === 'line' && prev && prev !== node && prev.level < node.level) this.wall.addChalkLine(prev, node, tint);
+    }
     this.pendingGem = null;
     this.checkHeightGems();
     this.checkMilestone(h);
@@ -1699,11 +1736,11 @@ export class ClimbScene extends Phaser.Scene {
     if (this.city.active) Audio.setMusicMode(biomeAt(levelToMeters(this.node.level)).music);
     Audio.play('runover');
     this.checkLogbook();
-    const best = this.prog.bestFor(this.mode);
+    const best = this.recordBest;
     const reached = this.run.maxHeight || 0;
     const fallH = levelToMeters(this.node.level);
     this.runOverUI = new RunSummary(this, {
-      modeLabel: this.modeCfg.label,
+      modeLabel: this.dared ? `${this.modeCfg.label} DARE ${dareLabel(this.dares)}` : this.modeCfg.label,
       reached: Math.max(reached, fallH),
       best: this.run.startBest,
       isRecord: reached >= best && reached > this.run.startBest,
@@ -1719,7 +1756,7 @@ export class ClimbScene extends Phaser.Scene {
     }, {
       onAgain: () => this.climbAgain(),
       onTitle: () => this.toMenu(),
-      onBoard: leaderboardEnabled() && !this.director && !this.expedition && !this.devRun ? () => this.openLeaderboard() : null,
+      onBoard: leaderboardEnabled() && !this.director && !this.expedition && !this.devRun && !this.dared ? () => this.openLeaderboard() : null,
       boardLabel: playerName(this.prog) ? '[L] LEADERBOARD' : '[L] JOIN THE LEADERBOARD',
     });
     this.cam.fadeIn(500, 10, 12, 20);
@@ -1740,7 +1777,7 @@ export class ClimbScene extends Phaser.Scene {
   respawnAt(cp, message, snap) {
     this.climber.stopTweens();
     if (this.lava) this.lava.y = cp.y + 150;
-    this.grip.restoreFull();
+    this.refillAtLedge();
     this.node = cp;
     if (snap) {
       this.camY = cp.y - STAND_HAND - GAME_HEIGHT * CAMERA_ANCHOR;
@@ -1766,7 +1803,7 @@ export class ClimbScene extends Phaser.Scene {
     const seg = this.mountain.segmentForLevel(node.level);
     const rest = (seg && seg.rest) || { type: 'ledge', name: 'LEDGE' };
     let title = rest.name || 'LEDGE';
-    let subtitle = 'CHECKPOINT  •  GRIP RESTORED';
+    let subtitle = this.dares.includes('light') ? 'CHECKPOINT  •  GRIP TO HALF' : 'CHECKPOINT  •  GRIP RESTORED';
     let detail = '';
     if (opts.initial) { title = this.tutorial ? 'TRAINING CRAG' : 'BASE CAMP'; subtitle = this.tutorial ? 'TUTORIAL' : 'THE MOUNTAIN IS WAITING'; }
     else if (opts.respawn) subtitle = opts.message || 'BACK AT THE LAST CHECKPOINT';
@@ -1886,9 +1923,17 @@ export class ClimbScene extends Phaser.Scene {
     else if (a === 'continue') this.leaveRest();
   }
 
+  // LIGHT PACK: a ledge only fills the grip up to half.
+  get ledgeCap() { return this.grip.max * (this.dares.includes('light') ? DARE.lightCap : 1); }
+
+  refillAtLedge() {
+    if (this.dares.includes('light')) { this.grip.resetHang(); this.grip.set(Math.max(this.grip.value, this.ledgeCap)); }
+    else this.grip.restoreFull();
+  }
+
   leaveRest() {
     this.climber.stopFidget();
-    this.grip.restoreFull();
+    this.refillAtLedge();
     if (this.atCamp) {
       this.atCamp = false;
       this.campMenu.hide();
@@ -2023,13 +2068,84 @@ export class ClimbScene extends Phaser.Scene {
 
   // Left alone on a ledge, the climber passes the time: a stretch, chalking
   // up, shaking the arms loose, a look around. Sitting, they nod off (Zzz).
-  updateRestIdle(dt, wallState) {
+  // ---------------------------------------------------------------- feel
+  // HIT-STOP setting: how long perfect hits hold still (OFF, SUBTLE, PUNCHY).
+  get hitStopScale() { return { off: 0, punchy: 1.6 }[this.settings.hitStop] ?? 1; }
+
+  // A freeze-frame on a big moment: every tween and particle holds still for
+  // a few frames. The game clock, the notes and the music keep running, so
+  // the next beat still lands where it should.
+  freezeFrame(ms, flash = null) {
+    const scale = this.hitStopScale;
+    if (!scale || this.tipOpen || this.paused) return;
+    const hold = Math.round(ms * scale);
+    this.frozenFx = this.frozenFx || new Set();
+    this.children.list.forEach((o) => { if (o.type === 'ParticleEmitter' && o.timeScale) { o.timeScale = 0; this.frozenFx.add(o); } });
+    this.tweens.timeScale = 0;
+    if (flash && this.settings.hitStop === 'punchy') this.hud.flashScreen(flash, 0.18, hold + 120);
+    const id = (this.freezeId = (this.freezeId || 0) + 1);
+    window.setTimeout(() => {
+      if (id !== this.freezeId || !this.sys || !this.sys.settings.active) return;
+      this.tweens.timeScale = 1;
+      this.frozenFx.forEach((o) => { if (o.active) o.timeScale = 1; });
+      this.frozenFx.clear();
+    }, hold);
+  }
+
+  // BEAT PULSE setting: the mountain moves with the beat. During a climb the
+  // beat is the climb's own; otherwise the biome's music tempo.
+  updateBeatPulse(biome, cold) {
+    const mode = this.settings.beatPulse || 'subtle';
+    this.climber.beatBreath = mode !== 'off';
+    if (mode === 'off' || this.state === STATE.RUN_OVER || this.tipOpen) return;
+    const combo = this.state === STATE.CLIMBING_COMBO && this.combo;
+    const beat = combo
+      ? `c${Math.floor((this.now() - this.combo.notes[0].time) / this.combo.beatMs + 64)}`
+      : `f${Math.floor((this.clock / 60000) * biome.music.tempo)}`;
+    if (beat === this.lastBeat) return;
+    const first = this.lastBeat === null;
+    this.lastBeat = beat;
+    if (first) return;
+    this.beatCount = (this.beatCount || 0) + 1;
+    const pulse = (o, k = 1.25, ms = 150) => {
+      if (!o || !o.active) return;
+      o.setScale(k);
+      this.tweens.add({ targets: o, scale: 1, duration: ms, ease: 'Quad.easeOut' });
+    };
+    // The ring on the hold you are climbing to, or the hold you have picked, beats.
+    if (combo) pulse(this.targetMark, 1.3);
+    else if (this.state === STATE.ROUTE_SELECT && this.routes[this.selected]) pulse(this.wall.getHold(this.routes[this.selected].target.id), 1.18, 130);
+    // In the cold, breath clouds come out on every other beat.
+    const around = this.state === STATE.ROUTE_SELECT || this.state === STATE.RESTING || this.state === STATE.CLIMBING_COMBO || this.state === STATE.VIEWING;
+    if (cold && around && this.beatCount % 2 === 0) { const h = this.climber.head; this.effects.breathPuff(h.x + 2, h.y + 2); }
+    if (mode !== 'full') return;
+    // FULL: the air swells with the biome's own motes, and the hanging body
+    // gives a one-pixel nod on the beat.
+    this.atmos.pulse(biome, this.climber.x, this.climber.y - 20, combo ? 2 : 3);
+    if (this.state === STATE.ROUTE_SELECT && this.climber.busy === 0) {
+      this.climber.offsetX = 0;
+      this.climber.sprite.y = Math.round(this.climber.y) + 1;
+      this.time.delayedCall(90, () => this.climber.sync());
+    }
+  }
+
+  updateRestIdle(dt, wallState, day = null) {
     if (wallState !== 'ledge' || this.atCamp || this.tipOpen || this.director) { this.restIdle = 0; this.restIdleNext = REST_IDLE_FIRST; return; }
     this.restIdle = (this.restIdle || 0) + dt;
     if (this.restIdle < (this.restIdleNext || REST_IDLE_FIRST) || this.climber.busy > 0 || this.climber.fidgeting) return;
     this.restIdleNext = this.restIdle + 3000 + Math.random() * 3500;
     if (this.sitting) { this.snore(); return; }
-    const options = FIDGET_NAMES.filter((n) => n !== this.lastFidget);
+    // LEDGE LIFE: LIVELY. The longer you stay, the more the climber settles in:
+    // a drink, a look at the map, a wave; warm hands in the cold, the stars at night.
+    let pool = FIDGET_NAMES;
+    if (this.settings.ledgeLife !== 'calm' && this.restIdle > 9000) {
+      const biome = biomeAt(levelToMeters(this.node.level));
+      const night = day ? day.night : 0;
+      const cold = biome.weather.snow > 0.3 || night > 0.6;
+      pool = [...FIDGET_NAMES, ...LIVELY_NAMES.filter((n) => (n !== 'stargaze' || night > 0.6) && (n !== 'warm' || cold))];
+      if (night > 0.6 && this.lastFidget !== 'stargaze' && Math.random() < 0.35) pool = ['stargaze'];
+    }
+    const options = pool.filter((n) => n !== this.lastFidget);
     this.lastFidget = options[Math.floor(Math.random() * options.length)];
     this.climber.fidget(this.lastFidget, this.effects);
     if (this.lastFidget === 'chalk') Audio.play('cloth');
@@ -2384,6 +2500,8 @@ export class ClimbScene extends Phaser.Scene {
     const now = this.clock;
     this.city.update(dt);
     this.dayNight.update(dt);
+    // ENDLESS NIGHT: the clock never gets past midnight.
+    if (this.dares.includes('night')) this.dayNight.t = 0.8;
     const day = this.dayNight.state();
 
     const cardOpen = this.director && this.tutorialCard.open;
@@ -2427,7 +2545,7 @@ export class ClimbScene extends Phaser.Scene {
         break;
       case STATE.RESTING:
       case STATE.VIEWING:
-        if (this.grip.value < this.grip.max) this.grip.change((BALANCE.grip.restRecoverPerSec * dt) / 1000);
+        if (this.grip.value < this.ledgeCap) this.grip.change(Math.min(this.ledgeCap - this.grip.value, (BALANCE.grip.restRecoverPerSec * dt) / 1000));
         break;
       default:
         break;
@@ -2477,7 +2595,9 @@ export class ClimbScene extends Phaser.Scene {
     this.emitTrail();
     this.updateLava(dt);
     if (this.atCamp) this.campMenu.update(dt, !this.tipOpen);
-    this.updateRestIdle(dt, wallState);
+    this.updateRestIdle(dt, wallState, day);
+    const cold = biome.weather.snow > 0.3 || day.night > 0.6;
+    this.updateBeatPulse(biome, cold);
     this.climber.idle(dt, { state: wallState, gripRatio: this.grip.ratio, cold: biome.weather.snow > 0.3 || day.night > 0.6, effects: this.effects, sitting: this.sitting });
     const climberMix = biomeMixAt(climberAlt);
     this.outfit.update(dt, {
@@ -2491,11 +2611,22 @@ export class ClimbScene extends Phaser.Scene {
       bpm: biome.music.tempo,
       cold: biome.weather.snow > 0.3 || day.night > 0.6,
     });
+    // WEATHER ON YOU: what the climber is exposed to right now.
+    const onWall = wallState === 'wall' || this.state === STATE.CLIMBING_COMBO || this.state === STATE.DODGING;
+    this.coat.enabled = this.settings.weatherCoat !== false;
+    this.coat.update(dt, {
+      snow: this.coat.enabled ? Math.min(1, biome.weather.snow + mech.snow + whiteout) * (onWall || wallState === 'ledge' ? 1 : 0) : 0,
+      wet: this.coat.enabled ? Math.max(storm > 0.5 ? storm : 0, this.wall.waterfallNear(this.climber.y) && onWall ? 0.7 : 0) : 0,
+      soot: this.coat.enabled ? Math.max(eye && eye.inside >= 0.5 ? eye.openness * 0.6 : 0, biomeMixWeight(climberMix, 'volcano') * 0.5) : 0,
+      glitter: this.coat.enabled ? biomeMixWeight(climberMix, 'crystal') * (onWall ? 0.8 : 0.3) : 0,
+      resting: wallState === 'ledge' && !this.atCamp,
+      visible: this.climber.sprite.visible,
+    });
 
     this.hud.update(dt, {
       heightM: climberAlt,
-      best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.prog.bestFor(this.mode),
-      modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : this.devRun ? `DEV ${this.mode === 'normal' ? '' : this.modeCfg.label}`.trim() : this.mode === 'normal' ? '' : this.modeCfg.label,
+      best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.recordBest,
+      modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
       biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT'}`,
       ...this.nextBiomeLine(climberAlt),
       grip: this.grip.value,
@@ -2733,6 +2864,8 @@ export class ClimbScene extends Phaser.Scene {
 
   cleanup() {
     setBiomeTheme(null);
+    this.tweens.timeScale = 1;
+    if (this.coat) this.coat.destroy();
     Audio.endSong();
     this.input.keyboard.off('keydown', this.onKeyDown, this);
     this.input.keyboard.off('keyup', this.onKeyUp, this);

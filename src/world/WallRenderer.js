@@ -354,6 +354,27 @@ export class WallRenderer {
     v.objects.push(mark);
   }
 
+  // CHALK MARKS: YOUR LINE. A faint dotted chalk line from the hold you left
+  // to the one you reached, so looking down shows the way you came.
+  addChalkLine(from, to, tint) {
+    const lv = this.mountain.getLevel(to.level);
+    const v = lv && this.visuals.get(lv.segIndex);
+    if (!v) return;
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 12 || len > 220) return;
+    const g = this.scene.add.graphics().setDepth(DEPTH.holds - 1).setAlpha(0);
+    // Leave a gap around each hold so the dots never cover one. Each dot has
+    // a dark pixel under it so it reads on pale rock and dark rock alike.
+    for (let d = 8; d <= len - 8; d += 4) {
+      const x = Math.round(from.x + (dx * d) / len), y = Math.round(from.y + (dy * d) / len);
+      g.fillStyle(0x16141f, 0.45).fillRect(x, y + 1, 1, 1);
+      g.fillStyle(tint, 1).fillRect(x, y, 1, 1);
+    }
+    this.scene.tweens.add({ targets: g, alpha: 0.85, duration: 500 });
+    v.objects.push(g);
+  }
+
   getHold(nodeId) {
     const lv = this.mountain.getLevel(parseInt(nodeId, 10));
     if (!lv) return null;

@@ -114,7 +114,7 @@ brings him back.
 cards, in seven chapters: places, creatures, gems, gear, hazards, wonders and Bram's stamps.
 Found cards show their picture; the rest show their back with a "?" (stamps show their goal
 and your progress). A card you have not looked at yet is tagged NEW and turns over the first
-time you pick it. 31 stamps on five pages (height, rhythm, mountain, finds, daring), from
+time you pick it. 36 stamps on five pages (height, rhythm, mountain, finds, daring), from
 "climb 50 m" to "reach 2000 m", plus two secret ones; each pays gems once
 (`src/data/journal.js`, `src/data/logbook.js`, `src/scenes/CollectionScene.js`).
 
@@ -246,6 +246,35 @@ Everything that makes a part of the mountain different lives in its entry in
 (`src/render/wallOverlays.js`), decor swaps, rest ledges and viewpoint names, backdrop
 layers and sky tint (`src/render/backdropArt.js`) and an optional mechanic
 (`src/systems/mechanics/`). Adding or changing a biome should not need edits elsewhere.
+
+## Bram's dares
+
+**DARES** (chalked on the rock beside the climb at base camp) lets you pick up to two dares for
+the next endless run: **Mirror Mountain** (every ← and → is shown the other way round),
+**Endless Night** (the sun never rises), **Quick Hands** (the beat is 10% faster), **Light Pack**
+(ledges only fill your grip to half) and **Blind Faith** (every note goes blind above 100 m).
+Each dare multiplies the gems you earn by 1.25. A dared run keeps its own record per set of
+dares and mode, never touches the mode records and is not sent to the leaderboard. Every dare
+has a stamp for reaching 500 m with it on (`src/data/dares.js`).
+
+## Look and feel settings
+
+Five choices in Settings, so the feel can be tuned per player:
+- **CHALK MARKS**: YOUR LINE (prints on used holds plus a dotted chalk line between them, so
+  looking down shows the way you came), PRINTS (prints only) or OFF.
+- **BEAT PULSE**: SUBTLE (the hold you are going for pulses on the beat, breath clouds come out
+  on the beat in the cold), FULL (also a swell of the biome's motes and a one-pixel nod while
+  hanging) or OFF. During a climb it follows the climb's own beat, otherwise the biome's tempo.
+- **HIT-STOP**: SUBTLE, PUNCHY or OFF. Perfect hits hold the body still for a moment; streak
+  milestones and perfect dodges freeze every tween and particle for a few frames (the clock and
+  the notes keep running). PUNCHY holds longer, squashes harder and flashes the screen; a puff of
+  dust comes off the boots on every ledge landing (`freezeFrame` in ClimbScene).
+- **WEATHER ON YOU**: snow piles on the hat, shoulders and pack, storms and waterfalls darken
+  and drip the jacket, dragon fire and the volcano leave soot, crystal dust glitters. On a ledge
+  the climber shakes it all off (`src/entities/WeatherCoat.js`).
+- **LEDGE LIFE**: LIVELY adds new idles after about 9 seconds on a ledge: a drink from the
+  bottle, a look at the map, a wave, warm breath into the hands in the cold, pointing at the
+  stars at night. CALM keeps the original fidgets.
 
 ## Codes
 

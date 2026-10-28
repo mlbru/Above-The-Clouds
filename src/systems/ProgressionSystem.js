@@ -14,6 +14,15 @@ export const DEFAULT_SETTINGS = {
   reducedParticles: false,
   forgiving: false,
   mode: 'normal',
+  // Look and feel (Settings): chalk marks, beat pulse, hit-stop, weather on
+  // the climber, ledge idles. See ui/SettingsMenu.js for the choices.
+  chalkMarks: 'line',
+  beatPulse: 'subtle',
+  hitStop: 'subtle',
+  weatherCoat: true,
+  ledgeLife: 'lively',
+  // Bram's dares picked for the next endless run (data/dares.js).
+  dares: [],
 };
 
 function memoryStorage() {
@@ -54,6 +63,8 @@ function freshData() {
     expeditions: {},
     // Biome mastery: { [biomeId]: [star ids] } (see data/mastery.js).
     mastery: {},
+    // Best height per set of dares: { [dareKey]: meters } (data/dares.js).
+    dareBest: {},
   };
 }
 
@@ -85,7 +96,7 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw);
       // Items without a requirement (including ones added in later versions) are always owned.
       const unlocked = [...new Set([...(parsed.unlocked || []), ...base.unlocked])];
-      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions }, mastery: { ...parsed.mastery } };
+      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions }, mastery: { ...parsed.mastery }, dareBest: { ...parsed.dareBest } };
     } catch {
       return base;
     }
@@ -139,6 +150,18 @@ export class ProgressionSystem {
   }
 
   bestFor(mode) { return this.data.bestByMode[mode] || 0; }
+
+  // Dared runs keep their own records, one per set of dares (and mode), so
+  // they never touch the mode records or the leaderboard.
+  recordDareHeight(h, key) {
+    const v = Math.floor(h * 10) / 10;
+    if (v <= (this.data.dareBest[key] || 0)) return { newBest: false, unlocks: [] };
+    this.data.dareBest[key] = v;
+    this.save();
+    return { newBest: true, unlocks: [] };
+  }
+
+  dareBestFor(key) { return this.data.dareBest[key] || 0; }
 
   // ---------- biome mastery ----------
   stars(biomeId) { return (this.data.mastery && this.data.mastery[biomeId]) || []; }

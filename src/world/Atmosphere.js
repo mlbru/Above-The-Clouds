@@ -114,4 +114,12 @@ export class Atmosphere {
       em.explode(1, v.x + Math.random() * v.width, v.y + Math.random() * v.height);
     }
   }
+
+  // BEAT PULSE: FULL. A small swell of the biome's own motes on the beat,
+  // close around (x, y) so it reads as the air moving with the music.
+  pulse(biome, x, y, count = 3) {
+    const em = this.motes[biome.id];
+    if (!em || this.reduced) return;
+    for (let i = 0; i < count; i++) em.explode(1, x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 90);
+  }
 }
