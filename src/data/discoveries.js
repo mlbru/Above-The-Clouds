@@ -14,4 +14,6 @@ export const DISCOVERIES = {
   'thermal-ride': { name: 'RIDING THE THERMAL', text: 'WARM AIR LIFTS YOU UP THE WALL LIKE A HAWK.' },
   whiteout: { name: 'WHITEOUT', text: 'THE WORLD TURNED WHITE. YOU CLIMBED ON BY FEEL.' },
   'prayer-flags': { name: 'PRAYER FLAGS', text: 'FADED FLAGS SNAP IN THE WIND ON A FORGOTTEN LEDGE.' },
+  thunderstorm: { name: 'THUNDERSTORM', text: 'LIGHTNING STRUCK THE RIDGE CLOSE ENOUGH TO TASTE IT.' },
+  'dragon-eye': { name: "THE DRAGON'S EYE", text: 'A YELLOW EYE THE SIZE OF A HOUSE OPENED IN THE SKY AND WATCHED YOU CLIMB.' },
 };

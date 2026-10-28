@@ -6,6 +6,7 @@ import { settingsItems, CONTROLS_TEXT } from '../ui/SettingsMenu.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
 import { levelToMeters } from '../config/gameConfig.js';
 import { toggleFullscreen, isFullscreen } from '../utils/fullscreen.js';
+import { wipeOut } from '../utils/transition.js';
 
 export class PauseScene extends Phaser.Scene {
   constructor() { super('Pause'); }
@@ -46,7 +47,7 @@ export class PauseScene extends Phaser.Scene {
     this.list = new MenuList(this, GAME_WIDTH / 2, 88, [
       { label: 'RESUME', onSelect: () => this.resume() },
       { label: 'WARDROBE', onSelect: () => this.openWardrobe() },
-      { label: "BRAM'S LOGBOOK", onSelect: () => this.openLogbook() },
+      { label: 'COLLECTION', onSelect: () => this.openCollection() },
       { label: 'SETTINGS', onSelect: () => this.showSettings() },
       { label: 'CONTROLS', onSelect: () => this.showControls() },
       { label: () => (isFullscreen() ? 'EXIT FULLSCREEN' : 'FULLSCREEN'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
@@ -61,8 +62,8 @@ export class PauseScene extends Phaser.Scene {
     this.scene.pause();
   }
 
-  openLogbook() {
-    this.scene.launch('Logbook', { returnTo: 'Pause' });
+  openCollection() {
+    this.scene.launch('Collection', { returnTo: 'Pause' });
     this.scene.pause();
   }
 
@@ -102,8 +103,7 @@ export class PauseScene extends Phaser.Scene {
   skipTutorial() {
     this.prog.data.tutorialDone = true;
     this.prog.save();
-    this.scene.stop('Climb');
-    this.scene.start('Climb', {});
+    wipeOut(this, () => { this.scene.stop('Climb'); this.scene.start('Climb', {}); });
   }
 
   resume() {
@@ -114,14 +114,13 @@ export class PauseScene extends Phaser.Scene {
   restart() {
     const tutorial = !!(this.climb && this.climb.tutorial);
     const expedition = this.climb && this.climb.expedition ? this.climb.expedition.id : null;
-    this.scene.stop('Climb');
     const devStart = this.climb && this.climb.devRun ? this.climb.devStart : null;
-    this.scene.start('Climb', { tutorial, devStart, expedition });
+    wipeOut(this, () => { this.scene.stop('Climb'); this.scene.start('Climb', { tutorial, devStart, expedition }); });
   }
 
   toTitle() {
-    this.scene.stop('Climb');
-    this.scene.start('Menu');
+    if (this.climb && this.climb.dayNight) this.registry.set('dayT', this.climb.dayNight.t);
+    wipeOut(this, () => { this.scene.stop('Climb'); this.scene.start('Menu'); });
   }
 
   onKey(event) {

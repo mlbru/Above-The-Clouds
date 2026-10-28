@@ -30,7 +30,7 @@ export class RestMenu {
     let ox = x + 14;
     opts.forEach(([id, label]) => {
       const t = add(new PixelText(this.scene, ox, oy, label, { color: id === 'continue' ? COLORS.green : id === 'trader' ? COLORS.gold : COLORS.text }));
-      t.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.onAction(id));
+      t.setInteractive({ useHandCursor: true }).on('pointerup', (p) => { if (p.getDistance() < 12) this.onAction(id); });
       ox += t.width + (trader ? 16 : 22);
     });
   }

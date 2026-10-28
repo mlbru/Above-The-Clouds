@@ -1,12 +1,14 @@
 import { PixelText, COLORS, drawPanel } from './PixelText.js';
-import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
+import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { biomeAt } from '../data/biomes.js';
 import { GEM_ORDER } from '../data/gems.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
-const STRIP = { x: 50, w: GAME_WIDTH - 100, h: 7 };
+const STRIP = { x: IS_PORTRAIT ? 20 : 50, w: GAME_WIDTH - (IS_PORTRAIT ? 40 : 100), h: 7 };
+// Portrait: the stat cards wrap into rows of three.
+const PER_ROW = IS_PORTRAIT ? 3 : 5;
 
 // Cuts a list of names down to what fits on one line ("A, B +3").
 function fitList(names, maxW) {
@@ -27,7 +29,7 @@ function fitList(names, maxW) {
 //      caught, finds[], stones{}, gems, wallet, stamps[] }
 // Optional (expedition summit): title, titleColor, recordLine, strandedLabel.
 export class RunSummary {
-  constructor(scene, s, { onAgain, onTitle }) {
+  constructor(scene, s, { onAgain, onTitle, onBoard = null, boardLabel = '[L] LEADERBOARD' }) {
     this.scene = scene;
     this.objs = [];
     const oy = Math.max(0, Math.round((GAME_HEIGHT - 270) / 2));
@@ -41,7 +43,11 @@ export class RunSummary {
     if (s.reason) text(W, 16, s.reason, COLORS.dim);
     text(W, 28, s.title || 'THE MOUNTAIN WINS', s.titleColor || COLORS.red, 2);
     const height = text(W, 48, '0 M', COLORS.text, 4);
+    // A near miss says how close it was: "ONLY 12 M SHORT OF YOUR RECORD".
+    const short = Math.ceil(s.best - s.reached);
+    const close = !s.isRecord && s.best > 0 && short > 0 && short <= Math.max(15, s.best * 0.2);
     if (s.recordLine) text(W, 72, s.recordLine, COLORS.dim);
+    else if (close) text(W, 72, `${s.modeLabel} RUN  •  ONLY ${short} M SHORT OF YOUR RECORD`, COLORS.gold);
     else text(W, 72, s.isRecord ? `${s.modeLabel} RUN  •  A NEW RECORD!` : `${s.modeLabel} RUN  •  RECORD ${Math.floor(s.best)} M`, s.isRecord ? COLORS.gold : COLORS.dim);
 
     // The mountain as a strip of biomes, with where you got stuck and your record.
@@ -78,17 +84,19 @@ export class RunSummary {
       { label: 'GEMS', value: s.gems, prefix: '+', color: '#9fe8ff' },
       { label: 'SLIPS CAUGHT', value: s.caught },
     ];
-    const cw = 84, gap = 6, cx0 = Math.round(W - (cards.length * cw + (cards.length - 1) * gap) / 2), cy = 118 + oy;
+    const cw = 84, gap = 6;
     this.counters = cards.map((c, i) => {
-      const x = cx0 + i * (cw + gap);
-      drawPanel(g, x, cy, cw, 32, { alpha: 0.9 });
-      const v = text(x + cw / 2, 122, `${c.prefix || ''}0`, c.color || COLORS.text, 2);
-      text(x + cw / 2, 140, c.label, COLORS.faint);
+      const row = Math.floor(i / PER_ROW), inRow = Math.min(PER_ROW, cards.length - row * PER_ROW);
+      const x = Math.round(W - (inRow * cw + (inRow - 1) * gap) / 2) + (i % PER_ROW) * (cw + gap);
+      const ry = row * 38;
+      drawPanel(g, x, 118 + oy + ry, cw, 32, { alpha: 0.9 });
+      const v = text(x + cw / 2, 122 + ry, `${c.prefix || ''}0`, c.color || COLORS.text, 2);
+      text(x + cw / 2, 140 + ry, c.label, COLORS.faint);
       return { ...c, text: v };
     });
 
     // What you found on the way.
-    let y = 158;
+    let y = 158 + (Math.ceil(cards.length / PER_ROW) - 1) * 38;
     const stones = GEM_ORDER.filter((k) => s.stones[k]);
     if (stones.length) {
       let x = W - (stones.length * 26) / 2;
@@ -104,10 +112,24 @@ export class RunSummary {
     text(W, y + 2, `WALLET ◆${s.wallet}`, '#9fe8ff');
 
     const fy = Math.max(y + 18, 222);
-    const again = text(W - 70, fy, '[SPACE] CLIMB AGAIN', COLORS.green);
-    const title = text(W + 70, fy, '[ESC] TITLE', COLORS.dim);
-    again.setInteractive({ useHandCursor: true }).on('pointerdown', onAgain);
-    title.setInteractive({ useHandCursor: true }).on('pointerdown', onTitle);
+    this.canOpenBoard = !!onBoard;
+    // On a touch screen the buttons drop their key names; upright they stack.
+    const key = (k, label) => (IS_TOUCH ? label : `[${k}] ${label}`);
+    const buttons = [
+      { label: key('SPACE', 'CLIMB AGAIN'), color: COLORS.green, go: onAgain },
+      ...(onBoard ? [{ label: IS_TOUCH ? boardLabel.replace(/^\[L\] /, '') : boardLabel, color: COLORS.gold, go: onBoard }] : []),
+      { label: key('ESC', 'TITLE'), color: COLORS.dim, go: onTitle },
+    ];
+    if (IS_PORTRAIT) {
+      buttons.forEach((b, i) => text(W, fy + i * 20, b.label, b.color, 1).setInteractive({ useHandCursor: true }).on('pointerdown', b.go));
+    } else {
+      const gapX = 18;
+      let bx = Math.round(W - (buttons.reduce((n, b) => n + measureLine(b.label), 0) + gapX * (buttons.length - 1)) / 2);
+      for (const b of buttons) {
+        text(bx, fy, b.label, b.color, 1, 0).setInteractive({ useHandCursor: true }).on('pointerdown', b.go);
+        bx += measureLine(b.label) + gapX;
+      }
+    }
 
     // Count up: height first, then the cards in turn.
     const count = (obj, to, prefix, suffix, delay, dur) => {

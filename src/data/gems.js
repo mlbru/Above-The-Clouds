@@ -7,9 +7,12 @@ export const GEMS = {
   opal: { id: 'opal', name: 'CLOUD OPAL', biome: 'clouds', value: 5, rarity: 0.7, color: 0xe8d8ff },
   ruby: { id: 'ruby', name: 'RUBY', biome: 'obsidian', value: 8, rarity: 0.6, color: 0xe0344f },
   diamond: { id: 'diamond', name: 'DIAMOND', biome: 'crystal', value: 12, rarity: 0.5, color: 0xd8fbff },
+  topaz: { id: 'topaz', name: 'STORM TOPAZ', biome: 'storm', value: 16, rarity: 0.45, color: 0xffd23c },
+  tourmaline: { id: 'tourmaline', name: 'TOURMALINE', biome: 'aurora', value: 20, rarity: 0.4, color: 0x3ff0b0 },
+  pearl: { id: 'pearl', name: 'DRAGON PEARL', biome: 'dragon', value: 25, rarity: 0.35, color: 0xff6a4a },
 };
 
-export const GEM_ORDER = ['emerald', 'amber', 'sapphire', 'opal', 'ruby', 'diamond'];
+export const GEM_ORDER = ['emerald', 'amber', 'sapphire', 'opal', 'ruby', 'diamond', 'topaz', 'tourmaline', 'pearl'];
 
 export function gemForBiome(biomeId) {
   return GEM_ORDER.map((k) => GEMS[k]).find((g) => g.biome === biomeId) || GEMS.emerald;

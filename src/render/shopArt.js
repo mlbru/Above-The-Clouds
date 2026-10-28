@@ -43,6 +43,15 @@ function icon(draw) {
   return g;
 }
 
+// A lift ticket: a paper stub with a coloured band and a tiny mountain.
+function ticket(g, band, peak) {
+  g.rect(0, 2, 11, 7, 0xf4efe4);
+  g.rect(0, 2, 11, 2, band);
+  g.set(0, 6, null); g.set(10, 6, null);
+  g.set(5, 5, peak); g.rect(4, 6, 3, 1, peak); g.rect(3, 7, 5, 1, peak);
+  for (let x = 1; x <= 9; x += 2) g.set(x, 8, 0xbdb6a6);
+}
+
 const ITEM_ICONS = {
   item_crampons: (g) => {
     g.rect(2, 1, 7, 1, 0xc8463b); g.rect(2, 1, 1, 3, 0xc8463b); g.rect(8, 1, 1, 3, 0xc8463b);
@@ -78,6 +87,18 @@ const ITEM_ICONS = {
     g.set(3, 3, lite); g.set(7, 3, lite); g.set(5, 5, 0x2f7a3a);
     g.line(6, 8, 8, 10, 0x2f7a3a);
   },
+  item_ticket_stone: (g) => ticket(g, 0x8a8478, 0xf2a03c),
+  item_ticket_frozen: (g) => ticket(g, 0x9fd8ff, 0x4f86f0),
+  perk_rubyheart: (g) => {
+    const r = 0xe0344f;
+    g.ellipse(3.5, 4, 2.4, 2.4, r); g.ellipse(7.5, 4, 2.4, 2.4, r);
+    g.rect(2, 4, 7, 2, r); g.rect(3, 6, 5, 1, r); g.rect(4, 7, 3, 1, r); g.set(5, 8, r);
+    g.set(3, 3, 0xff9aa8); g.set(4, 3, 0xff9aa8);
+  },
+  perk_diamondeye: (g) => {
+    g.ellipse(5.5, 5.5, 4.8, 2.8, 0xffffff);
+    g.rect(4, 3, 3, 1, 0xd8fbff); g.rect(3, 4, 5, 1, 0x9fe8ff); g.rect(4, 5, 3, 1, 0x6fc8e8); g.set(5, 6, 0x4fa8d0);
+  },
   perk_gemsense: (g) => {
     g.ellipse(5.5, 5.5, 4.8, 2.8, 0xffffff);
     g.rect(4, 4, 3, 3, 0x4f86f0); g.set(5, 3, 0x4f86f0); g.set(5, 7, 0x4f86f0); g.set(4, 4, 0xbfe0ff);
@@ -100,46 +121,69 @@ const ITEM_ICONS = {
   },
 };
 
-// The base camp trader: an old mountaineer with an overloaded pack and a lantern staff.
-function traderGrid(blink) {
-  const g = new PixelGrid(22, 33);
-  const skin = 0xe2a87e, skinDark = 0xb8805e, coat = 0x8a5a32, coatDark = 0x5e3c20, beard = 0xd8d0c0;
-  // Overloaded pack behind the body: rounded, with side pockets, a bedroll and a pot.
-  const pk = 0x8a7448, pkL = 0xa88e5a, pkD = 0x5e4e30;
-  g.rect(4, 9, 13, 14, pk); g.rect(5, 8, 11, 1, pk);
-  g.rect(4, 9, 1, 14, pkL); g.rect(16, 9, 1, 14, pkD); g.rect(4, 22, 13, 1, pkD);
-  g.rect(3, 14, 2, 6, pkD); g.rect(16, 14, 2, 6, pkD);
-  g.rect(4, 5, 13, 3, 0xc8463b); g.rect(4, 7, 13, 1, 0x8a2a24); g.set(4, 5, null); g.set(16, 5, null);
-  g.line(7, 5, 7, 7, 0x3a2414); g.line(13, 5, 13, 7, 0x3a2414);
-  g.rect(1, 16, 3, 3, 0x9aa4b0); g.set(1, 16, 0xd0d8e2); g.set(2, 15, 0x6a7280);
+// Bram, the base camp trader: an old mountaineer in a felt hat with a feather,
+// bushy brows and a big white beard, a fur-collared coat, an overloaded pack
+// and a lantern on his staff. Frames: 0 idle, 1 blink, 2 breathing in.
+function traderGrid(blink, breath = false) {
+  const g = new PixelGrid(24, 34);
+  const dy = breath ? -1 : 0;
+  const skin = 0xe8ae84, skinD = 0xc08060, cheek = 0xe07a7a;
+  const coat = 0x7a5a3a, coatD = 0x553c26, coatL = 0x9a7650;
+  const beard = 0xeae4d8, beardD = 0xbab2a2, fur = 0xd8c8a8, furD = 0xb0a080;
+  // The pack behind him (below his head, so it never frames the face): a
+  // bedroll sticking out on both sides, a pot and a coil of rope.
+  const pk = 0x6a6448, pkL = 0x847c58, pkD = 0x4a4632;
+  g.rect(3, 16, 16, 9, pk); g.rect(3, 16, 1, 9, pkL); g.rect(18, 16, 1, 9, pkD); g.rect(3, 24, 16, 1, pkD);
+  g.rect(1, 14, 21, 3, 0xc8463b); g.rect(1, 16, 21, 1, 0x8a2a24); g.rect(1, 14, 21, 1, 0xe06a5a);
+  g.set(1, 15, 0x8a2a24); g.set(21, 15, 0x8a2a24);
+  g.rect(0, 19, 3, 3, 0x9aa4b0); g.set(0, 19, 0xd0d8e2); g.set(1, 18, 0x6a7280);
+  g.ellipse(18, 21.5, 1.6, 2, 0xc8a050); g.set(18, 21, 0x8a6a30);
+  // Staff with a hanging lantern.
+  g.line(20, 4, 20, 33, 0x8a6a4a); g.set(20, 4, 0xa88a68);
+  g.rect(21, 6, 1, 2, 0x3a2a1a); g.rect(21, 8, 3, 5, 0x3a2a1a); g.rect(21, 9, 3, 3, 0xffd25a); g.set(22, 10, 0xffffff);
   // Legs and boots.
-  g.rect(7, 27, 2, 4, 0x343c52); g.rect(11, 27, 2, 4, 0x343c52);
-  g.rect(6, 30, 3, 2, 0x6a4428); g.rect(11, 30, 3, 2, 0x6a4428);
-  // Coat.
-  g.rect(6, 16, 8, 12, coat); g.rect(6, 27, 8, 1, coatDark); g.rect(10, 16, 1, 11, coatDark); g.rect(6, 22, 8, 1, 0x3a2414);
-  g.set(8, 22, 0xf2c14e);
-  // Arms.
-  g.rect(4, 17, 2, 8, coat); g.rect(4, 25, 2, 2, skin);
-  g.rect(14, 17, 2, 5, coat); g.rect(14, 22, 2, 2, skin);
-  // Staff with a lantern.
-  g.line(17, 5, 17, 31, 0x8a6a4a);
-  g.rect(18, 8, 3, 4, 0xf2c14e); g.set(19, 9, 0xffffff); g.rect(18, 7, 3, 1, 0x3a2a1a); g.rect(18, 12, 3, 1, 0x3a2a1a);
-  // Head, beard and hat.
-  g.ellipse(10, 12, 3.2, 3.6, skin);
-  g.rect(7, 13, 7, 4, beard); g.ellipse(10.5, 16.5, 3, 2, beard); g.set(10, 18, beard);
-  g.set(10, 12, skinDark);
-  if (blink) { g.set(8, 11, 0x2a2030); g.set(9, 11, 0x2a2030); g.set(11, 11, 0x2a2030); g.set(12, 11, 0x2a2030); } else { g.set(9, 11, 0x2a2030); g.set(11, 11, 0x2a2030); }
-  g.rect(5, 8, 11, 1, 0x4a3a2a); g.rect(7, 5, 7, 3, 0x5a4632); g.rect(7, 7, 7, 1, 0xc8463b);
-  g.set(8, 5, 0x6e5840);
+  g.rect(8, 27, 3, 4, 0x3a4258); g.rect(12, 27, 3, 4, 0x3a4258); g.set(10, 27, 0x2a3044);
+  g.rect(7, 31, 4, 2, 0x5a3a22); g.rect(12, 31, 4, 2, 0x5a3a22); g.rect(7, 31, 4, 1, 0x7a5232); g.rect(12, 31, 4, 1, 0x7a5232);
+  // Coat with a belt and patches.
+  g.rect(6, 18, 11, 10, coat); g.rect(6, 18, 1, 10, coatL); g.rect(16, 18, 1, 10, coatD); g.rect(11, 19, 1, 9, coatD);
+  g.rect(6, 23, 11, 1, 0x3a2414); g.set(11, 23, 0xf2c14e); g.rect(13, 25, 2, 2, coatL);
+  g.set(10, 20, 0xd8b060); g.set(10, 25, 0xd8b060);
+  // Arms: one at his side, one on the staff.
+  g.rect(4, 18, 2, 8, coat); g.rect(4, 18, 1, 8, coatL); g.rect(4, 26, 2, 2, skin);
+  g.rect(17, 18, 2, 4, coat); g.rect(18, 21, 2, 2, skin); g.set(19, 22, skinD);
+  // Fur collar (moves with the breath).
+  for (let x = 6; x <= 16; x++) { g.set(x, 17 + dy, fur); g.set(x, 18 + dy, x % 2 ? fur : furD); }
+  // Head.
+  g.ellipse(11.5, 12.5 + dy, 3.6, 3.6, skin);
+  g.set(8, 12 + dy, skinD); g.set(15, 12 + dy, skinD);
+  // Beard and moustache: full and white, shaded underneath.
+  g.ellipse(11.5, 17 + dy, 4.4, 3.4, beard);
+  g.rect(8, 14 + dy, 8, 1, beard);
+  for (let x = 9; x <= 14; x++) g.set(x, 20 + dy, beardD);
+  g.set(8, 18 + dy, beardD); g.set(15, 18 + dy, beardD); g.set(11, 21 + dy, beardD); g.set(12, 21 + dy, beard);
+  g.set(10, 16 + dy, beardD); g.set(13, 17 + dy, beardD);
+  g.rect(9, 14 + dy, 6, 1, 0xf6f2ea);
+  // Face: brows, eyes, nose and rosy cheeks.
+  g.rect(8, 10 + dy, 3, 1, beard); g.rect(13, 10 + dy, 3, 1, beard);
+  if (blink) { g.rect(9, 11 + dy, 2, 1, 0x2a2030); g.rect(13, 11 + dy, 2, 1, 0x2a2030); }
+  else { g.set(10, 11 + dy, 0x2a2030); g.set(13, 11 + dy, 0x2a2030); }
+  g.rect(11, 12 + dy, 2, 2, skinD); g.set(11, 12 + dy, skin);
+  g.set(9, 13 + dy, cheek); g.set(14, 13 + dy, cheek);
+  // Felt hat with a red band and a feather.
+  const hat = 0x5a4632, hatL = 0x7a6248, hatD = 0x3e3022;
+  g.rect(5, 8 + dy, 14, 2, hat); g.rect(5, 9 + dy, 14, 1, hatD);
+  g.rect(8, 4 + dy, 8, 4, hat); g.rect(8, 4 + dy, 8, 1, hatL); g.set(12, 4 + dy, hatD);
+  g.rect(8, 7 + dy, 8, 1, 0xc8463b);
+  g.line(16, 7 + dy, 18, 2 + dy, 0xf4efe4); g.set(17, 3 + dy, 0x6fae4a); g.set(18, 2 + dy, 0x6fae4a);
   g.outline(OUT);
   return g;
 }
 
-// Bram's head and shoulders for the tutorial speech bubble (cut from the trader sprite).
+// Bram's head and shoulders for his speech bubbles (cut from the trader sprite).
 function portraitGrid(blink) {
   const src = traderGrid(blink);
   const g = new PixelGrid(18, 20);
-  for (let y = 0; y < 20; y++) for (let x = 0; x < 18; x++) g.set(x, y, src.get(x + 2, y + 3));
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 18; x++) g.set(x, y, src.get(x + 3, y + 1));
   return g;
 }
 
@@ -159,7 +203,7 @@ export function buildShopTextures(scene) {
   for (const gem of Object.values(GEMS)) add(scene, `gem_${gem.id}`, gemGrid(gem.color));
   add(scene, 'icon_gem', gemGrid(0x6fd6ff));
   for (const [key, draw] of Object.entries(ITEM_ICONS)) add(scene, key, icon(draw));
-  addFrames(scene, 'npc_trader', [traderGrid(false), traderGrid(true)]);
+  addFrames(scene, 'npc_trader', [traderGrid(false), traderGrid(true), traderGrid(false, true)]);
   addFrames(scene, 'bram_face', [portraitGrid(false), portraitGrid(true)]);
   add(scene, 'decor_stall', stallGrid());
 }

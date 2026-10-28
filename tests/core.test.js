@@ -176,7 +176,7 @@ test('biome lookup and blending', () => {
   assert.equal(biomeAt(350).id, 'frozen');
   assert.equal(biomeAt(600).id, 'clouds');
   assert.ok(biomeAt(5000).id);
-  const mix = biomeMixAt(115);
+  const mix = biomeMixAt(75);
   assert.equal(mix.a.id, 'green');
   assert.equal(mix.b.id, 'stone');
   assert.ok(mix.t > 0 && mix.t < 0.5);
@@ -477,4 +477,104 @@ test("expeditions: Bram's route is a climbable hand-built mountain with a summit
     for (const ch of line) assert.ok(hasGlyph(ch), `no glyph "${ch}" in ${line}`);
   }
   for (const p of exp.pitches) for (const bank of Object.values(p.rhythm)) bank.forEach((s) => parseRhythm(s));
+});
+
+test('expeditions: every expedition reaches its summit and its pages fit', async () => {
+  const { EXPEDITIONS, EXPEDITION_ORDER } = await import('../src/data/expeditions.js');
+  const { ExpeditionMountain, parseRhythm } = await import('../src/systems/ExpeditionMountain.js');
+  const { measureLine, hasGlyph } = await import('../src/utils/pixelFont.js');
+  const { BIOMES } = await import('../src/data/biomes.js');
+  for (const id of EXPEDITION_ORDER) {
+    const exp = EXPEDITIONS[id];
+    if (exp.theme) assert.ok(BIOMES[exp.theme] && BIOMES[exp.theme].special, `${id} theme`);
+    const m = new ExpeditionMountain(exp);
+    m.ensureLevel(m.summitLevel + 5);
+    let node = m.getLevel(0).nodes[0], guard = 0;
+    while (!node.summit && guard++ < 500) {
+      const routes = m.computeRoutes(node);
+      assert.ok(routes.length >= 1, `${id}: routes from ${node.id}`);
+      node = routes[0].target;
+    }
+    assert.ok(node.summit, `${id}: reached the summit`);
+    const pages = [...exp.pitches.filter((p) => p.page).map((p) => p.page), exp.summitPage];
+    for (const page of pages) for (const line of page) {
+      assert.ok(measureLine(line) <= 276, `${id} too wide: ${line}`);
+      for (const ch of line) assert.ok(hasGlyph(ch), `${id}: no glyph "${ch}" in ${line}`);
+    }
+    for (const p of exp.pitches) for (const bank of Object.values(p.rhythm)) bank.forEach((s) => parseRhythm(s));
+  }
+});
+
+test('mirrored notes: shown flipped, judged on the direction you must press', () => {
+  const c = new ComboSystem({ notes: [{ dir: 'R', mirror: true }], beatMs: 500, perfectMs: 90, goodMs: 180, leadInMs: 1000 });
+  assert.equal(c.notes[0].mirror, true);
+  assert.equal(c.press('R', 1000).judged.result, RESULT.PERFECT);
+});
+
+test('double notes need both arrows; one alone is a miss', () => {
+  const mk = () => new ComboSystem({ notes: [{ dir: 'L', chord: 'R' }, { dir: 'U' }], beatMs: 500, perfectMs: 90, goodMs: 180, leadInMs: 1000 });
+  const a = mk();
+  assert.equal(a.press('R', 995).judged, null, 'first arrow waits for the second');
+  assert.equal(a.press('L', 1010).judged.result, RESULT.PERFECT);
+  const b = mk();
+  b.press('L', 1000);
+  const missed = b.update(1200);
+  assert.equal(missed[0].reason, 'half');
+  const w = mk();
+  assert.equal(w.press('U', 1000).judged.reason, 'wrong');
+});
+
+test('rolls: tap the arrow again before the tail ends, or it is a miss', () => {
+  const mk = () => new ComboSystem({ notes: [{ dir: 'U', roll: 3 }, { dir: 'L', gap: 1 }], beatMs: 400, perfectMs: 90, goodMs: 180, leadInMs: 1000, rollBeats: 1.5 });
+  const a = mk();
+  assert.equal(a.press('U', 1000).judged.result, RESULT.PERFECT);
+  assert.ok(a.press('U', 1150).tap);
+  assert.ok(a.press('U', 1300).tap);
+  assert.ok(a.press('U', 1400).tap, 'extra taps are swallowed, never judged as the next note');
+  const failed = [];
+  assert.equal(a.updateHolds(1700, failed).length, 1);
+  assert.equal(failed.length, 0);
+  assert.equal(a.notes[1].time, 1000 + 600 + 400, 'the next note waits for the tail');
+  const b = mk();
+  b.press('U', 1000);
+  b.press('U', 1200);
+  const f2 = [];
+  b.updateHolds(1700, f2);
+  assert.equal(f2[0].reason, 'roll');
+});
+
+test('the high mountain keeps getting harder after the tempo tops out', () => {
+  const at = (m) => difficultyAt(m);
+  assert.equal(at(900).mirror, 0);
+  assert.ok(at(1300).mirror > 0 && at(1300).chord > 0 && at(1300).roll === 0);
+  assert.ok(at(2200).roll > at(1600).roll);
+  assert.equal(at(1800).extraInputs, 3);
+  assert.equal(at(2300).rollTaps, 4);
+  // New notes really turn up on routes up there.
+  const m = new Mountain(77);
+  const tags = new Set();
+  for (let l = 900; l < 1450; l += 3) {
+    m.ensureLevel(l);
+    const lv = m.getLevel(l);
+    if (!lv || !lv.nodes.length) continue;
+    m.computeRoutes(lv.nodes[0]).forEach((r) => r.tags.forEach((t) => tags.add(t)));
+    m.prune(l - 40);
+  }
+  for (const t of ['MIRROR', 'DOUBLE', 'ROLL']) assert.ok(tags.has(t), `no ${t} routes found`);
+});
+
+test('still beats: freezing is perfect, pressing near the beat is a miss', () => {
+  const mk = () => new ComboSystem({ notes: [{ dir: 'L' }, { dir: 'U', still: true }, { dir: 'R' }], beatMs: 500, perfectMs: 90, goodMs: 180, leadInMs: 1000 });
+  const a = mk();
+  a.press('L', 1000);
+  // The next press comes on R's beat: the still beat passed untouched.
+  const r = a.press('R', 2000);
+  assert.equal(a.notes[1].result, RESULT.PERFECT);
+  assert.equal(r.judged.result, RESULT.PERFECT, 'the press after a still beat is still judged');
+  const b = mk();
+  b.press('L', 1000);
+  assert.equal(b.press('U', 1520).judged.reason, 'moved');
+  const c = mk();
+  c.press('L', 1000);
+  assert.equal(c.press('R', 1220).judged, null, 'a press far from the still beat is ignored');
 });

@@ -11,6 +11,10 @@ export const GEAR = [
   { id: 'quickdraws', name: 'QUICKDRAWS', price: 10, icon: 'item_quickdraws', text: 'CRUMBLING HOLDS LAST 50% LONGER.' },
   { id: 'rope', name: 'SPARE ROPE', price: 25, icon: 'item_rope', text: 'CATCHES YOU ONCE WHEN YOU MISS A SLIP RECOVERY.' },
   { id: 'charm', name: 'LUCKY CHARM', price: 20, icon: 'item_charm', text: 'THE NEXT 5 GEMS YOU GRAB COUNT DOUBLE.' },
+  // Lift tickets: skip the start and begin the run on the first ledge of a higher biome.
+  // Only one goes with you; they open up once your Normal record is high enough.
+  { id: 'lift-stone', name: 'STONE WALL TICKET', price: 8, icon: 'item_ticket_stone', lift: 80, needs: { best: 150 }, text: 'START YOUR NEXT RUN AT THE STONE WALL (80 M).' },
+  { id: 'lift-frozen', name: 'FROZEN REACH TICKET', price: 20, icon: 'item_ticket_frozen', lift: 300, needs: { best: 400, gem: 'sapphire', count: 1 }, text: 'START YOUR NEXT RUN IN THE FROZEN REACH (300 M).' },
 ];
 
 export const PERKS = [
@@ -18,11 +22,14 @@ export const PERKS = [
   { id: 'irongrip', name: 'IRON GRIP', price: 90, icon: 'perk_irongrip', text: 'GRIP DRAINS 10% SLOWER WHILE YOU HANG.' },
   { id: 'steady', name: 'STEADY HANDS', price: 110, icon: 'perk_steady', text: 'THE FIRST MISS ON EACH CLIMB COSTS HALF GRIP.' },
   { id: 'streaksaver', name: 'STREAK SAVER', price: 140, icon: 'perk_streaksaver', text: 'ONE GOOD HIT PER STREAK DOES NOT BREAK IT.' },
+  // Bought with gems, but only for climbers who found the rare stones up high.
+  { id: 'rubyheart', name: 'RUBY HEART', price: 160, icon: 'perk_rubyheart', needs: { gem: 'ruby', count: 2 }, text: 'EVERY PERFECT HIT GIVES 1 GRIP BACK.' },
+  { id: 'diamondeye', name: 'DIAMOND EYE', price: 220, icon: 'perk_diamondeye', needs: { gem: 'diamond', count: 1 }, text: 'TIMING WINDOWS 8% WIDER, ALL THE WAY UP.' },
 ];
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((g) => [g.id, g]));
 // Strength of each item (kept here so the shop texts and the game agree).
-export const GEAR_FX = { chalkWindow: 1.1, chalkUntil: 100, energyGrip: 25, quickdrawScale: 1.5, charmGems: 5, gemSense: 1.25, ironGrip: 0.9 };
+export const GEAR_FX = { chalkWindow: 1.1, chalkUntil: 100, energyGrip: 25, quickdrawScale: 1.5, charmGems: 5, gemSense: 1.25, ironGrip: 0.9, rubyGrip: 1, diamondWindow: 1.08 };
 
 export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));
 

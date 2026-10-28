@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BIOMES, biomeStretchAt } from '../src/data/biomes.js';
+import { BIOMES, SEQUENCE, LOOP_START, biomeStretchAt, nextBiomeAbove } from '../src/data/biomes.js';
+import { Storm, STORM } from '../src/systems/mechanics/Storm.js';
+import { applySwing } from '../src/systems/mechanics/Swing.js';
+import { DragonEye, DRAGON_EYE } from '../src/systems/mechanics/DragonEye.js';
 import { DISCOVERIES } from '../src/data/discoveries.js';
 import { WALL_OVERLAYS, ledgeTopColor } from '../src/render/wallOverlays.js';
 import { Whiteout, WHITEOUT } from '../src/systems/mechanics/Whiteout.js';
@@ -149,10 +152,72 @@ test('dev save copy never writes the real save', () => {
 });
 
 test('biome stretches tell repeat visits in the high loop apart', () => {
-  assert.equal(biomeStretchAt(130), 'stone@120');
-  assert.equal(biomeStretchAt(290), 'stone@120');
+  assert.equal(biomeStretchAt(130), 'stone@80');
+  assert.equal(biomeStretchAt(290), 'stone@80');
   assert.notEqual(biomeStretchAt(310), biomeStretchAt(290));
-  const loopA = biomeStretchAt(1310), loopB = biomeStretchAt(1310 + 750);
+  const loopA = biomeStretchAt(1960), loopB = biomeStretchAt(1960 + 1250);
   assert.equal(loopA.split('@')[0], loopB.split('@')[0]);
   assert.notEqual(loopA, loopB);
+});
+
+test('nextBiomeAbove: the next stretch and where it starts', () => {
+  assert.deepEqual([nextBiomeAbove(0).biome.id, nextBiomeAbove(0).from], ['stone', 80]);
+  assert.deepEqual([nextBiomeAbove(299).biome.id, nextBiomeAbove(299).from], ['frozen', 300]);
+  assert.deepEqual([nextBiomeAbove(600).biome.id, nextBiomeAbove(600).from], ['obsidian', 700]);
+  assert.deepEqual([nextBiomeAbove(1100).biome.id, nextBiomeAbove(1100).from], ['storm', 1200]);
+  assert.deepEqual([nextBiomeAbove(1800).biome.id, nextBiomeAbove(1800).from], ['obsidian', 1950]);
+  assert.deepEqual([nextBiomeAbove(1950).biome.id, nextBiomeAbove(1950).from], ['crystal', 2200]);
+});
+
+test('every biome on the way up is about as long as the others', () => {
+  const froms = SEQUENCE.map((id) => BIOMES[id].from).concat(LOOP_START);
+  for (let i = 2; i < froms.length - 1; i++) {
+    const len = froms[i + 1] - froms[i];
+    assert.ok(len >= 180 && len <= 250, `${SEQUENCE[i]} is ${len} m long`);
+  }
+});
+
+test('storm: hanging drains faster only while the storm rages', () => {
+  const s = new Storm(new SeededRandom(3));
+  assert.equal(s.hangScale, 1);
+  const seen = [];
+  for (let i = 0; i < 1200; i++) { const e = s.update(100, 1); if (e) seen.push(e); if (s.active) break; }
+  assert.ok(seen.includes('warning') && seen.includes('storm'));
+  assert.ok(s.active);
+  assert.equal(s.hangScale, STORM.hangScale);
+  const routes = [{ type: 'normal' }];
+  s.decorateRoutes(routes);
+  assert.equal(routes[0].mods.tag, 'STORM');
+});
+
+test('swing: straight beats become long-short pairs, other gaps stay', () => {
+  const notes = [{ dir: 'L', gap: 1 }, { dir: 'U', gap: 1 }, { dir: 'R', gap: 1 }, { dir: 'U', gap: 0.5 }, { dir: 'L', gap: 1 }];
+  assert.ok(applySwing(notes));
+  assert.deepEqual(notes.map((n) => +n.gap.toFixed(2)), [1, 1.33, 0.67, 0.5, 0.67]);
+  const held = [{ dir: 'L', gap: 1, hold: 1 }, { dir: 'U', gap: 1 }];
+  applySwing(held);
+  assert.equal(held[1].gap, 1, 'the note after a hold keeps its gap');
+});
+
+test("dragon's eye: opens, watches, puts on pressure and breathes fire", () => {
+  const d = new DragonEye(new SeededRandom(5));
+  const events = [];
+  for (let i = 0; i < 600 && !d.active; i++) { const e = d.update(100, 1); if (e) events.push(e); }
+  assert.deepEqual(events, ['open', 'watch']);
+  assert.equal(d.openness, 1);
+  assert.ok(d.pressure >= 0.6, 'watching puts on pressure');
+  assert.ok(!d.breathDue, 'a moment to see it first');
+  for (let i = 0; i < DRAGON_EYE.firstBreathSec * 10; i++) d.update(100, 1);
+  assert.ok(d.breathDue);
+  const dirs = d.startBreath(1750);
+  assert.equal(dirs.length, 1);
+  assert.ok(['L', 'R'].includes(dirs[0]));
+  assert.ok(!d.breathDue, 'the timer restarts');
+  // High up it breathes twice, the second sweep from the other side.
+  const two = d.startBreath(2100);
+  assert.equal(two.length, 2);
+  assert.notEqual(two[0], two[1]);
+  // Outside the biome there is no pressure.
+  d.update(100, 0);
+  assert.equal(d.pressure, 0);
 });

@@ -130,3 +130,42 @@ test('trader: old saves without gem data still load', () => {
   assert.ok(p.isUnlocked('chalk-white'), 'new free items are owned');
   assert.ok(p.isUnlocked('jacket-sun'), 'earned items are kept');
 });
+
+test('trader: lift tickets unlock with your Normal record and only one is packed', () => {
+  const p = new ProgressionSystem(memory());
+  p.data.gems = 500;
+  assert.ok(p.lockedReason(GEAR.find((g) => g.id === 'lift-stone')));
+  assert.equal(p.buyGear('lift-stone'), false);
+  p.recordHeight(420, 'normal');
+  assert.equal(p.lockedReason(GEAR.find((g) => g.id === 'lift-stone')), null);
+  assert.match(p.lockedReason(GEAR.find((g) => g.id === 'lift-frozen')), /SAPPHIRE/);
+  p.addGems(3, 'sapphire');
+  assert.ok(p.buyGear('lift-stone') && p.buyGear('lift-frozen'));
+  assert.deepEqual(p.data.packed, ['lift-frozen']);
+  assert.equal(p.togglePack('lift-stone'), true);
+  assert.deepEqual(p.data.packed, ['lift-stone']);
+});
+
+test('trader: rare-stone perks need the stones first', () => {
+  const p = new ProgressionSystem(memory());
+  p.data.gems = 500;
+  assert.equal(p.buyPerk('diamondeye'), false);
+  p.addGems(12, 'diamond');
+  assert.equal(p.buyPerk('diamondeye'), true);
+  assert.ok(PERKS.find((x) => x.id === 'rubyheart').needs.gem === 'ruby');
+});
+
+test('golden city: very rare, diamonds on most holds, and a song that fits its key', async () => {
+  const { GOLDEN_CITY, GOLDEN_CITY_MUSIC, cityGem } = await import('../src/data/goldenCity.js');
+  assert.ok(GOLDEN_CITY.chance > 0 && GOLDEN_CITY.chance <= 0.01);
+  const route = (i) => ({ from: { id: 'a' }, target: { id: `t${i}`, kind: 'hold' } });
+  const gems = Array.from({ length: 1000 }, (_, i) => cityGem(route(i), new Set(), Math.random)).filter(Boolean);
+  assert.ok(gems.length > 600 && gems.every((g) => g.type === 'diamond'));
+  assert.equal(cityGem({ from: { id: 'a' }, target: { id: 'l', kind: 'ledge' } }, new Set(), Math.random), null);
+  const { song, scale } = GOLDEN_CITY_MUSIC;
+  assert.equal(song.lead.length, song.chords.length);
+  for (const bar of song.lead) {
+    assert.equal(bar.reduce((n, [, b]) => n + b, 0), 4);
+    for (const [st] of bar) if (st !== null) assert.ok(scale.includes(((st % 12) + 12) % 12), `note ${st} outside the scale`);
+  }
+});

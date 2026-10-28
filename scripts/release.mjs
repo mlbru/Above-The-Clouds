@@ -14,9 +14,11 @@ if (jsFile.length !== 1) throw new Error(`expected one JS chunk, got ${jsFile}`)
 const js = fs.readFileSync(path.join('dist/assets', jsFile[0]), 'utf8').replace(/<\/script/g, '<\\/script');
 // Replacements use functions: a plain replacement string would expand "$&",
 // "$'" and "$`" sequences that occur in the minified code and corrupt it.
+// The one-file builds have no manifest or service worker next to them.
 const inline = (extraHead = '') => html
   .replace(/<script type="module" crossorigin src="[^"]+"><\/script>/, () => '')
-  .replace('</head>', () => `${extraHead}</head>`)
+  .replace(/\s*<link rel="(manifest|icon|apple-touch-icon)"[^>]*>/g, () => '')
+  .replace('</head>', () => `    <script>window.ATC_SINGLE_FILE = true;</script>\n${extraHead}</head>`)
   .replace('</body>', () => `<script type="module">\n${js}\n</script>\n</body>`);
 
 const check = (doc) => {

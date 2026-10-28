@@ -7,6 +7,7 @@ import { drawClimberSheet, FRAME_NAMES, FRAME_W, FRAME_H, POSES } from './climbe
 import { BIOMES } from '../data/biomes.js';
 import { ridgeHeights, buildBackdropTextures } from './backdropArt.js';
 import { buildShopTextures } from './shopArt.js';
+import { buildCampTextures } from './campArt.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 
 const OUT = 0x16141f;
@@ -31,10 +32,16 @@ function addFramesFromGrids(scene, key, grids) {
 export function buildClimberTexture(scene, look) {
   const key = 'climber';
   if (scene.textures.exists(key)) scene.textures.remove(key);
+  if (scene.textures.exists('climber_mask')) scene.textures.remove('climber_mask');
   const c = makeCanvas(FRAME_W * FRAME_NAMES.length, FRAME_H);
-  drawClimberSheet(c.getContext('2d'), look);
+  const m = makeCanvas(FRAME_W * FRAME_NAMES.length, FRAME_H);
+  drawClimberSheet(c.getContext('2d'), look, m.getContext('2d'));
   const tex = scene.textures.addCanvas(key, c);
-  FRAME_NAMES.forEach((name, i) => tex.add(name, 0, i * FRAME_W, 0, FRAME_W, FRAME_H));
+  const mask = scene.textures.addCanvas('climber_mask', m);
+  FRAME_NAMES.forEach((name, i) => {
+    tex.add(name, 0, i * FRAME_W, 0, FRAME_W, FRAME_H);
+    mask.add(name, 0, i * FRAME_W, 0, FRAME_W, FRAME_H);
+  });
   return POSES;
 }
 
@@ -155,6 +162,40 @@ function decorGrids() {
   crystal.line(3, 12, 2, 4, 0xb8a8f0, 2); crystal.line(5, 12, 6, 1, 0xd8c8ff, 2); crystal.line(7, 12, 8, 6, 0x9a88e0, 1);
   crystal.set(6, 1, 0xffffff); crystal.set(2, 4, 0xffffff);
   crystal.outline(0x2a2050); d.crystals = crystal;
+  // Stone Wall: an old iron piton with a faded rope loop hanging from it.
+  const piton = new PixelGrid(10, 11);
+  piton.rect(3, 0, 5, 2, 0x8a5a3a); piton.set(4, 0, 0xc0884e); piton.rect(5, 2, 1, 2, 0x6a4a34);
+  for (let a = 0; a < 20; a++) piton.set(Math.round(5 + Math.sin(a / 20 * Math.PI) * 3.5), 3 + Math.round(a / 20 * 7), a % 3 ? 0xd8b060 : 0xa87a3a);
+  piton.outline(OUT); d.piton = piton;
+  // Above the Clouds: a twig nest with two speckled eggs.
+  const nest = new PixelGrid(12, 7);
+  nest.ellipse(6, 5, 5.5, 2, 0x8a6a44); nest.set(6, 6, 0x5a4430);
+  for (let x = 1; x < 11; x += 2) nest.set(x, 4 + (x % 3 ? 0 : 1), 0xb48a5a);
+  nest.ellipse(4.5, 3, 1.6, 1.8, 0xe8f0f8); nest.ellipse(7.5, 2.8, 1.6, 1.8, 0xd8e8f8); nest.set(4, 2, 0x8aa0c0); nest.set(8, 3, 0x8aa0c0);
+  nest.outline(OUT); d.nest = nest;
+  // Obsidian Spires: a crack in the black glass with magma glowing inside.
+  const vent = new PixelGrid(11, 8);
+  vent.ellipse(5, 6, 5, 2, 0x1e1828); vent.line(2, 6, 8, 6, 0xd16a3c); vent.line(3, 5, 7, 5, 0xff9a3c); vent.set(5, 5, 0xffe08a);
+  vent.set(4, 3, 0x5a4a6a); vent.set(6, 2, 0x4a3e5a); vent.set(5, 0, 0x3a3048);
+  vent.outline(0x0b0a10); d.vent = vent;
+  // Storm Crown: a lightning-blackened iron chain hanging from a bolt.
+  const chain = new PixelGrid(7, 16);
+  chain.rect(1, 0, 5, 2, 0x5a6278); chain.set(2, 0, 0x9aa4bc);
+  for (let k = 0; k < 6; k++) { const y = 2 + k * 2; if (k % 2) { chain.set(2, y, 0x7a84a0); chain.set(4, y, 0x7a84a0); chain.set(3, y + 1, 0x4a5268); } else { chain.rect(3, y, 1, 2, 0x8a94b0); } }
+  chain.set(3, 14, 0xffe45a); chain.outline(0x0c0e14); d.chain = chain;
+  // Aurora Ridge: frost flowers, feathery ice fronds that catch the green light.
+  const fern2 = new PixelGrid(11, 8);
+  for (let i = 0; i < 5; i++) { fern2.line(5, 7, 1 + i * 2, 1 + Math.abs(2 - i), i % 2 ? 0xe8fff6 : 0x9ad8c8); fern2.set(1 + i * 2, 1 + Math.abs(2 - i), 0xffffff); }
+  fern2.set(5, 3, 0x5af0a0); fern2.set(3, 2, 0x9a70f0);
+  d.frostfern = fern2;
+  // Dragon's Spine: old bones (a curved rib and a little skull) and spilled gold.
+  const bones = new PixelGrid(14, 8);
+  for (let a = 0; a < 10; a++) bones.set(1 + a, 6 - Math.round(Math.sin(a / 9 * Math.PI) * 4), 0xf0e0c0);
+  bones.ellipse(11, 5, 2.4, 2, 0xe8d8b8); bones.set(10, 5, 0x3a1a18); bones.set(12, 5, 0x3a1a18); bones.rect(10, 7, 3, 1, 0xd8c0a0);
+  bones.outline(0x100606); d.bones = bones;
+  const coins = new PixelGrid(12, 6);
+  coins.ellipse(6, 4.5, 5.5, 1.8, 0xd8a030); coins.ellipse(5, 3, 3, 1.4, 0xf0c050); coins.set(4, 2, 0xffe08a); coins.set(8, 4, 0xffe08a); coins.set(2, 4, 0xff6a4a);
+  coins.outline(0x100606); d.coins = coins;
   // Base-camp tent
   const tent = new PixelGrid(28, 16);
   for (let y = 0; y < 13; y++) for (let x = 13 - y; x <= 14 + y; x++) tent.set(x, y + 2, x < 14 ? 0xe07a2e : 0xb85a1e);
@@ -267,6 +308,12 @@ function uiTextures(scene) {
   check.line(1, 3, 3, 5, 0xffffff); check.line(3, 5, 6, 1, 0xffffff); check.outline(OUT); addGrid(scene, 'icon_check', check);
   const cross = new PixelGrid(7, 7);
   cross.line(1, 1, 5, 5, 0xffffff); cross.line(5, 1, 1, 5, 0xffffff); cross.outline(OUT); addGrid(scene, 'icon_cross', cross);
+  // Still beats (the Dragon's Eye): a pause sign, "freeze".
+  for (const [key, n, bw] of [['still', 11, 3], ['still_s', 7, 2]]) {
+    const g = new PixelGrid(n, n);
+    g.rect(1, 1, bw, n - 2, 0xffffff); g.rect(n - 1 - bw, 1, bw, n - 2, 0xffffff);
+    g.outline(OUT); addGrid(scene, `icon_${key}`, g);
+  }
   const ring = new PixelGrid(21, 21);
   for (let a = 0; a < 96; a++) {
     const c = Math.cos(a / 96 * Math.PI * 2), sn = Math.sin(a / 96 * Math.PI * 2);
@@ -463,6 +510,55 @@ function paintWaterfall(scene) {
     for (let j = 0; j < len; j++) g.set(x, (y + j) % h, j === 0 ? 0xffffff : 0xd8eeff);
   }
   addGrid(scene, 'waterfall', g);
+  paintWaterfallEnds(scene);
+}
+
+// Where the water comes from (a cleft under a rock lip) and where it lands (a
+// foaming rock shelf with drips off the edges). Two frames each for the foam.
+function paintWaterfallEnds(scene) {
+  const rock = BIOMES.green.rock;
+  const WATER = 0x8ec5f0, EDGE = 0x5a8fc0, FOAM = [0xffffff, 0xd8eeff];
+  const tops = [0, 1].map((f) => {
+    const g = new PixelGrid(24, 14);
+    const rng = new SeededRandom(40 + f);
+    // A jutting rock lip with a dark cleft under it that the water spills from.
+    g.ellipse(12, 3, 11, 3, rock[2]);
+    g.ellipse(12, 2, 10, 2, rock[3]);
+    g.rect(5, 1, 14, 1, rock[4]);
+    for (let x = 2; x < 22; x++) if (!g.get(x, 6)) g.set(x, 6, OUT);
+    g.ellipse(12, 6, 7, 1.6, OUT);
+    // Water sheeting out of the cleft and narrowing into the falling column.
+    for (let y = 6; y < 14; y++) {
+      const half = y < 8 ? 6 : y < 10 ? 6 - (y - 7) : 5;
+      for (let x = 12 - half; x < 12 + half; x++) g.set(x, y, x === 12 - half || x === 11 + half ? EDGE : WATER);
+    }
+    for (let i = 0; i < 9; i++) g.set(rng.int(7, 16), rng.int(6, 9), FOAM[i % 2]);
+    return g;
+  });
+  addFramesFromGrids(scene, 'waterfall_top', tops);
+  const splashes = [0, 1].map((f) => {
+    const g = new PixelGrid(34, 20);
+    const rng = new SeededRandom(60 + f);
+    // The falling column running into the foam.
+    for (let y = 0; y < 8; y++) for (let x = 12; x < 22; x++) g.set(x, y, x === 12 || x === 21 ? EDGE : WATER);
+    // The rock shelf it lands on.
+    for (let x = 1; x < 33; x++) {
+      const taper = x < 4 || x > 29 ? 1 : 0;
+      g.set(x, 12 + taper, rock[4]);
+      for (let y = 13 + taper; y < 16; y++) g.set(x, y, rock[2]);
+      g.set(x, 16, OUT);
+    }
+    // A churning cloud of foam on the shelf: overlapping puffs, light blue
+    // underneath and white on top, shifting between the two frames.
+    const puffs = [[17, 9, 8, 4], [10 + f, 10, 5, 3], [24 - f, 10, 5, 3], [17 + (f ? 2 : -2), 6, 5, 3]];
+    puffs.forEach(([cx, cy, rx, ry]) => g.ellipse(cx, cy + 1, rx, ry, FOAM[1]));
+    puffs.forEach(([cx, cy, rx, ry]) => g.ellipse(cx - 0.5, cy, rx - 1, ry - 1, FOAM[0]));
+    for (let i = 0; i < 10; i++) g.set(rng.int(4, 29), rng.int(3, 11), FOAM[rng.int(0, 1)]);
+    // Drips off both ends of the shelf.
+    [[2, 17 + f], [3, 19 - f], [31, 18 - f], [30, 17 + f * 2]].forEach(([x, y]) => g.set(x, y, WATER));
+    return g;
+  });
+  addFramesFromGrids(scene, 'waterfall_splash', splashes);
 }
 
 // Big dark outcrop for the foreground parallax layer, with a lit rim in the
@@ -488,6 +584,66 @@ function foregroundRock(biome, seed) {
   return g;
 }
 
+// Animals on the wall (world/Critters.js). A perched bird, side view:
+// 0 sitting, 1 head down pecking, 2 wings up as it takes off.
+function perchFrames() {
+  const body = 0x3a3440, belly = 0xb8a890, beak = 0xe8b040;
+  return [0, 1, 2].map((f) => {
+    const g = new PixelGrid(9, 8);
+    g.ellipse(4, 5, 3, 2, body);
+    g.rect(3, 5, 3, 2, belly);
+    g.set(0, 4, body); g.set(1, 4, body);
+    const hy = f === 1 ? 4 : 2;
+    g.rect(6, hy, 2, 2, body);
+    g.set(8, hy + 1, beak);
+    g.set(7, hy, 0xf4f0e8);
+    g.set(4, 7, beak); g.set(5, 7, beak);
+    if (f === 2) { g.line(2, 3, 0, 0, body); g.line(5, 3, 4, 0, body); }
+    g.outline(OUT);
+    return g;
+  });
+}
+
+// A mountain goat, side view: 0 standing, 1 head turned to look back, 2 jumping.
+function goatFrames() {
+  const fur = 0xf0ece0, shade = 0xc8c0b0, horn = 0x4a4038, hoof = 0x2a2420;
+  return [0, 1, 2].map((f) => {
+    const g = new PixelGrid(16, 14);
+    const legY = f === 2 ? 8 : 9;
+    g.rect(3, 5, 9, 4, fur);
+    g.rect(3, 8, 9, 1, shade);
+    g.set(2, 5, fur); g.set(2, 6, shade);
+    if (f === 2) { g.line(4, 9, 2, 12, fur); g.line(10, 9, 13, 11, fur); g.set(2, 12, hoof); g.set(13, 11, hoof); }
+    else {
+      [4, 6, 9, 11].forEach((x) => { g.rect(x, legY, 1, 13 - legY, fur); g.set(x, 13, hoof); });
+    }
+    const hx = f === 1 ? 1 : 11;
+    g.rect(hx, 2, 3, 3, fur);
+    g.set(f === 1 ? hx : hx + 2, 5, fur);
+    g.set(f === 1 ? hx + 1 : hx + 1, 3, OUT);
+    g.line(hx + 1, 2, f === 1 ? hx + 3 : hx - 1, 0, horn);
+    g.set(f === 1 ? hx + 1 : hx + 1, 6, shade);
+    g.outline(OUT);
+    return g;
+  });
+}
+
+// A carved pumpkin for Halloween at base camp: 0 and 1 flicker the candle.
+function pumpkinFrames() {
+  return [0, 1].map((f) => {
+    const g = new PixelGrid(11, 10);
+    g.ellipse(5.5, 6, 5, 3.6, 0xe8761c);
+    g.rect(4, 3, 3, 7, 0xf08a2a);
+    g.set(2, 6, 0xb85a14); g.set(8, 6, 0xb85a14);
+    g.rect(5, 0, 1, 3, 0x4a6a2a); g.set(6, 1, 0x6a9a3a);
+    const lit = f ? 0xffe070 : 0xffc040;
+    g.set(3, 5, lit); g.set(7, 5, lit);
+    g.rect(3, 7, 5, 1, lit); g.set(4, 8, lit); g.set(6, 8, lit);
+    g.outline(OUT);
+    return g;
+  });
+}
+
 export function buildAllTextures(scene, look) {
   for (const biome of Object.values(BIOMES)) addGrid(scene, `fg_${biome.id}`, foregroundRock(biome, biome.from + 17));
   buildClimberTexture(scene, look);
@@ -500,8 +656,12 @@ export function buildAllTextures(scene, look) {
   const decor = decorGrids();
   for (const [k, g] of Object.entries(decor)) addGrid(scene, `decor_${k}`, g);
   addFramesFromGrids(scene, 'decor_flags', flagsFrames());
+  buildCampTextures(scene);
   addFramesFromGrids(scene, 'bird', birdFrames(false));
   addFramesFromGrids(scene, 'eagle', birdFrames(true));
+  addFramesFromGrids(scene, 'critter_bird', perchFrames());
+  addFramesFromGrids(scene, 'critter_goat', goatFrames());
+  addFramesFromGrids(scene, 'season_pumpkin', pumpkinFrames());
 
   paintRange(scene, 'bg_summits', { w: 480, h: 110, seed: 11, base: 50, amp: 34, rough: 0.55, body: 0xdfe6f2, shadow: 0xc6d0e2, snow: 0xffffff, snowLine: 70 });
   paintRange(scene, 'bg_far', { w: 480, h: 160, seed: 21, base: 60, amp: 46, rough: 0.56, body: 0xaebbd2, shadow: 0x8e9cb8, snow: 0xf4f8ff, snowLine: 62 });
@@ -515,4 +675,26 @@ export function buildAllTextures(scene, look) {
   paintMist(scene);
   paintVignette(scene);
   paintWaterfall(scene);
+  paintFxBits(scene);
+}
+
+// Small white particle shapes for trails and hit effects (tinted in use).
+function paintFxBits(scene) {
+  const W = 0xffffff;
+  const heart = new PixelGrid(7, 6);
+  [[1, 0], [2, 0], [4, 0], [5, 0]].forEach(([x, y]) => heart.set(x, y, W));
+  heart.rect(0, 1, 7, 2, W); heart.rect(1, 3, 5, 1, W); heart.rect(2, 4, 3, 1, W); heart.set(3, 5, W);
+  addGrid(scene, 'fx_heart', heart);
+  const note = new PixelGrid(6, 8);
+  note.rect(3, 0, 1, 6, W); note.rect(4, 0, 2, 1, W); note.set(5, 1, W); note.rect(0, 5, 3, 3, W); note.set(0, 5, null); note.set(2, 7, null);
+  addGrid(scene, 'fx_note', note);
+  const star = new PixelGrid(5, 5);
+  star.rect(2, 0, 1, 5, W); star.rect(0, 2, 5, 1, W); star.rect(1, 1, 3, 3, W);
+  addGrid(scene, 'fx_star', star);
+  const shard = new PixelGrid(3, 5);
+  shard.rect(1, 0, 1, 5, W); shard.rect(0, 1, 3, 2, W);
+  addGrid(scene, 'fx_shard', shard);
+  const leaf = new PixelGrid(4, 3);
+  leaf.rect(1, 0, 2, 1, W); leaf.rect(0, 1, 4, 1, W); leaf.rect(1, 2, 2, 1, W);
+  addGrid(scene, 'fx_leaf', leaf);
 }

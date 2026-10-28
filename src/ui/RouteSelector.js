@@ -1,10 +1,14 @@
-import { PixelText, COLORS, drawPanel } from './PixelText.js';
-import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
+import { PixelText, COLORS, drawPanel, drawFrame } from './PixelText.js';
+import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { toCss } from '../utils/color.js';
 import { THERMAL_TINT } from './ComboPrompt.js';
 
-const CARD_W = 104, CARD_H = 34;
+// Narrower cards in portrait so three still fit side by side.
+const CARD_W = IS_PORTRAIT ? 94 : 104, CARD_H = 34;
+const TAG_CHARS = IS_PORTRAIT ? 21 : 24;
+// A tap picks a route; a swipe that starts on a card or ring is a swipe, not a tap.
+const tapped = (fn) => (p) => { if (p.getDistance() < 12) fn(); };
 // The prism beam's colours, cycling along its length.
 const PRISM = [0xffc8f0, 0xfff1a8, 0xb8fff4, 0xa8c8ff, 0xd8b8ff];
 
@@ -39,13 +43,21 @@ export class RouteSelector {
       const color = this.colorOf(r);
       const ring = this.scene.add.image(r.target.x, r.target.y + 3, 'ring').setDepth(DEPTH.routeMarks).setTint(color);
       const num = new PixelText(this.scene, r.target.x, r.target.y - 18, `${i + 1}`, { color: toCss(color) }).setOrigin(0.5, 0).setDepth(DEPTH.routeMarks);
-      ring.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.onPick(i, true));
+      ring.setInteractive({ useHandCursor: true }).on('pointerup', tapped(() => this.onPick(i, true)));
       const cx = x0 + i * (CARD_W + 6);
       const cy = GAME_HEIGHT - CARD_H - 8;
       const head = new PixelText(this.scene, cx + 6, cy + 5, `${i + 1} ${r.label}`, { color: toCss(color) });
       const gain = new PixelText(this.scene, cx + 6, cy + 15, `↑${r.heightGain.toFixed(1)}M  GRIP -${Math.round(r.gripCost)}`, { color: COLORS.text });
       const HAZ = { icy: 'ICY: TIGHT TIMING', loose: 'LOOSE: MISSES HURT', crumbling: 'CRUMBLES: BE QUICK' };
-      const tricks = (r.tags || []).join(' ');
+      // As many tricks as fit on the card; the rest are counted.
+      let tricks = '';
+      const tagList = r.tags || [];
+      for (let k = 0; k < tagList.length; k++) {
+        const more = tagList.length - k - 1;
+        const next = `${tricks ? tricks + ' ' : ''}${tagList[k]}`;
+        if (`${r.inputs} ${next}${more ? ' +' + more : ''}`.length > TAG_CHARS) { tricks += ` +${tagList.length - k}`; break; }
+        tricks = next;
+      }
       const crampons = r.hazard === 'icy' && this.scene.gear && this.scene.gear.crampons;
       const tag = crampons ? 'ICY: CRAMPONS ON' : r.hazard ? HAZ[r.hazard] : r.target.kind === 'jug' ? 'JUG: SHAKE OUT' : tricks ? `${r.inputs} ${tricks}` : r.toLedge ? 'REST AHEAD' : `${r.inputs} MOVES`;
       const tagColor = crampons ? COLORS.green : r.hazard ? COLORS.red : r.target.kind === 'jug' ? COLORS.green : tricks ? COLORS.blue : COLORS.dim;
@@ -53,7 +65,7 @@ export class RouteSelector {
       sub.subText = tag; sub.subColor = tagColor;
       [head, gain, sub].forEach((t) => t.setScrollFactor(0).setDepth(DEPTH.hud + 1));
       const zone = this.scene.add.zone(cx, cy, CARD_W, CARD_H).setOrigin(0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => this.onPick(i, true));
+      zone.on('pointerup', tapped(() => this.onPick(i, true)));
       zone.on('pointermove', () => { if (this.selected !== i) this.onPick(i, false); });
       const gem = r.gem ? this.scene.add.image(cx + CARD_W - 30, cy + 7, `gem_${r.gem.type}`).setScrollFactor(0).setDepth(DEPTH.hud + 1) : null;
       // Thermal routes: a warm up-arrow on the card and next to the target hold.
@@ -61,6 +73,11 @@ export class RouteSelector {
         this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(THERMAL_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 1),
         this.scene.add.image(r.target.x + 9, r.target.y - 14, 'arrow_s_U').setTint(THERMAL_TINT).setDepth(DEPTH.routeMarks),
       ] : [];
+      // Still beats ahead: a red pause sign on the card and by the hold.
+      if ((r.tags || []).includes('STILL')) {
+        thermal.push(this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, 'icon_still_s').setTint(0xf0644b).setScrollFactor(0).setDepth(DEPTH.hud + 1));
+        thermal.push(this.scene.add.image(r.target.x + 10, r.target.y - 14, 'icon_still_s').setTint(0xf0644b).setDepth(DEPTH.routeMarks));
+      }
       this.objects.push({ ring, num, head, gain, sub, zone, cx, cy, route: r, gem, thermal });
     });
     const mods = routes[0] && routes[0].mods;
@@ -68,7 +85,7 @@ export class RouteSelector {
     this.lit = -1;
     const hint = mods ? mods.hint : prism ? 'PRISM LIGHT: CLIMB THE LIT ROUTE FOR FREE' : null;
     this.mods = hint ? { hint } : null;
-    this.hint = new PixelText(this.scene, GAME_WIDTH / 2, GAME_HEIGHT - 8 - CARD_H - 13, hint || '← → CHOOSE    ↑ / SPACE CLIMB', { color: hint ? (mods ? COLORS.blue : '#b8fff4') : COLORS.faint }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
+    this.hint = new PixelText(this.scene, GAME_WIDTH / 2, GAME_HEIGHT - 8 - CARD_H - 13, hint || (IS_TOUCH ? 'SWIPE ← → CHOOSE    SWIPE ↑ CLIMB' : '← → CHOOSE    ↑ / SPACE CLIMB'), { color: hint ? (mods ? COLORS.blue : '#b8fff4') : COLORS.faint }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
     this.redraw();
   }
 
@@ -96,7 +113,7 @@ export class RouteSelector {
       const sel = i === this.selected;
       const color = this.colorOf(o.route);
       const dy = sel ? -3 : 0;
-      drawPanel(g, o.cx, o.cy + dy, CARD_W, CARD_H, { alpha: sel ? 0.92 : 0.7, highlight: sel ? color : null });
+      drawFrame(g, o.cx, o.cy + dy, CARD_W, CARD_H, { accent: color, alpha: sel ? 0.94 : 0.75, glow: sel });
       // Difficulty pips
       for (let p = 0; p < 3; p++) {
         g.fillStyle(p < o.route.difficulty ? color : 0x3a3550, 1);
@@ -176,7 +193,7 @@ export class RouteSelector {
   }
 
   hide() {
-    this.objects.forEach((o) => [o.ring, o.num, o.head, o.gain, o.sub, o.zone, o.gem, ...(o.thermal || [])].forEach((x) => x && x.destroy()));
+    this.objects.forEach((o) => [o.ring, o.num, o.head, o.gain, o.sub, o.zone, o.gem, ...(o.thermal || [])].forEach((x) => { if (x) { this.scene.tweens.killTweensOf(x); x.destroy(); } }));
     this.objects = [];
     if (this.hint) { this.hint.destroy(); this.hint = null; }
     this.cards.clear();

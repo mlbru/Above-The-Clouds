@@ -53,13 +53,23 @@ export class Background {
     });
     this.birds = [];
     this.eagle = null;
+    // Sky life of the high biomes (see updateSkyLife).
+    this.skyFx = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.far + 9);
+    // Storm Crown: lightning flickering inside the thunderheads (see updateSkyLife).
+    this.stormAnvils = this.biomeLayers.find((r) => r.key === 'bg_storm_anvils');
+    this.stormGlow = this.stormAnvils ? [0, 1, 2].map(() => scene.add.image(0, 0, 'bg_storm_anvils').setOrigin(0, 0).setScrollFactor(0)
+      .setDepth(this.stormAnvils.depth).setBlendMode('ADD').setTint(0xc8d4ff).setVisible(false)) : [];
+    this.bats = [];
+    this.smoke = [];
+    this.streaks = [];
+    this.flicker = 0;
     this.time = 0;
     this.floatersVisible = false;
     this.auroraVisible = false;
   }
 
   // mix: biomeMixAt() at the camera height. whiteout: 0..1 storm strength.
-  update(dt, alt, day, ambience, { mix = null, whiteout = 0 } = {}) {
+  update(dt, alt, day, ambience, { mix = null, whiteout = 0, storm = 0 } = {}) {
     this.time += dt;
     const light = day.light;
     const weight = (id) => (mix ? (mix.a.id === id ? 1 - mix.t : 0) + (mix.b.id === id ? mix.t : 0) : 0);
@@ -77,6 +87,11 @@ export class Background {
       skyTop = lerpColor(skyTop, 0xc8d4e4, k * 0.6);
       skyBottom = lerpColor(skyBottom, 0xf0f4fa, k * 0.7);
     }
+    // A raging storm on the Storm Crown turns the sky to slate.
+    if (storm > 0) {
+      skyTop = lerpColor(skyTop, 0x141824, storm * 0.8);
+      skyBottom = lerpColor(skyBottom, 0x3a4058, storm * 0.7);
+    }
     const key = `${skyTop}-${skyBottom}`;
     if (key !== this.skyKey) {
       this.skyKey = key;
@@ -92,6 +107,8 @@ export class Background {
       g.fillRect(0, 200, GAME_WIDTH, GAME_HEIGHT - 200);
     }
     this.stars.setAlpha(Math.max(0, day.night - 0.2) * 1.2).setY(Math.round(-10 + (alt * 0.01) % 10));
+    const overcast = mix ? Math.min(1, [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.overcast || 0) * weight(b.id), 0) + storm) : 0;
+    this.sun.setAlpha(1 - overcast * 0.9);
     if (day.sun) this.sun.setVisible(true).setPosition(Math.round(day.sun.x), Math.round(day.sun.y + Math.min(40, alt * 0.01))).setTint(lerpColor(0xffffff, 0xffa060, Math.max(0, 1 - day.sun.y / 150)));
     else this.sun.setVisible(false);
     if (day.moon) this.moon.setVisible(true).setPosition(Math.round(day.moon.x), Math.round(day.moon.y));
@@ -107,7 +124,22 @@ export class Background {
       r.fillRect.setVisible(visible && r.fill !== null && y + h < GAME_HEIGHT).setY(y + h).setAlpha(alpha);
       if (r.fill !== null) r.fillRect.fillColor = multiply(r.fill, tint);
     };
-    for (const r of this.ranges) placeRange(r, 1);
+    // An expedition theme can scorch the distant hills or drop them altogether
+    // (weighted, so the expedition picker can blend from one theme to the next).
+    let hide = 0, scorch = 0xffffff;
+    for (const th of mix ? new Set([mix.a, mix.b]) : []) {
+      if (!th.special) continue;
+      const w = weight(th.id);
+      if (th.hideRanges) hide += w * Math.min(1, alt / 25);
+      if (th.rangeTint) scorch = lerpColor(scorch, th.rangeTint, w);
+    }
+    for (const r of this.ranges) {
+      placeRange(r, Math.max(0, 1 - hide));
+      if (scorch !== 0xffffff) {
+        r.img.setTint(multiply(r.img.tintTopLeft, scorch));
+        if (r.fill !== null) r.fillRect.fillColor = multiply(r.fillRect.fillColor, scorch);
+      }
+    }
     for (const r of this.biomeLayers) {
       const w = weight(r.biome);
       placeRange(r, w, w > 0 ? biomeLocalAlt(alt, r.biome) : alt);
@@ -124,29 +156,123 @@ export class Background {
     }
 
     // Cloud sea appears once you climb above the cloud layer (~480 m).
-    const seaAlpha = Math.max(0, Math.min(1, (alt - 470) / 30));
-    const seaY = Math.round(Math.min(GAME_HEIGHT - 48, 150 + Math.max(0, alt - 480) * 0.25));
-    this.cloudSea.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY).setTint(lerpColor(light, 0xffffff, 0.15));
+    // (An expedition theme can bring the sea lower: the sky islands float over it.)
+    const seaFrom = (mix && (mix.t > 0.5 ? mix.b : mix.a).seaFrom) ?? 470;
+    const seaAlpha = Math.max(0, Math.min(1, (alt - seaFrom) / 30));
+    const seaY = Math.round(Math.min(GAME_HEIGHT - 48, 150 + Math.max(0, alt - seaFrom - 10) * 0.25));
+    // Each high biome colours its sea of clouds: storm grey, dusk violet, ember red.
+    let sea = 0xffffff;
+    if (mix) for (const b of new Set([mix.a, mix.b])) if (b.sea) sea = lerpColor(sea, b.sea, weight(b.id));
+    const seaTint = multiply(lerpColor(light, 0xffffff, 0.15), sea);
+    this.cloudSea.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY).setTint(seaTint);
     this.cloudSea.tilePositionX += dt * 0.004;
     this.cloudSeaFill.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY + 88);
-    this.cloudSeaFill.fillColor = multiply(0xbcc6de, light);
+    this.cloudSeaFill.fillColor = multiply(multiply(0xbcc6de, light), sea);
 
-    // Floating stones: a rare high-altitude formation.
-    const fa = Math.max(0, Math.min(1, (alt - 520) / 40));
+    // Floating stones: they only drift where the air holds them up (biomes
+    // with `floaters`: above the clouds and among the crystals).
+    const floatW = mix ? [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.floaters ? weight(b.id) : 0), 0) : 0;
+    const fa = Math.max(0, Math.min(1, (alt - 520) / 40)) * floatW;
     this.floatersVisible = fa > 0.9;
     this.floaters.forEach((f) => {
       f.setVisible(fa > 0).setAlpha(fa).setTint(light);
       f.setPosition(Math.round(f.baseX + Math.sin(this.time / 4000 + f.phase) * 6), Math.round(f.baseY + Math.sin(this.time / 1700 + f.phase) * 3));
     });
 
-    this.updateAurora(day, alt);
+    // The Aurora Ridge keeps the northern lights up, day or night.
+    const auroraBiome = mix ? [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.aurora || 0) * weight(b.id), 0) : 0;
+    this.updateAurora(day, alt, auroraBiome);
     this.updateBirds(dt, ambience, day, light);
+    this.updateSkyLife(dt, weight, light);
   }
 
-  updateAurora(day, alt) {
+  // Something alive in every high sky: bats in the Obsidian Spires, shooting
+  // stars over the Aurora Ridge, smoke from the dragon's nostrils, and storm
+  // light flickering inside the thunderheads of the Storm Crown.
+  updateSkyLife(dt, weight, light) {
+    const g = this.skyFx;
+    g.clear();
+    const chance = (perSec) => Math.random() < (dt / 1000) * perSec;
+    // Bats: a jittery little swarm, dark against the dusk.
+    if (weight('obsidian') > 0.5 && this.bats.length === 0 && chance(0.12)) {
+      const dir = Math.random() < 0.5 ? 1 : -1, y0 = 30 + Math.random() * 70, n = 4 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < n; i++) {
+        const b = this.scene.add.image(dir > 0 ? -10 - i * 7 : GAME_WIDTH + 10 + i * 7, y0 + (Math.random() - 0.5) * 20, 'bird', 0).setScrollFactor(0).setDepth(DEPTH.mid + 5).setScale(0.75);
+        b.dir = dir; b.phase = Math.random() * 10; b.baseY = b.y; b.speed = 0.05 + Math.random() * 0.02;
+        this.bats.push(b);
+      }
+    }
+    this.bats.forEach((b) => {
+      b.x += b.dir * dt * b.speed;
+      b.y = b.baseY + Math.sin(this.time / 140 + b.phase) * 5 + Math.sin(this.time / 53 + b.phase * 3) * 2;
+      b.setFrame(Math.floor(this.time / 70 + b.phase) % 2).setTint(0x1a1222);
+    });
+    this.bats = this.bats.filter((b) => { const gone = b.x < -60 || b.x > GAME_WIDTH + 60; if (gone) b.destroy(); return !gone; });
+
+    // Shooting stars over the Aurora Ridge.
+    if (weight('aurora') > 0.5 && chance(0.35)) {
+      this.streaks.push({ x: 40 + Math.random() * (GAME_WIDTH - 80), y: 10 + Math.random() * 50, dx: (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random()), life: 0 });
+    }
+    this.streaks = this.streaks.filter((s) => {
+      s.life += dt;
+      const p = s.life / 650;
+      if (p >= 1) return false;
+      const len = 18 * Math.sin(p * Math.PI);
+      for (let k = 0; k < len; k++) {
+        g.fillStyle(k < 2 ? 0xffffff : 0xc8ffe8, (1 - k / len) * (1 - p * 0.6));
+        g.fillRect(Math.round(s.x + s.dx * (p * 40 - k * 0.5)), Math.round(s.y + p * 22 - k * 0.45), 1, 1);
+      }
+      return true;
+    });
+
+    // Dragon smoke: dark plumes rise slowly from behind the far ridge.
+    if (weight('dragon') > 0.5 && this.smoke.length < 7 && chance(0.6)) {
+      const p = this.scene.add.image(Math.random() * GAME_WIDTH, 150 + Math.random() * 30, 'puff').setScrollFactor(0).setDepth(DEPTH.far + 7)
+        .setScale(1.2 + Math.random() * 1.2).setAlpha(0).setTint(0x3a2626);
+      p.life = 0; p.span = 7000 + Math.random() * 4000; p.vx = (Math.random() - 0.3) * 0.004;
+      this.smoke.push(p);
+    }
+    this.smoke = this.smoke.filter((p) => {
+      p.life += dt;
+      const t = p.life / p.span;
+      if (t >= 1 || weight('dragon') < 0.2) { p.destroy(); return false; }
+      p.y -= dt * 0.006; p.x += dt * p.vx;
+      p.setAlpha(Math.sin(t * Math.PI) * 0.4).setScale(p.scale + dt * 0.00012);
+      return true;
+    });
+
+    // Storm Crown: light flickers deep inside the far thunderheads.
+    // The thunderheads themselves light up (an additive copy of their layer,
+    // cropped to a stretch of sky with softer, wider copies around it), so the
+    // glow always has the shape of the clouds.
+    if (weight('storm') > 0.5 && this.flicker <= 0 && chance(0.25)) this.startFlicker();
+    const anvils = this.stormAnvils;
+    if (this.flicker > 0 && anvils && anvils.img.visible) {
+      this.flicker -= dt;
+      const a = (Math.floor(this.flicker / 50) % 2 ? 0.55 : 0.18) * weight('storm');
+      this.stormGlow.forEach((img, i) => img.setVisible(true).setY(anvils.img.y).setAlpha(a * [1, 0.55, 0.3][i]));
+    } else {
+      this.flicker = Math.max(0, this.flicker - dt);
+      this.stormGlow.forEach((img) => img.setVisible(false));
+    }
+  }
+
+  startFlicker() {
+    if (!this.stormAnvils) return;
+    this.flicker = 260;
+    const cx = 60 + Math.random() * (GAME_WIDTH - 120);
+    const h = this.stormAnvils.img.height;
+    [60, 110, 170].forEach((w, i) => {
+      const half = w / 2 + Math.random() * 16;
+      const l = Math.max(0, Math.round(cx - half)), r = Math.min(GAME_WIDTH, Math.round(cx + half));
+      this.stormGlow[i].setCrop(l, 0, r - l, h);
+    });
+  }
+
+  updateAurora(day, alt, biome = 0) {
     const g = this.aurora;
     g.clear();
-    const strength = Math.max(0, day.night - 0.6) * 2.5 * Math.max(0, Math.min(1, (alt - 650) / 60));
+    const strength = Math.max(Math.max(0, day.night - 0.6) * 2.5 * Math.max(0, Math.min(1, (alt - 650) / 60)), biome * 1.2);
     this.auroraVisible = strength > 0.5;
     if (strength <= 0) return;
     const t = this.time / 1000;

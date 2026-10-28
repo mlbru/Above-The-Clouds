@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
+import { GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
 import { measureLine } from '../utils/pixelFont.js';
-import { COSMETICS, SLOT_NAMES } from '../data/cosmetics.js';
+import { COSMETICS, SLOT_NAMES, RARITY, rarityOf, findCosmetic } from '../data/cosmetics.js';
+import { FRAME_W } from '../render/climberArt.js';
+import { Effects } from '../systems/Effects.js';
 import { GEAR, PERKS, PACK_SLOTS, GEAR_BY_ID } from '../data/shop.js';
 import { GEMS, GEM_ORDER } from '../data/gems.js';
 import { buildClimberTexture, buildPreviewTexture } from '../render/textures.js';
@@ -12,6 +14,15 @@ import { toCss } from '../utils/color.js';
 const GEM_TEXT = '#9fe8ff';
 const ROW_H = 12;
 const SLOTS = Object.keys(COSMETICS);
+
+// What Bram says at the stall.
+const BRAM_LINES = {
+  hello: ['WHAT WILL IT BE TODAY?', 'FRESH GOODS FROM THE VALLEY!', 'LOOKING SHARP, CLIMBER.', 'GEMS FOR GEAR, FAIR AND SQUARE.'],
+  buy: ['A FINE CHOICE!', 'PLEASURE DOING BUSINESS.', 'THAT ONE SUITS YOU.', "YOU WON'T REGRET IT!"],
+  poor: ['COME BACK WITH A FEW MORE GEMS.', 'THE MOUNTAIN PAYS IN GEMS. GO EARN SOME!'],
+  locked: ['THAT ONE HAS TO BE EARNED UP THERE.', 'NOT FOR SALE. THE MOUNTAIN DECIDES.'],
+};
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 // Breaks text into lines that fit `maxW` pixels in the pixel font.
 function wrap(text, maxW) {
@@ -49,8 +60,25 @@ export class ShopScene extends Phaser.Scene {
     this.msg = null;
     this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0a14, 0.93).setOrigin(0, 0).setInteractive();
     this.g = this.add.graphics();
-    this.listX = 12; this.listY = 46; this.listW = 292; this.listH = GAME_HEIGHT - 46 - 24;
-    this.detX = 310; this.detW = GAME_WIDTH - 310 - 12;
+    // Landscape: the list on the left, details on the right. Portrait: the
+    // header steps down below the touch buttons, the list on top, details below.
+    this.top = IS_PORTRAIT ? 30 : 0;
+    this.listX = 12; this.listY = IS_PORTRAIT ? this.top + 64 : 46;
+    this.listW = IS_PORTRAIT ? GAME_WIDTH - 24 : 292;
+    this.listH = IS_PORTRAIT ? 160 : GAME_HEIGHT - 46 - 24;
+    this.trader = this.mode === 'trader';
+    this.bramLine = pick(BRAM_LINES.hello);
+    // Effects for the live preview of trails and hit effects.
+    this.fx = new Effects(this);
+    this.stage = null;
+    this.stageT = 0;
+    if (IS_PORTRAIT) {
+      this.detX = 12; this.detW = GAME_WIDTH - 24;
+      this.detY = this.listY + this.listH + 6; this.detH = GAME_HEIGHT - 24 - this.detY;
+    } else {
+      this.detX = 310; this.detW = GAME_WIDTH - 310 - 12;
+      this.detY = this.listY; this.detH = this.listH;
+    }
     this.visibleRows = Math.floor((this.listH - 6) / ROW_H);
     this.input.keyboard.on('keydown', this.onKey, this);
     this.input.on('wheel', (p, objs, dx, dy) => this.moveScroll(dy > 0 ? 1 : -1));
@@ -75,10 +103,11 @@ export class ShopScene extends Phaser.Scene {
     return GEAR.map((item) => {
       const owned = p.owned(item.id);
       const packed = p.isPacked(item.id);
+      const locked = !owned && p.lockedReason(item);
       return {
         icon: item.icon, text: item.name,
-        right: `${packed ? '[PACKED] ' : ''}X${owned}  ◆${item.price}`,
-        rightColor: packed ? COLORS.green : owned ? COLORS.text : COLORS.dim,
+        right: locked ? 'LOCKED' : `${packed ? '[PACKED] ' : ''}X${owned}  ◆${item.price}`,
+        rightColor: locked ? COLORS.faint : packed ? COLORS.green : owned ? COLORS.text : COLORS.dim,
         priceColor: p.gems >= item.price ? GEM_TEXT : COLORS.red,
         item, kind: 'gear',
         onAction: () => this.buyGear(item),
@@ -94,8 +123,8 @@ export class ShopScene extends Phaser.Scene {
       const active = p.data.activePerk === perk.id;
       return {
         icon: perk.icon, text: perk.name,
-        right: active ? 'ACTIVE' : has ? 'OWNED' : `◆${perk.price}`,
-        rightColor: active ? COLORS.green : has ? COLORS.text : p.gems >= perk.price ? GEM_TEXT : COLORS.red,
+        right: active ? 'ACTIVE' : has ? 'OWNED' : p.lockedReason(perk) ? 'LOCKED' : `◆${perk.price}`,
+        rightColor: active ? COLORS.green : has ? COLORS.text : p.lockedReason(perk) ? COLORS.faint : p.gems >= perk.price ? GEM_TEXT : COLORS.red,
         item: perk, kind: 'perk',
         onAction: () => (has ? this.togglePerk(perk) : this.buyPerk(perk)),
       };
@@ -105,7 +134,10 @@ export class ShopScene extends Phaser.Scene {
   styleRows() {
     const slot = SLOTS[this.styleSlot];
     const cycle = (d) => { this.styleSlot = (this.styleSlot + d + SLOTS.length) % SLOTS.length; this.index = 0; this.scroll = 0; this.render(); };
-    const rows = [{ header: true, text: `< ${SLOT_NAMES[slot]}S >`, onLeft: () => cycle(-1), onRight: () => cycle(1), onAction: () => cycle(1) }];
+    const items = COSMETICS[slot];
+    const fresh = items.filter((c) => this.prog.isNew(c.id)).length;
+    const owned = items.filter((c) => this.prog.isUnlocked(c.id)).length;
+    const rows = [{ header: true, text: `< ${SLOT_NAMES[slot]}S  ${owned}/${items.length}${fresh ? `  ${fresh} NEW` : ''} >`, onLeft: () => cycle(-1), onRight: () => cycle(1), onAction: () => cycle(1) }];
     for (const item of COSMETICS[slot]) {
       const st = this.prog.cosmeticStatus(item);
       const wearing = this.prog.data.look[slot] === item.id;
@@ -116,6 +148,7 @@ export class ShopScene extends Phaser.Scene {
       else { right = st.price ? `◆${st.price}` : 'LOCKED'; color = COLORS.faint; }
       rows.push({
         swatch: this.swatchOf(slot, item), text: item.name, right, rightColor: color, item, slot, kind: 'style', status: st,
+        rarity: rarityOf(item), isNew: this.prog.isNew(item.id),
         onAction: () => this.styleAction(slot, item),
         onLeft: () => cycle(-1), onRight: () => cycle(1),
       });
@@ -131,23 +164,28 @@ export class ShopScene extends Phaser.Scene {
         const i = owned.findIndex((c) => c.id === cur.id);
         const next = owned[(i + d + owned.length) % owned.length];
         this.prog.setLook(slot, next.id);
+        this.prog.markSeen(next.id);
+        Audio.play('ui');
         this.render();
       };
+      const fresh = owned.filter((c) => this.prog.isNew(c.id)).length;
       return {
         swatch: this.swatchOf(slot, cur), text: SLOT_NAMES[slot], right: `< ${cur.name} >`, rightColor: COLORS.gold,
-        sub: `${owned.length}/${COSMETICS[slot].length}`, kind: 'wardrobe', slot,
+        sub: `${owned.length}/${COSMETICS[slot].length}`, kind: 'wardrobe', slot, item: cur, rarity: rarityOf(cur), newCount: fresh,
         onAction: () => step(1), onLeft: () => step(-1), onRight: () => step(1),
       };
     });
   }
 
   swatchOf(slot, item) {
-    if (slot === 'hat' && item.style === 'none') return null;
+    if (item.style === 'none') return null;
     if (slot === 'accessory') return null;
     return item.rainbow ? 'rainbow' : item.color;
   }
 
   // ---------------------------------------------------------------- actions
+  say(kind) { if (this.trader) this.bramLine = pick(BRAM_LINES[kind]); }
+
   message(text, color = COLORS.text) {
     this.msgText = text;
     this.msgColor = color;
@@ -157,9 +195,12 @@ export class ShopScene extends Phaser.Scene {
   }
 
   buyGear(item) {
-    if (!this.prog.buyGear(item.id)) { Audio.play('denied'); this.message('NOT ENOUGH GEMS', COLORS.red); }
+    const locked = this.prog.lockedReason(item);
+    if (locked) { Audio.play('denied'); this.message(locked, COLORS.red); }
+    else if (!this.prog.buyGear(item.id)) { Audio.play('denied'); this.say('poor'); this.message('NOT ENOUGH GEMS', COLORS.red); }
     else {
       Audio.play('buy');
+      this.say('buy');
       this.message(this.prog.isPacked(item.id) ? `BOUGHT ${item.name}. PACKED.` : `BOUGHT ${item.name}.`, COLORS.green);
     }
     this.render();
@@ -175,8 +216,10 @@ export class ShopScene extends Phaser.Scene {
   }
 
   buyPerk(perk) {
-    if (!this.prog.buyPerk(perk.id)) { Audio.play('denied'); this.message('NOT ENOUGH GEMS', COLORS.red); }
-    else { Audio.play('buy'); this.message(`${perk.name} LEARNED`, COLORS.green); }
+    const locked = this.prog.lockedReason(perk);
+    if (locked) { Audio.play('denied'); this.message(locked, COLORS.red); }
+    else if (!this.prog.buyPerk(perk.id)) { Audio.play('denied'); this.say('poor'); this.message('NOT ENOUGH GEMS', COLORS.red); }
+    else { Audio.play('buy'); this.say('buy'); this.message(`${perk.name} LEARNED`, COLORS.green); }
     this.render();
   }
 
@@ -194,8 +237,10 @@ export class ShopScene extends Phaser.Scene {
     else if (st.state === 'buy') {
       this.prog.buyCosmetic(slot, item);
       Audio.play('buy');
+      this.say('buy');
       this.message(`BOUGHT ${item.name}!`, COLORS.green);
-    } else { Audio.play('denied'); this.message(st.state === 'poor' ? 'NOT ENOUGH GEMS' : st.reason, COLORS.red); }
+      this.celebrateBuy(item);
+    } else { Audio.play('denied'); this.say(st.state === 'poor' ? 'poor' : 'locked'); this.message(st.state === 'poor' ? 'NOT ENOUGH GEMS' : st.reason, COLORS.red); }
     this.render();
   }
 
@@ -219,22 +264,36 @@ export class ShopScene extends Phaser.Scene {
     if (this.index >= this.scroll + this.visibleRows) this.scroll = this.index - this.visibleRows + 1;
     this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, rows.length - this.visibleRows)));
 
-    // Header: title and wallet.
-    this.text(14, 8, this.mode === 'trader' ? 'BASE CAMP TRADER' : 'WARDROBE', COLORS.gold).setScale(2);
-    const wallet = this.text(GAME_WIDTH - 14, 8, `${this.prog.gems}`, GEM_TEXT).setOrigin(1, 0).setScale(2);
-    this.add2(this.add.image(wallet.x - wallet.displayWidth - 10, 13, 'icon_gem').setScale(2));
+    // Header: title and wallet; at the trader, Bram behind his stall says something.
+    const T = this.top;
+    const wallet = this.text(GAME_WIDTH - 14, T + 8, `${this.prog.gems}`, GEM_TEXT).setOrigin(1, 0).setScale(2);
+    this.add2(this.add.image(wallet.x - wallet.displayWidth - 10, T + 13, 'icon_gem').setScale(2));
+    if (this.trader) {
+      drawPanel(this.g, 12, T + 3, 22, 22, { alpha: 0.95, highlight: 0xf2c14e });
+      this.add2(this.add.sprite(23, T + 14, 'bram_face', Math.floor(this.time.now / 140) % 26 === 0 ? 1 : 0));
+      this.text(40, T + 4, 'BRAM\'S STALL', COLORS.gold).setScale(2);
+      // Portrait: Bram's speech bubble gets its own row under the title.
+      const bx = IS_PORTRAIT ? 40 : 160, by = IS_PORTRAIT ? T + 24 : T + 4;
+      const bw = IS_PORTRAIT ? GAME_WIDTH - 12 - bx : wallet.x - wallet.displayWidth - 30 - bx;
+      const said = wrap(this.bramLine, bw - 10);
+      const lines = said.split('\n').length;
+      drawPanel(this.g, bx, by, bw, lines > 1 ? 20 : 13, { alpha: 0.95, fill: 0xf4efe4 });
+      this.g.fillStyle(0xf4efe4, 1).fillTriangle(bx, by + 5, bx - 5, by + 8, bx, by + 9);
+      this.text(bx + 5, by + 3, said, '#2a2440', { shadow: null });
+    } else this.text(14, T + 8, 'WARDROBE', COLORS.gold).setScale(2);
 
     // Tabs
     let tx = 14;
+    const ty = this.listY - 19;
     this.tabs.forEach((name, i) => {
       const sel = i === this.tab;
-      const t = this.text(tx + 6, 31, name, sel ? COLORS.gold : COLORS.dim);
-      drawPanel(this.g, tx, 27, t.width + 12, 13, { alpha: sel ? 0.95 : 0.6, highlight: sel ? 0xf2c14e : null });
-      const zone = this.add2(this.add.zone(tx, 27, t.width + 12, 13).setOrigin(0, 0).setInteractive({ useHandCursor: true }));
+      const t = this.text(tx + 6, ty + 4, name, sel ? COLORS.gold : COLORS.dim);
+      drawPanel(this.g, tx, ty, t.width + 12, 13, { alpha: sel ? 0.95 : 0.6, highlight: sel ? 0xf2c14e : null });
+      const zone = this.add2(this.add.zone(tx, ty, t.width + 12, 13).setOrigin(0, 0).setInteractive({ useHandCursor: true }));
       zone.on('pointerdown', () => this.setTab(i));
       tx += t.width + 16;
     });
-    this.text(GAME_WIDTH - 14, 31, 'Q / E  SWITCH TAB', COLORS.faint).setOrigin(1, 0);
+    if (!IS_TOUCH) this.text(GAME_WIDTH - 14, ty + 4, 'Q / E  SWITCH TAB', COLORS.faint).setOrigin(1, 0);
 
     // List
     drawPanel(this.g, this.listX, this.listY, this.listW, this.listH, { alpha: 0.9 });
@@ -244,7 +303,7 @@ export class ShopScene extends Phaser.Scene {
     if (end < rows.length) this.text(this.listX + this.listW - 10, this.listY + this.listH - 8, '↓', COLORS.dim);
 
     // Detail
-    drawPanel(this.g, this.detX, this.listY, this.detW, this.listH, { alpha: 0.9 });
+    drawPanel(this.g, this.detX, this.detY, this.detW, this.detH, { alpha: 0.9 });
     this.drawDetail(rows[this.index]);
 
     // Footer
@@ -254,7 +313,7 @@ export class ShopScene extends Phaser.Scene {
       STYLE: `↑↓ CHOOSE   ← → CLOTHING TYPE   SPACE ${this.mode === 'trader' ? 'BUY / WEAR' : 'WEAR'}   ESC LEAVE`,
       WARDROBE: '↑↓ CHOOSE   ← → CHANGE   ESC DONE',
     };
-    this.text(14, GAME_HEIGHT - 16, hints[this.tabName], COLORS.faint);
+    if (!IS_TOUCH) this.text(14, GAME_HEIGHT - 16, hints[this.tabName], COLORS.faint);
     const close = this.text(GAME_WIDTH - 14, GAME_HEIGHT - 16, this.mode === 'trader' ? '[ LEAVE ]' : '[ DONE ]', COLORS.green).setOrigin(1, 0);
     close.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.close());
   }
@@ -269,10 +328,13 @@ export class ShopScene extends Phaser.Scene {
     if (row.header) {
       this.text(x + w / 2, y + 2, row.text, sel ? COLORS.gold : COLORS.text).setOrigin(0.5, 0);
     } else {
+      // A stripe in the item's rarity colour.
+      if (row.rarity) { this.g.fillStyle(RARITY[row.rarity].color, 0.9); this.g.fillRect(x + 2, y, 1, ROW_H - 2); }
       if (row.icon) this.add2(this.add.image(x + 8, y + 5, row.icon));
-      if (row.swatch !== undefined && row.swatch !== null) this.drawSwatch(x + 4, y + 1, row.swatch);
-      this.text(x + 18, y + 2, row.text, sel ? COLORS.gold : COLORS.text);
-      if (row.sub) this.text(x + 90, y + 2, row.sub, COLORS.faint);
+      if (row.swatch !== undefined && row.swatch !== null) this.drawSwatch(x + 5, y + 1, row.swatch);
+      const name = this.text(x + 18, y + 2, row.text, sel ? COLORS.gold : COLORS.text);
+      if (row.isNew) this.text(name.x + name.width + 5, y + 2, 'NEW!', '#ff7ab8');
+      if (row.sub) this.text(x + 90, y + 2, row.newCount ? `${row.sub}  ${row.newCount} NEW` : row.sub, row.newCount ? '#ff7ab8' : COLORS.faint);
       this.text(x + w - 4, y + 2, row.right, row.rightColor).setOrigin(1, 0);
     }
     const zone = this.add2(this.add.zone(x, y - 1, w, ROW_H).setOrigin(0, 0).setInteractive({ useHandCursor: true }));
@@ -295,7 +357,7 @@ export class ShopScene extends Phaser.Scene {
 
   drawDetail(row) {
     const x = this.detX, w = this.detW, cx = x + w / 2;
-    let y = this.listY + 6;
+    let y = this.detY + 6;
     const line = (str, color = COLORS.text) => {
       const t = this.text(cx, y, wrap(str, w - 12), color, { align: 'center' }).setOrigin(0.5, 0);
       y += t.height + 4;
@@ -322,7 +384,11 @@ export class ShopScene extends Phaser.Scene {
       y += 26;
       line(row.kind === 'gear' ? `${row.item.name}  X${this.prog.owned(row.item.id)}` : row.item.name, COLORS.gold);
       line(row.item.text, COLORS.dim);
-      if (row.kind === 'gear') {
+      const locked = !this.prog.owned(row.item.id) && !this.prog.hasPerk(row.item.id) && this.prog.lockedReason(row.item);
+      if (locked) {
+        line(`LOCKED: ${locked}`, COLORS.red);
+        if (row.kind === 'gear') { this.drawPackSlots(y); y += 18; }
+      } else if (row.kind === 'gear') {
         buttons(
           [`BUY ◆${row.item.price}`, this.prog.gems >= row.item.price ? GEM_TEXT : COLORS.red, () => this.buyGear(row.item)],
           [this.prog.isPacked(row.item.id) ? 'UNPACK' : 'PACK', COLORS.green, () => this.togglePack(row.item)],
@@ -335,18 +401,19 @@ export class ShopScene extends Phaser.Scene {
         else button(this.prog.data.activePerk === row.item.id ? 'ACTIVE (TURN OFF)' : 'MAKE ACTIVE', COLORS.green, () => this.togglePerk(row.item));
         line('ONE PERK CAN BE ACTIVE AT A TIME.', COLORS.faint);
       }
+      if (row.item.lift && !locked) line('ONE TICKET AT A TIME. PACKING ONE SWAPS THE OTHER.', COLORS.blue);
       if (!this.gearAllowed) line('ONLY WORKS IN NORMAL MODE.', COLORS.red);
       else if (this.departed && row.kind === 'gear') line('THIS RUN HAS STARTED: NEW GEAR GOES WITH YOUR NEXT RUN.', COLORS.blue);
       else line(row.kind === 'gear' ? 'USED UP WHEN YOU LEAVE BASE CAMP. NORMAL MODE ONLY.' : 'NORMAL MODE ONLY.', COLORS.faint);
     } else if (row.kind === 'style' || row.kind === 'wardrobe' || row.header) {
       const look = { ...this.prog.data.look };
       if (row.kind === 'style') look[row.slot] = row.item.id;
-      buildPreviewTexture(this, 'climber_preview', look);
-      const scale = this.listH > 190 ? 2 : 1.5;
-      this.add2(this.add.image(cx, y + 2, 'climber_preview', 'look').setOrigin(0.5, 0).setScale(scale));
-      y += Math.round(56 * scale) + 2;
+      this.drawStage(x + 5, y - 1, w - 10, look, row.slot);
+      y += this.stage.h + 3;
       if (row.kind === 'style') {
+        this.prog.markSeen(row.item.id);
         line(row.item.name, COLORS.gold);
+        line(RARITY[row.rarity].name, toCss(RARITY[row.rarity].color));
         const st = row.status;
         if (this.prog.data.look[row.slot] === row.item.id) line('WEARING', COLORS.green);
         else if (st.state === 'owned') button('WEAR', COLORS.green, () => this.styleAction(row.slot, row.item));
@@ -354,14 +421,78 @@ export class ShopScene extends Phaser.Scene {
         else if (this.mode === 'trader') button(`BUY  ◆${st.price}`, st.state === 'buy' ? GEM_TEXT : COLORS.red, () => this.styleAction(row.slot, row.item));
         else line(`◆${st.price} AT THE BASE CAMP TRADER`, GEM_TEXT);
       } else if (row.kind === 'wardrobe') {
+        line(row.item.name, toCss(RARITY[row.rarity].color));
         const total = Object.values(COSMETICS).flat();
         line(`OWNED ${total.filter((c) => this.prog.isUnlocked(c.id)).length}/${total.length}`, COLORS.dim);
       } else line('PICK A CLOTHING TYPE', COLORS.dim);
     }
     if (this.msgText && this.time.now - this.msgT < 2600) {
-      this.text(cx, this.listY + this.listH - 12, this.msgText, this.msgColor).setOrigin(0.5, 0);
+      this.text(cx, this.detY + this.detH - 12, this.msgText, this.msgColor).setOrigin(0.5, 0);
     }
     if (this.tabName === 'WARDROBE' || (this.tabName === 'STYLE' && row.header)) this.drawGemCollection();
+  }
+
+  // A little sky-and-ledge stage with the climber on it. Trails and hit
+  // effects play on it live (see update()).
+  drawStage(x, y, w, look, slot) {
+    const h = this.detH > 190 ? 122 : 96;
+    const scale = h > 100 ? 1.5 : 1.25;
+    const g = this.g;
+    const sky = [0x2a4a7a, 0x3a5f92, 0x5079aa, 0x6c95c2, 0x8fb4d8];
+    sky.forEach((c, i) => { g.fillStyle(c, 1); g.fillRect(x, y + Math.round((i * h) / sky.length), w, Math.ceil(h / sky.length)); });
+    g.fillStyle(0xdfe6f2, 0.55);
+    [[0.2, 0.22, 14], [0.7, 0.14, 18], [0.85, 0.4, 10]].forEach(([fx, fy, r]) => { g.fillEllipse(x + w * fx, y + h * fy, r * 2, r * 0.8); });
+    g.fillStyle(0x7f8ca6, 1);
+    for (let i = 0; i < w; i++) {
+      const top = y + h - 26 - Math.round(Math.abs(Math.sin(i / 17)) * 14 + Math.sin(i / 5) * 2);
+      g.fillRect(x + i, top, 1, y + h - 10 - top);
+    }
+    g.fillStyle(0x4f8a3c, 1); g.fillRect(x, y + h - 10, w, 10);
+    g.fillStyle(0x8fc85a, 1); g.fillRect(x, y + h - 10, w, 2);
+    g.lineStyle(1, 0x16141f, 1); g.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
+    buildPreviewTexture(this, 'climber_preview', look);
+    const baseY = y + h - 9;
+    const img = this.add2(this.add.image(x + w / 2, baseY, 'climber_preview', 'look').setOrigin(0.5, 1).setScale(scale));
+    this.fx.setTrail(findCosmetic('trail', look.trail || 'trail-none'));
+    this.fx.setHit(findCosmetic('hit', look.hit || 'hit-ring'));
+    const mode = slot === 'trail' && look.trail !== 'trail-none' ? 'trail' : slot === 'hit' ? 'hit' : 'idle';
+    this.stage = { x, y, w, h, img, cx: x + w / 2, baseY, scale, mode };
+    if (this.pendingCelebrate) {
+      this.pendingCelebrate = false;
+      this.fx.confettiBurst(x + w / 2, baseY - 60, 36);
+      this.fx.sparkle(x + w / 2, baseY - 40, 14);
+    }
+  }
+
+  celebrateBuy() { this.pendingCelebrate = true; }
+
+  update(time, delta) {
+    const st = this.stage;
+    if (!st || !st.img.active) return;
+    this.stageT += delta;
+    const t = this.stageT, img = st.img;
+    if (st.mode === 'trail') {
+      // Hop back and forth across the stage so the trail has somewhere to go.
+      img.setFrame(Math.cos(t / 520) > 0 ? 'look' : 'look2');
+      img.x = st.cx + Math.round(Math.sin(t / 520) * st.w * 0.3);
+      img.y = st.baseY - Math.round(Math.abs(Math.sin(t / 260)) * 12);
+      this.fx.trail(img.x, img.y - 26 * st.scale);
+    } else if (st.mode === 'hit') {
+      const beat = Math.floor(t / 700);
+      if (beat !== st.beat) {
+        st.beat = beat;
+        const left = beat % 2 === 0;
+        img.setFrame(left ? 'perfectL' : 'perfectR');
+        img.y = st.baseY;
+        const [hx, hy] = left ? [13, 0] : [35, 0];
+        const top = img.y - 56 * st.scale;
+        this.fx.hit(img.x + (hx - FRAME_W / 2) * st.scale, top + (hy + 4) * st.scale, (beat % 6) * 3);
+        img.setScale(st.scale * 0.9, st.scale * 1.1);
+        this.tweens.add({ targets: img, scaleX: st.scale, scaleY: st.scale, duration: 180, ease: 'Back.easeOut' });
+      }
+    } else {
+      img.setFrame(Math.floor(t / 1300) % 2 ? 'look2' : 'look');
+    }
   }
 
   drawPackSlots(y) {
@@ -376,7 +507,7 @@ export class ShopScene extends Phaser.Scene {
 
   // Regional gems found so far (they unlock some items at the trader).
   drawGemCollection() {
-    const y = this.listY + this.listH - 26;
+    const y = this.detY + this.detH - 26;
     const x0 = this.detX + Math.round(this.detW / 2 - (GEM_ORDER.length * 24) / 2);
     GEM_ORDER.forEach((id, i) => {
       const n = this.prog.found(id);
@@ -432,6 +563,7 @@ export class ShopScene extends Phaser.Scene {
       if (sc && sc.sys.settings.status !== Phaser.Scenes.SHUTDOWN && sc.climber && sc.sys.isActive && (sc.sys.isActive() || sc.sys.isPaused())) {
         if (sc.climber.refreshTexture) sc.climber.refreshTexture();
         else sc.climber.setTexture('climber', 'look');
+        if (sc.refreshEffects) sc.refreshEffects();
       }
     }
     this.scene.stop();

@@ -239,6 +239,15 @@ class AudioSystemImpl {
         if (o.snow) this.noiseHit({ t: 0.03, dur: 0.08, type: 'highpass', freq: 3000, peak: 0.05 });
       },
       cloth() { this.noiseHit({ dur: 0.14, freq: 2800, q: 0.6, peak: 0.06, attack: 0.04 }); },
+      // A bird taking off: quick wing beats and a startled chirp.
+      flutter() {
+        for (let i = 0; i < 5; i++) this.noiseHit({ t: i * 0.07, dur: 0.05, freq: 900 + i * 120, q: 0.8, peak: 0.07 * (1 - i / 6) });
+        this.chirp();
+      },
+      // A goat: a short wavering bleat.
+      bleat() {
+        [0, 0.06, 0.12, 0.18].forEach((t, i) => this.tone({ t, freq: 520 + (i % 2) * 40, toFreq: 480, dur: 0.08, type: 'sawtooth', peak: 0.025, reverb: 0.3 }));
+      },
       breath(o) {
         const v = 0.025 + (o.intensity || 0) * 0.06;
         this.noiseHit({ dur: 0.35, freq: 1100, q: 2.5, peak: v, attack: 0.15 });
@@ -273,6 +282,19 @@ class AudioSystemImpl {
         [0, 4, 7, 12, 16].forEach((s, i) => this.tone({ t: i * 0.05, freq: midiToHz(r + s), dur: 0.5, type: 'triangle', peak: 0.05, reverb: 0.5 }));
         this.tone({ t: 0.25, freq: midiToHz(r + 24), dur: 1.0, peak: 0.05, reverb: 0.8 });
       },
+      // "ON FIRE": a deep drop under a bright rising chord.
+      bassdrop() {
+        this.tone({ freq: 160, toFreq: 38, dur: 0.6, peak: 0.32 });
+        this.tone({ freq: 80, toFreq: 40, dur: 0.5, type: 'triangle', peak: 0.18 });
+        this.noiseHit({ dur: 0.35, type: 'lowpass', freq: 400, sweepTo: 80, peak: 0.2 });
+        [0, 7, 12, 19].forEach((s, i) => this.tone({ t: 0.08 + i * 0.04, freq: midiToHz(79 + s), dur: 0.6, type: 'triangle', peak: 0.045, reverb: 0.6 }));
+        this.noiseHit({ t: 0.05, dur: 0.6, type: 'highpass', freq: 5000, sweepTo: 9000, peak: 0.05, reverb: 0.5 });
+      },
+      // The thud of a milestone number landing.
+      slam() {
+        this.tone({ freq: 120, toFreq: 45, dur: 0.35, peak: 0.28 });
+        this.noiseHit({ dur: 0.12, type: 'lowpass', freq: 900, peak: 0.22 });
+      },
       // Short rising arpeggio for every 100 m.
       milestone() {
         const r = this.music.root + 12;
@@ -298,6 +320,14 @@ class AudioSystemImpl {
         if (this.music.motif) this.playMotif(this.music.motif, 0.5, 0.055);
         this.music.nextAt = Math.max(this.music.nextAt, this.ctx.currentTime + 6);
       },
+      // Sunrise on a ledge: a slow warm chord and a rising bell line.
+      sunrise() {
+        const r = this.music.root;
+        [0, 4, 7, 11].forEach((st, i) => this.tone({ t: i * 0.08, freq: midiToHz(r + st), dur: 4.5, attack: 1.2, peak: 0.03, reverb: 0.9, bus: this.musicBus }));
+        this.tone({ freq: midiToHz(r - 12), dur: 4.5, attack: 0.8, peak: 0.06, reverb: 0.7, bus: this.musicBus });
+        [12, 16, 19, 23, 24, 28, 31].forEach((st, i) => this.tone({ t: 0.6 + i * 0.32, freq: midiToHz(r + st), dur: 1.6, type: 'triangle', peak: 0.04, attack: 0.01, reverb: 0.85, bus: this.musicBus }));
+        this.music.nextAt = Math.max(this.music.nextAt, this.ctx.currentTime + 7);
+      },
       // Bright chime; rarer stones ring higher and longer.
       gem(o) {
         const v = o.value || 1;
@@ -318,6 +348,30 @@ class AudioSystemImpl {
         [0, 4, 7].forEach((s2, i) => this.tone({ t: 0.05 + i * 0.05, freq: midiToHz(76 + s2), dur: 0.3, type: 'triangle', peak: 0.05 }));
       },
       tick() { this.tone({ freq: 1800, dur: 0.015, type: 'square', peak: 0.012 }); },
+      // A roll tap: a dry scrape of fingers on rock.
+      scrabble() { this.noiseHit({ dur: 0.05, freq: 2400 + Math.random() * 800, q: 1.4, peak: 0.12 }); },
+      // Lightning: a sharp crack, then thunder rolling away down the valley.
+      thunder(o = {}) {
+        const v = o.volume ?? 1;
+        this.noiseHit({ dur: 0.12, type: 'highpass', freq: 2500, peak: 0.22 * v });
+        this.noiseHit({ t: 0.05, dur: 2.6, type: 'lowpass', freq: 260, sweepTo: 90, peak: 0.42 * v, attack: 0.08, bus: this.ambBus, reverb: 0.6 });
+        this.noiseHit({ t: 0.5, dur: 1.6, type: 'lowpass', freq: 180, peak: 0.22 * v, attack: 0.3, bus: this.ambBus });
+      },
+      // A far-off rumble before a storm.
+      rumble() { this.noiseHit({ dur: 3, type: 'lowpass', freq: 140, sweepTo: 80, peak: 0.3, attack: 0.8, bus: this.ambBus }); },
+      // The dragon wakes: a long, low growl rising into a roar.
+      roar() {
+        this.tone({ freq: 55, toFreq: 80, dur: 2.2, type: 'sawtooth', peak: 0.12, attack: 0.5, bus: this.ambBus, reverb: 0.6 });
+        this.tone({ freq: 58, toFreq: 84, dur: 2.2, type: 'sawtooth', peak: 0.1, attack: 0.5, bus: this.ambBus });
+        this.noiseHit({ dur: 2.4, type: 'bandpass', freq: 300, sweepTo: 700, q: 1.2, peak: 0.3, attack: 0.6, bus: this.ambBus, reverb: 0.5 });
+      },
+      // Dragon fire: a roaring rush of flame.
+      flame() {
+        this.noiseHit({ dur: 1.1, type: 'lowpass', freq: 1800, sweepTo: 500, peak: 0.35, attack: 0.08 });
+        this.noiseHit({ dur: 0.9, type: 'bandpass', freq: 300, q: 0.8, peak: 0.25, attack: 0.05 });
+      },
+      // A scorched note: a quick hiss of heat.
+      sizzle() { this.noiseHit({ dur: 0.25, type: 'highpass', freq: 3500, sweepTo: 1800, peak: 0.12 }); },
       // A crystal's chime: one pitch per direction, ringing out.
       crystal(o) {
         const n = { L: 84, U: 88, R: 91 }[o.dir] || 86;
@@ -428,8 +482,76 @@ class AudioSystemImpl {
     this.amb.wind = wind; this.amb.stream = stream; this.amb.birds = birds;
   }
 
-  setMusicMode({ root, scale, instrument = 'pluck', tempo = 90, octave = 12, motif = null, drum = false }) {
-    Object.assign(this.music, { root, scale, instrument, tempo, octave, motif, drum });
+  setMusicMode({ root, scale, instrument = 'pluck', tempo = 90, octave = 12, motif = null, drum = false, song = null }) {
+    const newSong = song && song !== this.music.song;
+    if (!song) this.endSong();
+    Object.assign(this.music, { root, scale, instrument, tempo, octave, motif, drum, song });
+    // A written song (the Golden City) loops bar by bar instead of the loose phrases.
+    if (newSong) { this.music.songBar = 0; this.music.songAt = this.ctx ? this.ctx.currentTime + 0.3 : 0; }
+  }
+
+  // Stops a written song and fades out the notes it already scheduled (they
+  // all play through the song's own bus and reverb send, which fade together).
+  endSong() {
+    this.music.song = null;
+    if (!this.songBus) return;
+    const { songBus, songVerb } = this;
+    this.songBus = null;
+    this.songVerb = null;
+    const t = this.ctx.currentTime;
+    for (const g of [songBus, songVerb]) {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(0, t + 0.8);
+    }
+    setTimeout(() => { songBus.disconnect(); songVerb.disconnect(); }, 1500);
+  }
+
+  // The song's own bus into the music bus, plus its own send into the reverb.
+  ensureSongBus() {
+    if (this.songBus) return;
+    this.songBus = this.ctx.createGain();
+    this.songBus.connect(this.musicBus);
+    this.songVerb = this.ctx.createGain();
+    this.songVerb.connect(this.reverb);
+  }
+
+  // Schedules the next bar of a written song shortly before it is due.
+  songStep(t) {
+    const m = this.music, song = m.song;
+    if (m.songAt < t) m.songAt = t + 0.1;
+    if (m.songAt - t > 0.25) return;
+    const beat = 60 / song.tempo;
+    const at = m.songAt - this.ctx.currentTime;
+    const bar = m.songBar % song.lead.length;
+    const v = 0.6 + m.intensity * 0.4;
+    // Everything below goes through the song's bus and reverb send, so endSong()
+    // can fade it all, tails included. (The instruments send to this.reverb,
+    // which points at the song's send while this bar is scheduled.)
+    this.ensureSongBus();
+    const reverb = this.reverb, bus = this.songBus;
+    this.reverb = this.songVerb;
+    // Drone and chord.
+    this.tone({ t: at, freq: midiToHz(m.root - 24), dur: beat * 4.4, attack: 0.6, type: 'sine', peak: 0.05 * v, bus, reverb: 0.5 });
+    this.tone({ t: at, freq: midiToHz(m.root - 17), dur: beat * 4.4, attack: 0.8, type: 'triangle', peak: 0.014 * v, detune: 5, bus, reverb: 0.6 });
+    for (const st of song.chords[bar]) {
+      this.tone({ t: at, freq: midiToHz(m.root + st), dur: beat * 4, attack: 1.2, type: 'sine', peak: 0.022 * v, bus, reverb: 0.8 });
+    }
+    // Frame drum: a heavy one, then a light one.
+    this.drum(at, 0.55 * v, bus);
+    this.drum(at + beat * 2.5, 0.3 * v, bus);
+    this.noiseHit({ t: at + beat * 3, dur: 0.06, type: 'highpass', freq: 5000, peak: 0.02 * v, bus, reverb: 0.4 });
+    // The melody.
+    let nt = at;
+    for (const [st, beats] of song.lead[bar]) {
+      if (st !== null) this.note(m.instrument, { t: nt, midi: m.root + st, dur: beats * beat * 1.3, peak: 0.05 * v, bus });
+      nt += beats * beat;
+    }
+    // Now and then a glint of glass far above.
+    if (bar % 4 === 3) [24, 28, 31].forEach((st, i) => this.note('glass', { t: at + beat * (2 + i * 0.33), midi: m.root + st + 12, peak: 0.015, bus }));
+    this.reverb = reverb;
+    m.songBar++;
+    m.songAt += beat * 4;
   }
 
   swell(seconds = 25) {
@@ -450,6 +572,7 @@ class AudioSystemImpl {
       this.amb.nextBirdAt = t + 3 + Math.random() * 9 / this.amb.birds;
       this.chirp();
     }
+    if (this.music.song) { this.songStep(t); return; }
     const swelling = t < this.music.swellUntil;
     const intensity = swelling ? 1 : this.music.intensity;
     if (t > this.music.nextAt) {
@@ -526,9 +649,9 @@ class AudioSystemImpl {
   }
 
   // Low pulse for the darker biomes (a soft taiko).
-  drum(t, v = 1) {
-    this.tone({ t, freq: 70, toFreq: 42, dur: 0.5, peak: 0.12 * v, attack: 0.005, bus: this.musicBus, reverb: 0.3 });
-    this.noiseHit({ t, dur: 0.12, type: 'lowpass', freq: 400, peak: 0.06 * v, bus: this.musicBus });
+  drum(t, v = 1, bus = this.musicBus) {
+    this.tone({ t, freq: 70, toFreq: 42, dur: 0.5, peak: 0.12 * v, attack: 0.005, bus, reverb: 0.3 });
+    this.noiseHit({ t, dur: 0.12, type: 'lowpass', freq: 400, peak: 0.06 * v, bus });
   }
 
   // ---------- instruments ----------
@@ -636,6 +759,90 @@ const INSTRUMENTS = {
     const rg = ctx.createGain(); rg.gain.value = 0.9; g.connect(rg).connect(this.reverb);
     car.start(start); mod.start(start);
     car.stop(start + 2.4); mod.stop(start + 2.4);
+  },
+  // The Golden City: a hammered dulcimer, two strings a hair apart, bright and metallic.
+  santur({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const len = Math.min(Math.max(dur, 0.8), 2);
+    for (const rate of [1, 1.004]) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.pluckBuffer(midi);
+      src.playbackRate.value = rate;
+      const f = ctx.createBiquadFilter(); f.type = 'peaking'; f.frequency.value = 3200; f.gain.value = 6;
+      const g = ctx.createGain(); g.gain.value = peak * 1.5;
+      src.connect(f).connect(g).connect(bus);
+      const rg = ctx.createGain(); rg.gain.value = 0.55; g.connect(rg).connect(this.reverb);
+      g.gain.setValueAtTime(peak * 1.5, start + len);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + len + 0.3);
+      src.start(start);
+      src.stop(start + len + 0.35);
+    }
+    this.tone({ t, freq: midiToHz(midi) * 4.2, dur: 0.15, type: 'sine', peak: peak * 0.18, attack: 0.001, bus });
+  },
+  // The Storm Crown: a dark brass horn, swelling in.
+  horn({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const f = midiToHz(midi);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak * 0.8, start + 0.18);
+    g.gain.setValueAtTime(peak * 0.8, start + dur * 0.75);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur + 0.4);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.5;
+    lp.frequency.setValueAtTime(f * 1.5, start);
+    lp.frequency.exponentialRampToValueAtTime(f * 5, start + 0.2);
+    lp.frequency.exponentialRampToValueAtTime(f * 2.5, start + dur + 0.3);
+    for (const d of [-6, 6]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = d;
+      o.connect(lp);
+      o.start(start); o.stop(start + dur + 0.5);
+    }
+    lp.connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.45; g.connect(rg).connect(this.reverb);
+  },
+  // The Aurora Ridge: a slow, wide synth pad that breathes in and out.
+  pad({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const len = Math.max(dur, 1) + 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak * 0.7, start + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + len);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
+    for (const [m, d] of [[1, -9], [1, 9], [2, 0]]) {
+      const o = ctx.createOscillator(); o.type = m === 2 ? 'sine' : 'triangle'; o.frequency.value = midiToHz(midi) * m; o.detune.value = d;
+      o.connect(lp);
+      o.start(start); o.stop(start + len + 0.1);
+    }
+    lp.connect(g).connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 1; g.connect(rg).connect(this.reverb);
+  },
+  // The Dragon's Spine: a throat-singing drone, a low buzz with a whistling overtone.
+  throat({ t = 0, midi, dur, peak = 0.04, bus }) {
+    const ctx = this.ctx;
+    const start = ctx.currentTime + t;
+    const f = midiToHz(midi);
+    const len = Math.max(dur, 0.6);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak * 1.2, start + 0.12);
+    g.gain.setValueAtTime(peak * 1.2, start + len * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + len + 0.3);
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+    // Two vocal formants; the upper one glides like a whistle over the drone.
+    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 450; f1.Q.value = 4;
+    const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.Q.value = 18;
+    f2.frequency.setValueAtTime(f * 8, start);
+    f2.frequency.linearRampToValueAtTime(f * 10, start + len);
+    const g2 = ctx.createGain(); g2.gain.value = 2.2;
+    o.connect(f1).connect(g);
+    o.connect(f2).connect(g2).connect(g);
+    g.connect(bus);
+    const rg = ctx.createGain(); rg.gain.value = 0.5; g.connect(rg).connect(this.reverb);
+    o.start(start); o.stop(start + len + 0.4);
   },
   bell({ t = 0, midi, peak = 0.03, bus }) {
     this.tone({ t, freq: midiToHz(midi), dur: 1.6, attack: 0.01, peak, bus, reverb: 0.9 });

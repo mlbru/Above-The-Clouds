@@ -2,6 +2,8 @@ import { COSMETICS, DEFAULT_LOOK, describeRequirement } from '../data/cosmetics.
 import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, PACK_SLOTS } from '../data/shop.js';
 import { STAMPS } from '../data/logbook.js';
+import { STARS, MASTERY_BIOMES } from '../data/mastery.js';
+import { currentSeason } from '../data/seasons.js';
 
 const KEY = 'above-the-clouds-save-v1';
 
@@ -50,6 +52,8 @@ function freshData() {
     tipsSeen: [],
     // Expeditions: { [id]: { best, summits, bestTime, pages: [pitch indexes] } }
     expeditions: {},
+    // Biome mastery: { [biomeId]: [star ids] } (see data/mastery.js).
+    mastery: {},
   };
 }
 
@@ -63,7 +67,15 @@ export class ProgressionSystem {
       this.storage = memoryStorage();
     }
     this.data = this.load();
+    // Cosmetics you have not looked at yet show as NEW. Older saves start with
+    // everything they already own marked as seen.
+    if (!Array.isArray(this.data.seen)) this.data.seen = [...this.data.unlocked];
+    // Items added in an update may already be earned.
+    this.checkUnlocks();
   }
+
+  isNew(id) { return this.isUnlocked(id) && !this.data.seen.includes(id); }
+  markSeen(id) { if (this.isNew(id)) { this.data.seen.push(id); this.save(); } }
 
   load() {
     const base = freshData();
@@ -73,7 +85,7 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw);
       // Items without a requirement (including ones added in later versions) are always owned.
       const unlocked = [...new Set([...(parsed.unlocked || []), ...base.unlocked])];
-      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions } };
+      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions }, mastery: { ...parsed.mastery } };
     } catch {
       return base;
     }
@@ -97,7 +109,8 @@ export class ProgressionSystem {
         || (r.viewpoints && d.viewpoints.length >= r.viewpoints)
         || (r.discoveries && d.discoveries.length >= r.discoveries)
         || (r.discovery && d.discoveries.includes(r.discovery))
-        || (r.streak && d.bestStreak >= r.streak);
+        || (r.streak && d.bestStreak >= r.streak)
+        || (r.mastery && this.stars(r.mastery).length >= STARS.length);
       if (ok) { d.unlocked.push(item.id); newly.push(item); }
     }
     return newly;
@@ -126,6 +139,19 @@ export class ProgressionSystem {
   }
 
   bestFor(mode) { return this.data.bestByMode[mode] || 0; }
+
+  // ---------- biome mastery ----------
+  stars(biomeId) { return (this.data.mastery && this.data.mastery[biomeId]) || []; }
+  // Returns { isNew, unlocks }: unlocks are cosmetics freed by a full set.
+  earnStar(biomeId, star) {
+    const m = this.data.mastery || (this.data.mastery = {});
+    const list = m[biomeId] || (m[biomeId] = []);
+    if (list.includes(star)) return { isNew: false, unlocks: [] };
+    list.push(star);
+    const unlocks = this.checkUnlocks();
+    this.save();
+    return { isNew: true, unlocks };
+  }
 
   addClimbed(m) { this.data.totalClimbed += m; }
 
@@ -162,6 +188,32 @@ export class ProgressionSystem {
       this.save();
       return { ok: true, message: cheats.devTeleport ? 'DEV TELEPORT: ON (TITLE SCREEN)' : 'DEV TELEPORT: OFF' };
     }
+    // Not a cheat (runs stay on the leaderboard): it only opens the collection.
+    if (code === 'OPENBOOK') {
+      this.data.journalAll = true;
+      // Maarten's own save also gets his Normal record (1867 m) back. The online
+      // board already has it, so it is marked as sent and nothing is uploaded.
+      if (String(this.data.playerName || '').toUpperCase() === 'MAARTEN' && this.bestFor('normal') < 1867) {
+        this.recordHeight(1867, 'normal');
+        this.data.lbSynced = { ...this.data.lbSynced, normal: 1867 };
+      }
+      this.save();
+      return { ok: true, message: 'THE WHOLE COLLECTION IS OPEN' };
+    }
+    // Every biome mastered at once: all three stars everywhere, so every
+    // mastery reward unlocks. Stars are kept, so entering it again changes nothing.
+    if (code === 'GRANDMASTER') {
+      if (!this.data.mastery) this.data.mastery = {};
+      for (const id of MASTERY_BIOMES) this.data.mastery[id] = [...STARS];
+      const unlocks = this.checkUnlocks();
+      this.save();
+      return { ok: true, message: unlocks.length ? `ALL BIOMES MASTERED: ${unlocks.length} ITEMS UNLOCKED` : 'ALL BIOMES ARE ALREADY MASTERED' };
+    }
+    if (code === 'GOLDENCITY') {
+      cheats.goldenCity = !cheats.goldenCity;
+      this.save();
+      return { ok: true, message: cheats.goldenCity ? 'GOLDEN CITY: EVERY NEW BIOME' : 'GOLDEN CITY: OFF' };
+    }
     return { ok: false, message: 'UNKNOWN CODE' };
   }
 
@@ -191,6 +243,7 @@ export class ProgressionSystem {
     if (this.isUnlocked(item.id)) return { state: 'owned' };
     const r = item.requirement;
     if (!r || !r.price) return { state: 'locked', reason: describeRequirement(r) };
+    if (r.season && r.season !== currentSeason()) return { state: 'locked', reason: describeRequirement(r), price: r.price };
     if (r.gem && this.found(r.gem) < r.count) {
       const g = GEMS[r.gem];
       return { state: 'locked', reason: `FIND ${r.count} ${g.name}${r.count > 1 ? 'S' : ''} (${this.found(r.gem)}/${r.count})`, price: r.price };
@@ -201,6 +254,7 @@ export class ProgressionSystem {
   buyCosmetic(slot, item) {
     if (this.cosmeticStatus(item).state !== 'buy' || !this.spend(item.requirement.price)) return false;
     this.data.unlocked.push(item.id);
+    this.data.seen.push(item.id);
     this.data.look[slot] = item.id;
     this.save();
     return true;
@@ -208,12 +262,34 @@ export class ProgressionSystem {
 
   owned(gearId) { return this.data.inventory[gearId] || 0; }
 
+  // Why a gear item or perk with `needs` is not for sale yet, or null when it is.
+  lockedReason(item) {
+    const n = item && item.needs;
+    if (!n) return null;
+    if (n.best && this.bestFor('normal') < n.best) return `REACH ${n.best} M IN NORMAL (${Math.floor(this.bestFor('normal'))}/${n.best})`;
+    if (n.gem && this.found(n.gem) < n.count) {
+      const g = GEMS[n.gem];
+      return `FIND ${n.count} ${g.name}${n.count > 1 ? 'S' : ''} (${this.found(n.gem)}/${n.count})`;
+    }
+    return null;
+  }
+
   buyGear(id) {
     const g = GEAR_BY_ID[id];
-    if (!g || !this.spend(g.price)) return false;
+    if (!g || this.lockedReason(g) || !this.spend(g.price)) return false;
     this.data.inventory[id] = this.owned(id) + 1;
-    if (!this.data.packed.includes(id) && this.data.packed.length < PACK_SLOTS) this.data.packed.push(id);
+    if (!this.data.packed.includes(id) && this.data.packed.length < PACK_SLOTS) this.packLift(id) || this.data.packed.push(id);
     this.save();
+    return true;
+  }
+
+  // Only one lift ticket goes with you: packing one swaps out the other.
+  packLift(id) {
+    if (!GEAR_BY_ID[id].lift) return false;
+    const p = this.data.packed;
+    const other = p.findIndex((k) => GEAR_BY_ID[k] && GEAR_BY_ID[k].lift);
+    if (other >= 0) p[other] = id;
+    else p.push(id);
     return true;
   }
 
@@ -223,8 +299,10 @@ export class ProgressionSystem {
   togglePack(id) {
     const p = this.data.packed;
     if (p.includes(id)) { p.splice(p.indexOf(id), 1); this.save(); return false; }
-    if (p.length >= PACK_SLOTS || this.owned(id) < 1) return null;
-    p.push(id);
+    if (this.owned(id) < 1) return null;
+    const swapsLift = GEAR_BY_ID[id].lift && p.some((k) => GEAR_BY_ID[k] && GEAR_BY_ID[k].lift);
+    if (p.length >= PACK_SLOTS && !swapsLift) return null;
+    if (!this.packLift(id)) p.push(id);
     this.save();
     return true;
   }
@@ -246,7 +324,7 @@ export class ProgressionSystem {
 
   buyPerk(id) {
     const p = PERK_BY_ID[id];
-    if (!p || this.hasPerk(id) || !this.spend(p.price)) return false;
+    if (!p || this.hasPerk(id) || this.lockedReason(p) || !this.spend(p.price)) return false;
     this.data.perks.push(id);
     if (!this.data.activePerk) this.data.activePerk = id;
     this.save();

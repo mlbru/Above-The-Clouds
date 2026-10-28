@@ -193,6 +193,35 @@ export function buildRhythm(rng, pattern, ramp, biome, typeIndex = 1) {
     notes[start + 1].gust = true;
     tags.add('GUST');
   }
+  // The high mountain's notes. Each keeps clear of the other tricks so a note
+  // never asks two new things at once.
+  const plain = (n) => !n.hold && !n.hidden && !n.gust && !n.mirror && !n.chord && !n.roll;
+  if (ramp.mirror) {
+    for (let i = 0; i < notes.length; i++) {
+      if (notes[i].dir !== 'U' && plain(notes[i]) && rng.chance(ramp.mirror * k)) { notes[i].mirror = true; tags.add('MIRROR'); }
+    }
+  }
+  if (ramp.chord && rng.chance(ramp.chord * k * 1.6)) {
+    const options = notes.map((n, i) => i).filter((i) => plain(notes[i]));
+    if (options.length) {
+      const i = rng.pick(options);
+      notes[i].chord = notes[i].dir === 'U' ? rng.pick(['L', 'R']) : notes[i].dir === 'L' ? 'R' : 'L';
+      tags.add('DOUBLE');
+    }
+  }
+  if (ramp.roll && rng.chance(ramp.roll * k * 1.6)) {
+    // Never the last note: the tail needs the next beat to land on.
+    const options = notes.map((n, i) => i).filter((i) => i < notes.length - 1 && plain(notes[i]));
+    if (options.length) {
+      const i = rng.pick(options);
+      notes[i].roll = ramp.rollTaps || 3;
+      // The next note waits for the tail and is a different arrow, so extra
+      // taps can never be mistaken for it.
+      notes[i + 1].gap = Math.max(notes[i + 1].gap, 1);
+      if (notes[i + 1].dir === notes[i].dir) notes[i + 1].dir = notes[i].dir === 'U' ? rng.pick(['L', 'R']) : 'U';
+      tags.add('ROLL');
+    }
+  }
   return { notes, tags: [...tags] };
 }
 

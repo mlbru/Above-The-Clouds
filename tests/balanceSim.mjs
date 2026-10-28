@@ -8,6 +8,9 @@ import { biomeAt, biomeStretchAt } from '../src/data/biomes.js';
 import { WHITEOUT } from '../src/systems/mechanics/Whiteout.js';
 import { ROCKFALL } from '../src/systems/mechanics/Rockfall.js';
 import { addThermal } from '../src/systems/mechanics/Thermals.js';
+import { STORM } from '../src/systems/mechanics/Storm.js';
+import { applySwing } from '../src/systems/mechanics/Swing.js';
+import { DRAGON_EYE } from '../src/systems/mechanics/DragonEye.js';
 
 import { SeededRandom } from '../src/utils/seededRandom.js';
 
@@ -15,12 +18,20 @@ import { SeededRandom } from '../src/utils/seededRandom.js';
 const W = WHITEOUT;
 const STORM_SHARE = W.stormSec / ((W.calmSec[0] + W.calmSec[1]) / 2 + W.warnSec + W.stormSec + W.clearSec);
 const NO_MECHANICS = process.argv.includes('--no-mechanics');
+// Share of time a storm rages on the Storm Crown, and the dragon is awake.
+const THUNDER_SHARE = STORM.stormSec / ((STORM.calmSec[0] + STORM.calmSec[1]) / 2 + STORM.warnSec + STORM.stormSec + STORM.clearSec);
+const D = DRAGON_EYE;
+const WATCH_SHARE = D.watchSec / ((D.sleepSec[0] + D.sleepSec[1]) / 2 + D.openSec + D.watchSec + D.closeSec);
+const BREATH_PER_MOVE = Math.min(1, 5 / ((D.breathSec[0] + D.breathSec[1]) / 2));
+// --classic: without the high mountain's new notes, to compare against.
+if (process.argv.includes('--classic')) Object.assign(BALANCE.ramp, { mirror: null, chord: null, roll: null, extraInputs: BALANCE.ramp.extraInputs.slice(0, 2) });
+const MAX_MOVES = Number((process.argv.find((a) => a.startsWith('--moves=')) || '--moves=900').slice(8));
 // A move takes roughly 5 s, so this is the chance a rockfall greets a new hold.
 const ROCK_PER_MOVE = 5 / ((ROCKFALL.calmSec[0] + ROCKFALL.calmSec[1]) / 2);
 
 function gauss() { return Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random()); }
 
-function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 500) {
+function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = MAX_MOVES) {
   const m = new Mountain(seed, BALANCE, mode);
   const modeCfg = BALANCE.modes[mode];
   const grip = new GripSystem(BALANCE, modeCfg);
@@ -44,7 +55,17 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
         if (!dodged) grip.change(-ROCKFALL.hitGrip * modeCfg.costScale);
       }
     }
-    grip.hang(decide, { drainMultiplier: 1, onJug: node.kind === 'jug' });
+    const thunder = !NO_MECHANICS && biome.mechanic === 'storm' && node.kind !== 'ledge' && Math.random() < THUNDER_SHARE;
+    grip.hang(decide, { drainMultiplier: thunder ? STORM.hangScale : 1, onJug: node.kind === 'jug', noGrace: thunder });
+    if (!NO_MECHANICS && biome.mechanic === 'swing') routes.forEach((rt) => { rt.notes = rt.notes.map((n) => ({ ...n })); applySwing(rt.notes); });
+    // Dragon fire: while it watches, most new holds bring a breath to dodge.
+    if (!NO_MECHANICS && biome.mechanic === 'dragonEye' && node.kind !== 'ledge' && Math.random() < WATCH_SHARE * BREATH_PER_MOVE) {
+      const n = node.level * 1.5 >= D.doubleFrom ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const dodged = Math.abs(gauss() * sd) <= D.goodMs * modeCfg.catchScale && Math.random() > wrong;
+        if (!dodged) grip.change(-D.breathGrip * modeCfg.costScale);
+      }
+    }
     let want = grip.value > 65 ? 'risky' : grip.value > 35 ? 'normal' : 'safe';
     const route = routes.find((r) => r.type === want) || routes[0];
     // Prism light: about one climb in three starts on the lit route and pays no note grip.
@@ -56,15 +77,30 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
     const dark = !NO_MECHANICS && biome.mechanic === 'darkness';
     const w = timingWindows(BALANCE, { windowScale: route.windowScale });
     const r = BALANCE.ramp;
-    const c = new ComboSystem({ notes: route.notes, beatMs: route.beatMs, ...w, leadInMs: 900, minGapMs: r.minGapMs, gustWindowScale: r.gustWindowScale });
+    const c = new ComboSystem({ notes: route.notes, beatMs: route.beatMs, ...w, leadInMs: 900, minGapMs: r.minGapMs, gustWindowScale: r.gustWindowScale, rollBeats: r.rollBeats, chordSpreadMs: r.chordSpreadMs });
     let empty = grip.isEmpty;
     for (const n of c.notes) {
       if (empty) break;
+      // A still beat: the player presses on it by reflex now and then.
+      if (n.still) {
+        if (Math.random() < 0.1 + sd / 1000) { const rs = c.press('U', n.time + gauss() * 40); if (rs.judged) { grip.applyNote(route, 'miss'); grip.change(-D.snapGrip); } }
+        continue;
+      }
       // Blind notes and off-beats are read less accurately.
-      const spread = sd * (n.hidden && !whiteout && !dark ? 1.35 : 1) * (whiteout ? 1.15 : 1) * (dark ? 1.12 : 1) * (route.tags.includes('OFFBEAT') ? 1.1 : 1);
-      const dir = Math.random() < wrong ? (n.dir === 'L' ? 'R' : 'L') : n.dir;
-      const res = c.press(dir, n.time + gauss() * spread);
-      [...res.auto, res.judged].filter(Boolean).forEach((x) => { if (!lit || x.result === 'miss') grip.applyNote(route, x.result); });
+      const spread = sd * (n.hidden && !whiteout && !dark ? 1.35 : 1) * (whiteout ? 1.15 : 1) * (dark ? 1.12 : 1) * (route.tags.includes('OFFBEAT') ? 1.1 : 1) * (route.swing ? 1.1 : 1) * (n.chord ? 1.15 : 1);
+      // Mirrored arrows fool players far more often than plain ones.
+      const dir = Math.random() < wrong * (n.mirror ? 3 : 1) ? (n.dir === 'L' ? 'R' : 'L') : n.dir;
+      const at = n.time + gauss() * spread;
+      const judged = [];
+      const res = c.press(dir, at);
+      judged.push(...res.auto, res.judged);
+      if (n.chord && !n.result) { const r2 = c.press(n.chord, at + Math.abs(gauss() * 30)); judged.push(...r2.auto, r2.judged); }
+      // A roll: the taps land with a gap that grows with the player's sloppiness.
+      if (n.roll && n.holding) for (let k = 1; k < n.roll; k++) c.press(n.dir, at + k * (110 + Math.abs(gauss() * sd * 1.5)));
+      if (n.roll) { const failed = []; c.updateHolds(n.time + n.rollMs + 1, failed); judged.push(...failed); }
+      judged.filter((x) => x && !x.still).forEach((x) => {
+        if (!lit || x.result === 'miss') grip.applyNote(route, x.result);
+      });
       if (res.judged && res.judged.holding && Math.random() < wrong * 2) { c.release(n.dir, n.time + 50); grip.applyNote(route, 'miss'); }
       if (grip.isEmpty) { empty = true; break; }
     }
@@ -98,7 +134,7 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = 5
 
 const players = { expert: { sd: 45, wrong: 0.01 }, good: { sd: 75, wrong: 0.03 }, average: { sd: 110, wrong: 0.05 }, novice: { sd: 150, wrong: 0.08 } };
 for (const mode of ['normal', 'hard', 'summit']) {
-  console.log(`--- ${mode.toUpperCase()} (500 moves max)`);
+  console.log(`--- ${mode.toUpperCase()} (${MAX_MOVES} moves max)`);
   for (const [name, p] of Object.entries(players)) {
     const runs = Array.from({ length: 30 }, (_, i) => simulate(p, 1000 + i, mode));
     const avg = (k) => (runs.reduce((a, r) => a + r[k], 0) / runs.length).toFixed(0);

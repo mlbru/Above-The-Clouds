@@ -72,6 +72,24 @@ export const COLORS = {
   panelLight: 0x8a84a0,
 };
 
+// A framed game panel: dark body with a lighter top half, an accent-coloured
+// inner rim with corner studs, and (when glowing) a soft outer halo.
+export function drawFrame(g, x, y, w, h, { accent = 0xf2c14e, alpha = 0.9, glow = false } = {}) {
+  const half = Math.ceil((h - 2) / 2);
+  if (glow) {
+    g.fillStyle(accent, 0.18).fillRect(x - 2, y - 1, w + 4, h + 2).fillRect(x - 1, y - 2, w + 2, h + 4);
+  }
+  g.fillStyle(0x0c0a12, alpha).fillRect(x + 1, y, w - 2, h).fillRect(x, y + 1, w, h - 2);
+  g.fillStyle(0x2c2740, alpha).fillRect(x + 1, y + 1, w - 2, half);
+  g.fillStyle(0x1c1828, alpha).fillRect(x + 1, y + 1 + half, w - 2, h - 2 - half);
+  g.fillStyle(0xffffff, 0.06).fillRect(x + 2, y + 2, w - 4, 1);
+  g.fillStyle(accent, glow ? 1 : 0.5).fillRect(x + 2, y + 1, w - 4, 1);
+  g.fillStyle(accent, glow ? 0.7 : 0.25).fillRect(x + 1, y + 2, 1, h - 4).fillRect(x + w - 2, y + 2, 1, h - 4);
+  g.fillStyle(0x000000, 0.4).fillRect(x + 2, y + h - 2, w - 4, 1);
+  g.fillStyle(accent, 1);
+  for (const [cx, cy] of [[x + 2, y + 2], [x + w - 3, y + 2], [x + 2, y + h - 3], [x + w - 3, y + h - 3]]) g.fillRect(cx, cy, 1, 1);
+}
+
 export function drawPanel(g, x, y, w, h, { fill = COLORS.panel, alpha = 0.82, line = COLORS.panelLine, highlight = null } = {}) {
   g.fillStyle(fill, alpha);
   g.fillRect(x + 1, y, w - 2, h);

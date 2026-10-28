@@ -61,9 +61,12 @@ export const BALANCE = {
   // How the mountain gets harder with height (meters, before the mode's rampSpeed).
   ramp: {
     fullAt: 800,
+    // Tempo and timing start as if you were already this high, fading out by fullAt.
+    // The rhythm tricks below keep their own heights.
+    warmStart: 100,
     beatScaleAtFull: 0.62,
     windowScaleAtFull: 0.74,
-    extraInputs: [{ from: 300, add: 1 }, { from: 700, add: 2 }],
+    extraInputs: [{ from: 300, add: 1 }, { from: 700, add: 2 }, { from: 1700, add: 3 }],
     restEvery: [{ from: 0, every: 3 }, { from: 300, every: 4 }, { from: 700, every: 5 }],
     // [start height, height where the maximum is reached, maximum chance]
     syncopation: [40, 440, 0.45],
@@ -71,6 +74,18 @@ export const BALANCE = {
     fade: [380, 980, 0.35],
     gust: [250, 750, 0.55],
     crumbling: [150, 750, 0.22],
+    // The high mountain keeps adding new kinds of notes after the tempo tops out:
+    // mirrored arrows (press the other way), doubles (two arrows at once) and
+    // rolls (tap the same arrow again and again before the tail ends).
+    // They keep growing long after everything else has topped out, so the
+    // climb never flattens: ~30% by the first loop, still rising until 3500 m.
+    mirror: [950, 3200, 0.5],
+    chord: [1200, 3400, 0.45],
+    roll: [1450, 3500, 0.5],
+    rollTaps: [{ from: 0, taps: 3 }, { from: 2200, taps: 4 }, { from: 3000, taps: 5 }],
+    rollBeats: 1.5,
+    // A press of a chord's second arrow may come this much after the first.
+    chordSpreadMs: 90,
     minGapMs: 260,
     holdReleaseGraceMs: 120,
     gustWindowScale: 0.72,

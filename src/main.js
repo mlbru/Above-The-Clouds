@@ -5,7 +5,9 @@ import { MenuScene } from './scenes/MenuScene.js';
 import { ClimbScene } from './scenes/ClimbScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { ShopScene } from './scenes/ShopScene.js';
-import { LogbookScene } from './scenes/LogbookScene.js';
+import { CollectionScene } from './scenes/CollectionScene.js';
+import { ExpeditionScene } from './scenes/ExpeditionScene.js';
+import { LeaderboardScene } from './scenes/LeaderboardScene.js';
 import { installFullscreenKey } from './utils/fullscreen.js';
 import { installTouchControls, isTouchDevice } from './ui/TouchControls.js';
 import { Audio } from './systems/AudioSystem.js';
@@ -24,14 +26,21 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, LogbookScene],
+  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, CollectionScene, ExpeditionScene, LeaderboardScene],
   disableContextMenu: true,
 });
 
 window.__game = game;
+if (import.meta.env.DEV) window.__audio = Audio;
 installFullscreenKey();
 if (isTouchDevice()) installTouchControls();
 // Unlock audio on the very first real touch or click (required on iOS).
 window.addEventListener('pointerdown', () => Audio.init(), { once: true, capture: true });
 
 if (import.meta.env.DEV && params.has('harness')) import('../tests/browserHarness.js');
+
+// The installable app (public/sw.js): offline play and updates on the next
+// launch. Only for the hosted build; the one-file builds have no sw.js next to them.
+if (import.meta.env.PROD && 'serviceWorker' in navigator && window.location.protocol === 'https:' && !window.ATC_SINGLE_FILE) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

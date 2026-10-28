@@ -463,7 +463,197 @@ function crystalIsles({ w, h, seed }) {
   return b.canvas();
 }
 
-const PAINTERS = { glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles };
+// Box-blurs a wrapping ridge line so slopes shade in broad faces, not stripes.
+function smoothRidge(arr, radius) {
+  const n = arr.length - 1;
+  return arr.map((_, x) => {
+    let sum = 0;
+    for (let d = -radius; d <= radius; d++) sum += arr[((x + d) % n + n) % n];
+    return sum / (2 * radius + 1);
+  });
+}
+
+// Which side of its peak a pixel lies on: each summit sends a crest line down
+// the mountain, left of it is the lit face, right of it the shadow. Shading by
+// faces (not by the slope of each column) avoids vertical stripes.
+function peakFaces(ridge, w, seed) {
+  const noise = makeNoise2D(seed + 7);
+  const peaks = [];
+  for (let x = 0; x < w; x++) {
+    let top = true;
+    for (let d = -22; d <= 22 && top; d++) if (d && ridge[((x + d) % w + w) % w] < ridge[x]) top = false;
+    if (top && (!peaks.length || x - peaks[peaks.length - 1].x > 8)) peaks.push({ x, y: ridge[x] });
+  }
+  return (x, y) => {
+    let best = null, bd = 1e9;
+    for (const p of peaks) {
+      const d = Math.abs((((x - p.x) % w) + w + w / 2) % w - w / 2);
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (!best) return false;
+    const dx = (((x - best.x) % w) + w + w / 2) % w - w / 2;
+    const crest = (noise(best.x * 0.1, y * 0.05) - 0.5) * 0.9 * (y - best.y) + Math.sin(y * 0.3 + best.x) * 1.5;
+    return dx > crest;
+  };
+}
+
+// Storm Crown: towering thunderheads with flat anvil tops and grey rain shafts.
+function stormAnvils({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const base = h - 34;
+  const mask = new Uint8Array(w * h);
+  const at = (x, y) => (y < 0 || y >= h ? 0 : mask[y * w + (((x % w) + w) % w)]);
+  const disc = (cx, cy, r) => {
+    for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++) {
+      if (y >= 0 && y < h && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) mask[y * w + (((x % w) + w) % w)] = 1;
+    }
+  };
+  const towers = [];
+  for (let i = 0; i < 3; i++) {
+    const cx = (i / 3) * w + rng.range(-15, 15), tall = rng.range(78, 96), wide = rng.range(62, 78);
+    towers.push({ cx, wide });
+    // A puffy body, broad and round at the bottom, pinched below the top...
+    for (let t = 0; t <= 1; t += 0.04) disc(cx + Math.sin(t * 4 + i) * 4, base - 10 - t * tall, wide * 0.5 * (1 - t * 0.55));
+    for (let k = 0; k < 50; k++) {
+      const t = Math.pow(rng.next(), 1.4), rr = wide * 0.5 * (1 - t * 0.55);
+      disc(cx + rng.range(-1, 1) * rr, base - 10 - t * tall, rng.range(8, 15) * (1 - t * 0.4));
+    }
+    // ...then the anvil: a flat, thin shelf spreading downwind.
+    const top = base - 10 - tall;
+    for (let k = 0; k < 34; k++) {
+      const dx = rng.range(-wide * 0.45, wide * 0.95);
+      disc(cx + dx, top + rng.range(-1, 3) + Math.max(0, dx) * 0.05, rng.range(4, 7) * (1 - Math.max(0, dx) / (wide * 1.6)));
+    }
+  }
+  return toCanvas(w, h, (put) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (y >= base + 4) {
+        // Rain shafts hang under each tower.
+        const tw = towers.find((tt) => Math.abs((((x - tt.cx) % w) + w + w / 2) % w - w / 2) < tt.wide * 0.55);
+        if (tw && bayer(x, y) < 0.55 - (y - base) / 70 && (x + y) % 3 !== 0) put(x, y, 0x4a5068);
+        continue;
+      }
+      if (!at(x, y)) continue;
+      let c = lerpColor(0x8a92aa, 0x3a4058, Math.max(0, Math.min(1, (y - (base - 100)) / 110)));
+      if (!at(x - 2, y - 3) || !at(x, y - 2)) c = 0xc8d0e4;
+      else if (!at(x + 2, y + 3)) c = bayer(x, y) < 0.6 ? 0x2a3044 : 0x343a50;
+      if (noise(x * 0.05, y * 0.08) > 0.72 && c !== 0xc8d0e4) c = lerpColor(c, 0x2a3044, 0.4);
+      put(x, y, c);
+    }
+  });
+}
+
+// Storm Crown: a jagged black ridge, its wet edges catching the light.
+function stormCrags({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const ridge = smoothRidge(ridgeHeights(rng, w, 44, 30, 0.52), 3);
+  // A few sharp teeth stand up out of the ridge.
+  for (let i = 0; i < 7; i++) {
+    const cx = rng.int(0, w - 1), tall = rng.range(12, 26), hw = rng.range(9, 16);
+    for (let dx = -hw; dx <= hw; dx++) {
+      const x = (cx + Math.round(dx) + w) % w;
+      ridge[x] = Math.min(ridge[x], ridge[cx] - tall * (1 - Math.abs(dx) / hw));
+    }
+  }
+  const shadowAt = peakFaces(ridge, w, seed);
+  return toCanvas(w, h, (put) => {
+    for (let x = 0; x < w; x++) {
+      const top = Math.round(ridge[x]);
+      for (let y = Math.max(0, top); y < h; y++) {
+        const d = y - top;
+        const shadow = shadowAt(x, y);
+        let c = shadow ? 0x14161e : 0x2a2f3a;
+        if (d < 2) c = shadow ? 0x4a5468 : 0x8a96b4;
+        else if (d < 4 && !shadow) c = 0x4a5468;
+        if (d > 6 && noise(x * 0.09, y * 0.04) > 0.7) c = 0x2c3240;
+        put(x, y, c);
+      }
+    }
+  });
+}
+
+// Aurora Ridge: snow peaks at night, their snow faintly green under the lights.
+function auroraPeaks({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const ridge = smoothRidge(ridgeHeights(rng, w, 50, 38, 0.55), 2);
+  const shadowAt = peakFaces(ridge, w, seed);
+  return toCanvas(w, h, (put) => {
+    for (let x = 0; x < w; x++) {
+      const top = Math.round(ridge[x]);
+      for (let y = Math.max(0, top); y < h; y++) {
+        const d = y - top;
+        const shadow = shadowAt(x, y);
+        const snow = d < 18 + noise(x * 0.07, y * 0.05) * 16;
+        let c = shadow ? 0x1a2c3c : 0x24404e;
+        if (snow) c = shadow ? 0x4a7a80 : (bayer(x, y) < 0.5 ? 0xb8f0d8 : 0x9ae0c8);
+        if (d < 1) c = 0xd8fff0;
+        put(x, y, c);
+      }
+    }
+  });
+}
+
+// Aurora Ridge: a frozen lake far below, mirroring green light.
+function auroraLake({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const shore = ridgeHeights(rng, w, 26, 12, 0.55);
+  const lake = h - 40;
+  return toCanvas(w, h, (put) => {
+    for (let x = 0; x < w; x++) {
+      const top = Math.round(shore[x]);
+      for (let y = Math.max(0, top); y < h; y++) {
+        let c = y - top < 2 ? 0x8ac0b8 : 0x10202a;
+        if (y > lake) {
+          const t = (y - lake) / 40;
+          c = lerpColor(0x1c3a48, 0x0e1c26, t);
+          // Streaks of reflected aurora, broken up by cracks in the ice.
+          const glow = noise(x * 0.04, y * 0.4);
+          if (glow > 0.66 && bayer(x, y) < 0.7 - t * 0.5) c = glow > 0.74 ? 0x5af0a0 : 0x2e8a78;
+          if ((x * 7 + y * 3) % 53 === 0) c = 0xc8ffe8;
+        }
+        put(x, y, c);
+      }
+    }
+  });
+}
+
+// Dragon's Spine: the sleeping dragon's body coils through the far haze, a
+// scaled ribbon with a row of spines, dipping behind the peaks and out again.
+function dragonCoils({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const b = layerBuffer(w, h);
+  const ph = rng.range(0, Math.PI * 2);
+  const centre = (x) => h * 0.55 + Math.sin((x / w) * Math.PI * 4 + ph) * h * 0.2 + Math.sin((x / w) * Math.PI * 10) * 4;
+  const thick = (x) => 20 + Math.sin((x / w) * Math.PI * 2 + ph) * 5;
+  for (let x = 0; x < w; x++) {
+    const cy = centre(x), r = thick(x);
+    // Behind the far peaks every other loop: only the top of the back shows.
+    const sunk = Math.sin((x / w) * Math.PI * 4 + ph) > 0.55;
+    for (let y = Math.round(cy - r); y <= cy + r; y++) {
+      const k = (y - cy) / r;
+      if (sunk && k > -0.2) continue;
+      const row = Math.floor((y - cy + r) / 4);
+      const sx = (x + (row % 2) * 3) % 6;
+      let c = k < -0.6 ? 0x8a2a2a : k < 0.2 ? 0x6a1c22 : k < 0.7 ? 0x4a1418 : 0xc89060;
+      if (k > 0.7) c = (x + y) % 4 ? 0xc89060 : 0xa87048;
+      else if (sx === 0 || (y - cy + r) % 4 === 0) c = lerpColor(c, 0x2a0a10, 0.5);
+      if (k < -0.85) c = 0xf0a050;
+      b.set(x, y, c);
+    }
+    // Spines along the back.
+    if (x % 9 === 0) {
+      const top = Math.round(cy - r);
+      for (let s = 1; s < 11; s++) for (let dx = -Math.floor((11 - s) / 3); dx <= 0; dx++) b.set(x + dx + Math.floor(s / 3), top - s, s > 8 ? 0xffe08a : 0x3a1014);
+    }
+  }
+  return b.canvas();
+}
+
+const PAINTERS = { glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils };
 
 export function buildBackdropTextures(scene, biomes) {
   for (const biome of Object.values(biomes)) {

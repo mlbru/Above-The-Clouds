@@ -8,7 +8,7 @@ import { gemForBiome } from '../data/gems.js';
 const WALL_MIN_X = 36, WALL_MAX_X = 444;
 const LINE_MIN_X = 100, LINE_MAX_X = 380;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const DECOR = { green: ['grass', 'flowers', 'fern', 'pine'], stone: ['rocks', 'grass'], frozen: ['icicles', 'snowdrift'], clouds: ['crystals', 'rocks'] };
+const DECOR = { green: ['grass', 'flowers', 'fern', 'pine'], stone: ['rocks', 'grass'], frozen: ['icicles', 'snowdrift'], clouds: ['crystals', 'rocks'], volcano: ['rocks'] };
 const HAZARD = { l: 'loose', i: 'icy', c: 'crumbling' };
 
 // '-12j' -> { dx: -12, rise: 2, kind: 'jug', hazard: null, gem: false }
@@ -100,6 +100,8 @@ export class ExpeditionMountain extends Mountain {
     for (let level = spec.start; level <= spec.end; level++) {
       const node = byLevel.get(level);
       if (node) cx = node.x;
+      // The Crevasse: both ice walls stay put around the gap in the middle.
+      if (this.exp.chasm && !spec.cap) cx = 240;
       const k = spec.cap ? (level - spec.start) / Math.max(1, spec.end - spec.start) : 0;
       const w = spec.cap ? Math.max(30, spec.width * (1 - k)) : spec.width + Math.sin(level * 0.37) * 14;
       const l = clamp(cx - w / 2, WALL_MIN_X, WALL_MAX_X - 30);
@@ -108,7 +110,7 @@ export class ExpeditionMountain extends Mountain {
     }
     const biome = biomeAt(levelToMeters(spec.start));
     const decor = [];
-    if (!spec.cap) {
+    if (!spec.cap && !this.exp.islands) {
       const types = DECOR[biome.id] || DECOR.stone;
       for (let d = rng.int(6, 10); d > 0; d--) {
         const lv = rng.pick(levels);
@@ -122,6 +124,8 @@ export class ExpeditionMountain extends Mountain {
       index, templateId: `expedition-${index}`, name: p.name || 'BASE CAMP', style: 'balanced', difficulty: 1 + Math.min(3, Math.floor((spec.pitchIndex || 0) / 3)),
       features: p.features || [], biomeId: biome.id, startLevel: spec.start, endLevel: spec.end, levels, rest: spec.rest, decor,
       waterfall: p.waterfall ? { side: p.waterfall } : null,
+      islands: !!this.exp.islands,
+      chasm: !!this.exp.chasm && !spec.cap && index > 0,
       exitX: last.nodes.length ? last.nodes[0].x : Math.round((last.bounds.l + last.bounds.r) / 2), exitBounds: last.bounds,
       viewpointCount: 0, sinceRest: 0, seed: hashInts(this.seed, index, 99), pitchIndex: spec.pitchIndex ?? null,
     };
@@ -145,7 +149,8 @@ export class ExpeditionMountain extends Mountain {
     if (!t.gem) return null;
     const key = `exp>${t.id}`;
     if (this.takenGems.has(key)) return null;
-    return { type: gemForBiome(biomeAt(levelToMeters(t.level)).id).id, key };
+    const biome = biomeAt(levelToMeters(t.level));
+    return { type: gemForBiome(biome.gemFrom || biome.id).id, key };
   }
 
   computeRoutes(node, { forgiving = false } = {}) {

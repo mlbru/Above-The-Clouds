@@ -31,6 +31,9 @@ export const STAMPS = [
   { id: 'above-clouds', page: 'height', name: 'ABOVE THE CLOUDS', text: `REACH ${BIOMES.clouds.from} M.`, gems: 18, goal: BIOMES.clouds.from, unit: 'M', ...height() },
   { id: 'black-glass', page: 'height', name: 'BLACK GLASS', text: `REACH THE OBSIDIAN SPIRES AT ${BIOMES.obsidian.from} M.`, gems: 30, goal: BIOMES.obsidian.from, unit: 'M', ...height() },
   { id: 'crystal-heights', page: 'height', name: 'CRYSTAL HEIGHTS', text: `REACH ${BIOMES.crystal.from} M.`, gems: 45, goal: BIOMES.crystal.from, unit: 'M', ...height() },
+  { id: 'thunderhead', page: 'height', name: 'THUNDERHEAD', text: `REACH THE STORM CROWN AT ${BIOMES.storm.from} M.`, gems: 55, goal: BIOMES.storm.from, unit: 'M', ...height() },
+  { id: 'northern-lights', page: 'height', name: 'UNDER THE LIGHTS', text: `REACH THE AURORA RIDGE AT ${BIOMES.aurora.from} M.`, gems: 65, goal: BIOMES.aurora.from, unit: 'M', ...height() },
+  { id: 'dragon-spine', page: 'height', name: 'HERE BE DRAGONS', text: `REACH THE DRAGON'S SPINE AT ${BIOMES.dragon.from} M.`, gems: 75, goal: BIOMES.dragon.from, unit: 'M', ...height() },
   { id: 'off-the-map', page: 'height', name: 'OFF THE MAP', text: 'REACH 2000 M. NOBODY HAS DRAWN THIS PART.', gems: 80, goal: 2000, unit: 'M', ...height() },
 
   { id: 'groove', page: 'rhythm', name: 'IN THE GROOVE', text: '10 PERFECT MOVES IN A ROW.', gems: 5, goal: 10, ...perRun((r) => r.bestStreak) },
@@ -44,10 +47,11 @@ export const STAMPS = [
   { id: 'hawk', page: 'mountain', name: 'HAWK', text: 'RIDE 15 THERMALS.', gems: 18, goal: 15, ...counter('thermals') },
   { id: 'headlamp', page: 'mountain', name: 'HEADLAMP', text: 'REACH 5 LEDGES IN THE OBSIDIAN SPIRES.', gems: 22, goal: 5, ...counter('darkLedges') },
   { id: 'prism-climber', page: 'mountain', name: 'PRISM CLIMBER', text: 'CLIMB 15 ROUTES IN THE PRISM LIGHT.', gems: 25, goal: 15, ...counter('prisms') },
+  { id: 'statue', page: 'mountain', name: 'FIREPROOF', text: "DODGE 15 OF THE DRAGON'S FIRE BREATHS.", gems: 35, goal: 15, ...counter('fireDodges') },
   { id: 'great-catch', page: 'mountain', name: 'GREAT CATCH', text: 'CATCH 5 SLIPS WITH A PERFECT GRAB.', gems: 10, goal: 5, ...counter('greatCatches') },
 
   { id: 'gem-pockets', page: 'finds', name: 'GEM POCKETS', text: 'FIND 50 GEMS IN ONE RUN.', gems: 10, goal: 50, ...perRun((r) => r.gems) },
-  { id: 'geologist', page: 'finds', name: 'GEOLOGIST', text: 'FIND ALL SIX KINDS OF STONE.', gems: 30, goal: GEM_ORDER.length, ...lifetime(({ d }) => GEM_ORDER.filter((k) => (d.gemsFound[k] || 0) > 0).length) },
+  { id: 'geologist', page: 'finds', name: 'GEOLOGIST', text: `FIND ALL ${GEM_ORDER.length} KINDS OF STONE.`, gems: 30, goal: GEM_ORDER.length, ...lifetime(({ d }) => GEM_ORDER.filter((k) => (d.gemsFound[k] || 0) > 0).length) },
   { id: 'explorer', page: 'finds', name: 'EXPLORER', text: 'MAKE 10 DISCOVERIES.', gems: 20, goal: 10, ...lifetime(({ d }) => d.discoveries.length) },
   { id: 'sightseer', page: 'finds', name: 'SIGHTSEER', text: 'VISIT 20 VIEWPOINTS.', gems: 25, goal: 20, ...lifetime(({ d }) => d.viewpoints.length) },
   { id: 'night-shot', page: 'finds', name: 'NIGHT SHOT', text: 'TAKE A PHOTO UNDER THE STARS.', gems: 5, goal: 1, secret: true, ...counter('nightPhotos') },

@@ -2,11 +2,13 @@ import { PixelText, COLORS, drawPanel } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { Audio } from '../systems/AudioSystem.js';
+import { lerpColor } from '../utils/color.js';
 
 const TOAST_Y = 41;
 export const GEM_COLOR = '#9fe8ff';
-export const GEM_TARGET = { x: 11, y: 41 };
+export const GEM_TARGET = { x: 11, y: 50 };
 const FIRE = ['#ff9a3c', '#f0644b', '#f2c14e', '#ffffff'];
+
 
 // Minimal climbing HUD: height, grip, biome banner, quiet toasts, debug overlay.
 export class HUD {
@@ -19,14 +21,18 @@ export class HUD {
     this.height = add(new PixelText(scene, 20, 6, '0 M').setScale(2));
     this.best = add(new PixelText(scene, 8, 20, '', { color: COLORS.dim }));
     this.biome = add(new PixelText(scene, 8, 29, '', { color: COLORS.faint }));
+    // How far to the next area ("FROZEN REACH IN 80 M").
+    this.next = add(new PixelText(scene, 8, 38, '', { color: COLORS.faint }));
     this.gripIcon = add(scene.add.image(GAME_WIDTH - 88, 7, 'icon_grip').setOrigin(0, 0));
     this.gripLabel = add(new PixelText(scene, GAME_WIDTH - 79, 8, 'GRIP'));
     this.gripBar = add(scene.add.graphics());
     this.gripValue = add(new PixelText(scene, GAME_WIDTH - 10, 17, '100', { color: COLORS.dim }).setOrigin(1, 0));
     this.streak = add(new PixelText(scene, GAME_WIDTH - 10, 27, '', { color: COLORS.gold }).setOrigin(1, 0));
-    this.gemIcon = add(scene.add.image(7, 38, 'icon_gem').setOrigin(0, 0));
-    this.gemText = add(new PixelText(scene, 18, 39, '0', { color: GEM_COLOR }));
+    this.gemIcon = add(scene.add.image(7, 47, 'icon_gem').setOrigin(0, 0));
+    this.gemText = add(new PixelText(scene, 18, 48, '0', { color: GEM_COLOR }));
     this.gearIcons = [];
+    // Storm Crown: a little thundercloud that fills up until the next storm.
+    this.stormG = add(scene.add.graphics());
     this.streakValue = 0;
     this.streakScale = 1;
     this.fireT = 0;
@@ -44,7 +50,8 @@ export class HUD {
     this.blink = 0;
   }
 
-  update(dt, { heightM, best, biomeName, grip, gripLow, gripCritical, modeLabel = '' }) {
+  update(dt, { heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripLow, gripCritical, modeLabel = '' }) {
+    this.next.setText(nextLine).setColor(nextColor);
     this.height.setText(`${Math.max(0, heightM).toFixed(0)} M`);
     this.best.setText(`BEST ${best.toFixed(0)} M${modeLabel ? '  ' + modeLabel : ''}`);
     this.biome.setText(biomeName);
@@ -71,6 +78,32 @@ export class HUD {
     this.updateToasts(dt);
   }
 
+  // ---------- storm meter ----------
+  // storm: null (hidden) or { phase, progress } from the Storm mechanic.
+  setStorm(storm) {
+    const g = this.stormG;
+    g.clear();
+    if (!storm) return;
+    const { phase, progress } = storm;
+    const x = GAME_WIDTH - 160, y = 14;
+    const flash = Math.floor(this.blink / 160) % 2 === 0;
+    // A pixel thundercloud; it darkens as the storm builds.
+    const fill = phase === 'calm' ? progress : phase === 'clearing' ? 1 - progress : 1;
+    const cloud = phase === 'storm' ? (flash ? 0xffe45a : 0x5a6078) : lerpColor(0xc8d0e0, 0x4a5068, fill);
+    g.fillStyle(0x16141f, 0.8).fillRect(x - 1, y + 1, 14, 7).fillRect(x + 2, y - 1, 8, 3);
+    g.fillStyle(cloud, 1).fillRect(x, y + 2, 12, 5).fillRect(x + 3, y, 6, 3).fillRect(x + 1, y + 1, 3, 2);
+    if (phase !== 'calm') {
+      g.fillStyle(0xffe45a, phase === 'warning' && !flash ? 0.4 : 1);
+      g.fillRect(x + 6, y + 7, 2, 2).fillRect(x + 5, y + 9, 2, 1).fillRect(x + 4, y + 10, 2, 2);
+    }
+    // The bar: fills up while it is calm, drains while the storm rages.
+    const bx = x + 16, bw = 44;
+    drawPanel(g, bx - 2, y + 1, bw + 3, 7, { alpha: 0.6 });
+    const shown = phase === 'calm' ? progress : phase === 'warning' ? 1 : phase === 'storm' ? 1 - progress : 0;
+    const col = phase === 'calm' ? (progress > 0.8 && flash ? 0xffe45a : 0x8a94b8) : 0xffe45a;
+    g.fillStyle(col, 1).fillRect(bx, y + 3, Math.round(bw * shown), 3);
+  }
+
   // ---------- gems & gear ----------
   setGems(n, pulse = false) {
     this.gemText.setText(`${n}`);
@@ -85,9 +118,9 @@ export class HUD {
   gemGain(amount, color = GEM_COLOR) {
     this.gains = (this.gains || []).filter((g) => g.active);
     if (this.gains.length >= 2) this.gains.shift().destroy();
-    const t = new PixelText(this.scene, 20 + this.gemText.width + 4, 39, `+${amount}`, { color }).setScrollFactor(0).setDepth(DEPTH.hud).setVisible(this.visible);
+    const t = new PixelText(this.scene, 20 + this.gemText.width + 4, 48, `+${amount}`, { color }).setScrollFactor(0).setDepth(DEPTH.hud).setVisible(this.visible);
     this.gains.push(t);
-    this.scene.tweens.add({ targets: t, y: 31, alpha: 0, delay: 500, duration: 700, onComplete: () => t.destroy() });
+    this.scene.tweens.add({ targets: t, y: 40, alpha: 0, delay: 500, duration: 700, onComplete: () => t.destroy() });
   }
 
   // Small icons for this run's gear and perk; used-up items are dimmed.
@@ -95,7 +128,7 @@ export class HUD {
     this.gearIcons.forEach((o) => o.destroy());
     this.root = this.root.filter((o) => !this.gearIcons.includes(o));
     this.gearIcons = list.map((g, i) => {
-      const img = this.scene.add.image(7 + i * 12, 49, g.icon).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(g.used ? 0.3 : 1).setVisible(this.visible);
+      const img = this.scene.add.image(7 + i * 12, 58, g.icon).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(g.used ? 0.3 : 1).setVisible(this.visible);
       this.root.push(img);
       return img;
     });
@@ -191,8 +224,9 @@ export class HUD {
   }
 
   // Big centre-screen moments (every 100 m, new record). Queued so they never overlap.
-  celebrate({ title, sub = '', color = COLORS.gold, flicker = false, scale = 3 }) {
-    this.celebrations.push({ title, sub, color, flicker, scale });
+  // slam: the title drops in from huge and lands with a thud (onLand fires on impact).
+  celebrate({ title, sub = '', color = COLORS.gold, flicker = false, scale = 3, slam = false, onLand = null }) {
+    this.celebrations.push({ title, sub, color, flicker, scale, slam, onLand });
     if (!this.celebrating) this.nextCelebration();
   }
 
@@ -206,7 +240,16 @@ export class HUD {
     const s = c.sub ? new PixelText(sc, GAME_WIDTH / 2, y + c.scale * 5 + 5, c.sub, { color: COLORS.text }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2).setAlpha(0) : null;
     const parts = [t, s].filter(Boolean);
     parts.forEach((o) => o.setVisible(this.visible));
-    sc.tweens.add({ targets: t, scale: c.scale, alpha: 1, duration: 260, ease: 'Back.easeOut' });
+    if (c.slam) {
+      t.setScale(c.scale * 3.2);
+      sc.tweens.add({
+        targets: t, scale: c.scale, alpha: 1, duration: 170, ease: 'Quad.easeIn',
+        onComplete: () => {
+          if (c.onLand) c.onLand();
+          sc.tweens.add({ targets: t, scale: c.scale * 1.12, duration: 60, yoyo: true, ease: 'Quad.easeOut' });
+        },
+      });
+    } else sc.tweens.add({ targets: t, scale: c.scale, alpha: 1, duration: 260, ease: 'Back.easeOut' });
     if (s) sc.tweens.add({ targets: s, alpha: 1, delay: 200, duration: 300 });
     let flick = null;
     if (c.flicker) {

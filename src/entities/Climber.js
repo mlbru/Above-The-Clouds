@@ -1,7 +1,23 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config/gameConfig.js';
-import { POSES, FRAME_H } from '../render/climberArt.js';
+import { POSES, FRAME_H, FRAME_W } from '../render/climberArt.js';
 import { Audio } from '../systems/AudioSystem.js';
+
+// Fidgets while resting: [pose, ms, puff?] steps. puff = frame point where a
+// little chalk cloud comes off the hands.
+const FIDGETS = {
+  stretch: [['stretch', 380], ['stretch_b', 900], ['stretch', 300], ['stand', 0]],
+  chalk: [['chalk', 650, [26, 36]], ['clap_open', 160], ['clap', 140, [24, 13]], ['clap_open', 140], ['clap', 140, [24, 13]], ['stand', 0]],
+  shake: [['shake', 130], ['shake2', 130], ['shake', 130], ['shake2', 130], ['shake', 130], ['shake2', 130], ['stand', 0]],
+  look: [['look', 1500], ['stand', 400], ['look2', 1500], ['stand', 0]],
+};
+export const FIDGET_NAMES = Object.keys(FIDGETS);
+// Moods, played on purpose (not as idle fidgets): cheering after a long
+// perfect streak, panting after arriving with little grip left.
+const MOODS = {
+  cheer: [['cheer', 170], ['cheer_b', 170], ['cheer', 170], ['cheer_b', 170], ['cheer', 170], ['cheer_b', 300], ['stand', 0]],
+  pant: [['pant', 520], ['pant_b', 520], ['pant', 520], ['pant_b', 520], ['pant', 520], ['pant_b', 520], ['stand', 0]],
+};
 
 // The climber sprite. Its position is the "attach point": the hands on a hold
 // for wall poses, or the feet on the ground for ledge poses.
@@ -59,23 +75,42 @@ export class Climber {
   // Wall "hand" point while standing on a ledge (used to start climbing).
   static standHandOffset() { return 50; }
 
-  tweenTo(x, y, duration, ease = 'Sine.easeInOut') {
+  // delay: hold still first (the hit-stop on perfect hits).
+  tweenTo(x, y, duration, ease = 'Sine.easeInOut', delay = 0) {
     this.busy++;
     return new Promise((resolve) => {
       this.scene.tweens.add({
-        targets: this, x, y, duration, ease,
+        targets: this, x, y, duration, ease, delay,
         onUpdate: () => this.sync(),
         onComplete: () => { this.busy--; this.sync(); resolve(); },
       });
     });
   }
 
+  // A leap through the air on an arc (the Crevasse's jumps across the gap).
+  jumpTo(x, y, duration, arc = 18) {
+    this.busy++;
+    const x0 = this.x, y0 = this.y;
+    return new Promise((resolve) => {
+      this.scene.tweens.addCounter({
+        from: 0, to: 1, duration, ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          const t = tw.getValue();
+          this.x = x0 + (x - x0) * t;
+          this.y = y0 + (y - y0) * t - Math.sin(t * Math.PI) * arc;
+          this.sync();
+        },
+        onComplete: () => { this.busy--; this.x = x; this.y = y; this.sync(); resolve(); },
+      });
+    });
+  }
+
   // Squash & stretch: snaps to (sx, sy) and eases back to normal size.
-  squash(sx, sy, ms = 160) {
+  squash(sx, sy, ms = 160, delay = 0) {
     const s = this.sprite;
     this.scene.tweens.killTweensOf(s);
     s.setScale(sx, sy);
-    this.scene.tweens.add({ targets: s, scaleX: 1, scaleY: 1, duration: ms, ease: 'Back.easeOut' });
+    this.scene.tweens.add({ targets: s, scaleX: 1, scaleY: 1, duration: ms, delay, ease: 'Back.easeOut' });
   }
 
   // A one-frame white flash (impact accent on perfect hits).
@@ -111,8 +146,32 @@ export class Climber {
     this.sprite.setAngle(0);
   }
 
+  // Plays one of the FIDGETS on a ledge. Idle breathing waits until it ends;
+  // anything that moves the climber cancels it (stopFidget).
+  fidget(name, effects = null) {
+    const seq = FIDGETS[name] || MOODS[name];
+    this.stopFidget();
+    let i = 0;
+    const step = () => {
+      this.fidgetT = null;
+      if (i >= seq.length) return;
+      const [pose, ms, puff] = seq[i++];
+      this.setPose(pose);
+      if (puff && effects) effects.chalk(this.x - FRAME_W / 2 + puff[0], this.y - POSES[pose].anchor + puff[1]);
+      if (i < seq.length) this.fidgetT = this.scene.time.delayedCall(ms, step);
+    };
+    step();
+  }
+
+  get fidgeting() { return !!this.fidgetT; }
+
+  stopFidget() {
+    if (this.fidgetT) { this.fidgetT.remove(); this.fidgetT = null; }
+  }
+
   // Cancels any movement in progress (pending tween promises are abandoned).
   stopTweens() {
+    this.stopFidget();
     this.scene.tweens.killTweensOf(this);
     this.stopFlail();
     this.busy = 0;
@@ -139,22 +198,27 @@ export class Climber {
         if (cold && effects) { const h = this.head; effects.breathPuff(h.x + 2, h.y + 2); }
       }
     }
-    if (this.busy > 0) return;
+    if (this.busy > 0 || this.fidgetT) return;
     if (state === 'wall') {
       if (tired) this.setPose(this.breathPhase ? 'hang_tired' : 'hang_b');
       else this.setPose(this.breathPhase ? 'hang_b' : 'hang');
     } else if (state === 'ledge') {
-      this.setPose(sitting ? (this.breathPhase ? 'sit_b' : 'sit') : this.breathPhase ? 'stand_b' : 'stand');
+      if (sitting) this.setPose(this.breathPhase ? 'sit_b' : 'sit');
+      else if (cold) this.setPose(this.breathPhase ? 'hug_b' : 'hug');
+      else this.setPose(this.breathPhase ? 'stand_b' : 'stand');
     } else if (state === 'look') {
       this.setPose(Math.floor(this.scene.time.now / 2600) % 2 ? 'look2' : 'look');
     }
+    // In the cold a shiver runs through the body every few seconds.
+    this.shiverT = (this.shiverT || 0) + dt;
+    const shivering = cold && state !== 'look' && this.shiverT % 4200 < 420;
     // Trembling arms when grip is critical (1px, stays on the pixel grid).
     this.trembleT += dt;
-    if (state === 'wall' && gripRatio < 0.15 && this.trembleT > 90) {
+    if (((state === 'wall' && gripRatio < 0.15) || shivering) && this.trembleT > (shivering ? 60 : 90)) {
       this.trembleT = 0;
       this.offsetX = this.offsetX ? 0 : Math.random() < 0.5 ? -1 : 1;
       this.sync();
-    } else if (gripRatio >= 0.15 && this.offsetX) {
+    } else if ((gripRatio >= 0.15 || state !== 'wall') && !shivering && this.offsetX) {
       this.offsetX = 0;
       this.sync();
     }
@@ -162,7 +226,8 @@ export class Climber {
 
   updateLamp(night) {
     const h = this.head;
-    this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 22)).setAlpha(Math.max(0, night - 0.35) * 0.55);
+    // At night the headlamp throws a wide warm pool of light on the rock.
+    this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 14)).setScale(night > 0.5 ? 2 : 1).setTint(0xffe8c0).setAlpha(Math.max(0, night - 0.3) * 0.42);
   }
 
   destroy() {

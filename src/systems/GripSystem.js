@@ -42,14 +42,15 @@ export class GripSystem {
   }
 
   // Called every frame while hanging on the wall and choosing a route.
-  hang(dtSec, { drainMultiplier = 1, onJug = false } = {}) {
+  // noGrace: drain from the first moment (the Storm Crown's storms).
+  hang(dtSec, { drainMultiplier = 1, onJug = false, noGrace = false } = {}) {
     this.hangTime += dtSec;
     const g = this.b.grip;
     if (onJug) {
       if (this.value < g.jugRecoverCap) this.set(Math.min(g.jugRecoverCap, this.value + g.jugRecoverPerSec * dtSec));
       return this.value;
     }
-    if (this.hangTime > g.hangGraceSec) this.change(-g.hangDrainPerSec * drainMultiplier * this.mode.drainScale * dtSec);
+    if (noGrace || this.hangTime > g.hangGraceSec) this.change(-g.hangDrainPerSec * drainMultiplier * this.mode.drainScale * dtSec);
     return this.value;
   }
 

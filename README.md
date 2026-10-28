@@ -8,20 +8,23 @@ resource, the mountain never ends, and every part of it plays by its own rules.
 
 ![Title screen: the climber at base camp below the wall](docs/screenshots/title.png)
 
-## Six biomes, five twists
+## Nine biomes, eight twists
 
-The mountain climbs through six biomes. Each has its own scenery in the distance, its own
-rock, weather and music, and (above the first) its own mechanic. Above 1300 m the three
-highest biomes take turns, forever.
+The mountain climbs through nine biomes. Each has its own scenery in the distance, its own
+rock, weather and music, and (above the first) its own mechanic. From Above the Clouds on,
+every biome is about 250 m long. Above 1950 m the five highest biomes take turns, forever.
 
 | | Biome | What changes |
 | --- | --- | --- |
 | ![The Green Rise](docs/screenshots/green-rise.png) | **The Green Rise**<br>0 m | The calm start: meadows, a winding river and pine forest below. No twist, just the climb. |
-| ![The Stone Wall with a rock falling towards the climber](docs/screenshots/stone-wall.png) | **The Stone Wall**<br>120 m | **Rockfall.** Rocks come down as you grab a hold. Press the shown direction on the beat to dodge; a hit costs grip, a clean dodge feeds your streak. |
+| ![The Stone Wall with a rock falling towards the climber](docs/screenshots/stone-wall.png) | **The Stone Wall**<br>80 m | **Rockfall.** Rocks come down as you grab a hold. Press the shown direction on the beat to dodge; a hit costs grip, a clean dodge feeds your streak. |
 | ![The Frozen Reach in a whiteout](docs/screenshots/frozen-reach.png) | **The Frozen Reach**<br>300 m | **Whiteout.** Blizzards roll in. Notes only appear just before the line, but gems turn up twice as often. Wait it out on a ledge, or climb on by feel. |
 | ![Above the Clouds with a thermal route](docs/screenshots/above-the-clouds.png) | **Above the Clouds**<br>480 m | **Thermals.** Some routes ride warm air. Hit the orange up-note perfectly and the updraft lifts you 3 m higher. |
-| ![The Obsidian Spires in the dark](docs/screenshots/obsidian-spires.png) | **The Obsidian Spires**<br>800 m | **Darkness.** The black glass swallows the light. Notes are faint shapes that flash up on every beat, and your headlamp comes on. |
-| ![The Crystal Heights](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>1050 m | **Prism light.** A beam of split sunlight sweeps across the routes while you decide. Start a climb on the lit route and its hits cost no grip, and its gem is worth double. |
+| ![The Obsidian Spires in the dark](docs/screenshots/obsidian-spires.png) | **The Obsidian Spires**<br>700 m | **Darkness.** The black glass swallows the light. Notes are faint shapes that flash up on every beat, and your headlamp comes on. |
+| ![The Crystal Heights](docs/screenshots/crystal-heights.png) | **The Crystal Heights**<br>950 m | **Prism light.** A beam of split sunlight sweeps across the routes while you decide. Start a climb on the lit route and its hits cost no grip, and its gem is worth double. |
+| | **The Storm Crown**<br>1200 m | **Storms.** Thunderheads roll over the summit ridge. While a storm rages, hanging on a hold drains grip five times faster with no grace period: pick quickly, or wait it out on a ledge. Lightning lights up the wall. |
+| | **The Aurora Ridge**<br>1450 m | **Swing.** Northern lights sway over the ice, day and night, and so does the rhythm: every route plays long-short, long-short. |
+| | **The Dragon's Spine**<br>1700 m | **Dragon fire.** A dragon sleeps coiled around the peak. Now and then it wakes and rears its head beside the wall. While it watches, the mountain shakes, the play box sways and thunder rolls, and every few seconds it draws breath and breathes fire at you: swing clear with the arrow, on the beat. Ledges are safe. |
 
 ## How it plays
 
@@ -30,8 +33,9 @@ highest biomes take turns, forever.
 - **Climb on the beat.** Arrows slide into the line; press ← ↑ → in time. Perfect hits cost
   almost no grip, misses cost a lot.
 - **Rest on ledges.** Ledges refill your grip and are your checkpoints.
-- **One free fall per biome.** Fall once and you are back at your last ledge. Fall a second
-  time in the same biome and the run is over: back to 0 m.
+- **One slip per biome.** Lose your grip once and you either catch yourself or fall back to
+  your last ledge. Lose it a second time in the same biome, caught or not, and the run is
+  over: back to 0 m.
 - **Collect and spend.** Every biome has its own gem. Spend them at the trader at base camp
   on gear, perks and clothes.
 
@@ -50,7 +54,10 @@ node tests/balanceSim.mjs   # Monte-Carlo balance check
 
 URL flags: `?seed=123` (reproducible mountain), `?play` (skip title),
 `?timer` (setTimeout game loop for background tabs), `?harness` (loads the in-browser
-integration tests; run `await __runHarness()` in the console).
+integration tests; run `await __runHarness()` in the console), `?at=1450` (dev server only:
+a test run starting at that height, nothing saved), `?touch` (swipe controls on a computer),
+`?portrait` / `?landscape` (force a layout), `?season=halloween|christmas|none` (pretend it is
+that time of year).
 
 ## Bram explains as you go
 
@@ -67,26 +74,49 @@ The old Training Crag still exists for testing: `?tutorial` jumps straight in.
 
 ## Expeditions
 
-**EXPEDITIONS** on the title screen: hand-built mountains with a real summit. The first is
-**Bram's Route** (about 600 m, 12 pitches), the climb Bram and his partner Elsa never
-finished. Every hold, every rhythm and every ledge is written by hand in
-`src/data/expeditions.js` and laid out by `src/systems/ExpeditionMountain.js`: from a hold,
-SAFE climbs to the next hold on the line, NORMAL skips one, RISKY skips two. The biomes and
-their twists follow the height as usual (rockfall, whiteout, thermals).
+**EXPEDITIONS** (the signpost at base camp) opens a lineup of painted mountains on a wide
+horizon: ← → swing the view from one to the next (the sky changes with it), and the chosen one
+shows its height, your best, journal pages found and a flag where you got to. Space climbs.
 
-- No fall limit: a fall always takes you back to the last ledge (falls are counted).
-- At each ledge a cairn holds a page of Bram's journal; the summit has one last page.
-- The summit gives a summary with your time, best time and falls; the first ascent pays gems
-  and the logbook stamp FOR BRAM.
+- **Bram's Route** (about 600 m, 12 pitches): the climb Bram and Elsa never finished.
+- **Mount Ember** (about 320 m, 7 pitches): an active volcano. Lava rises behind you while you
+  climb (it waits while you rest on a ledge); close to it the holds are hot and drain your grip
+  fast, and if it reaches your feet you slip. The mountain erupts: dodge the rocks on the beat.
+- **The Sky Islands** (about 280 m, 7 pitches): no wall at all, just rocks floating over a sea of
+  clouds. Wide jumps from island to island on gust notes and thermals.
+- **The Crevasse** (about 130 m, 4 pitches): a crack in the glacier between two ice walls. The
+  holds alternate walls, so SAFE and RISKY climbs end in a leap across the gap on the last
+  arrow (← or →); NORMAL stays on your own wall. Ledges are snow bridges (`chasm` in
+  `src/data/expeditions.js`, the gap painted in `src/render/wallArt.js`).
 
-## Bram's logbook
+Every hold, rhythm and ledge is written by hand in `src/data/expeditions.js` and laid out by
+`src/systems/ExpeditionMountain.js`; an expedition can bring its own look (`theme`, the special
+biomes `volcano` and `sky` in `src/data/biomes.js`), rising lava and floating islands. No fall
+limit: a fall always takes you back to the last ledge. Each ledge holds a journal page (Elsa's
+own notes on the two new mountains), the summit a last page, and the first ascent pays gems.
 
-28 stamps on five pages (height, rhythm, mountain, finds, daring), from "climb 50 m" to
-"reach 2000 m" and "reach 800 m in Summit mode", plus two secret ones. The later stamps on
-each page are real challenges. Every stamp shows its progress (`BEST 24/30`, `18/25`): per-run
-stamps show your best run so far. Every stamp pays gems once. Open the logbook from the
-title screen or the pause menu (`src/data/logbook.js`,
-`src/scenes/LogbookScene.js`).
+## Base camp is the menu
+
+The title screen has no list: base camp itself is the menu. The wall is **CLIMB** (press ↓ on it
+to switch between Normal, Hard and Summit), the campfire is **COLLECTION**, the signpost is
+**EXPEDITIONS**, Bram is the **SHOP** and the tent is the **WARDROBE**. ← → hop between them,
+Space goes; the mouse works too. The title camp *is* the start of your next run (same
+mountain, same time of day): picking CLIMB fades the words away and the climber steps straight
+onto the wall, with no loading screen and no second base camp. Fall back to base camp during a
+run and you get the same camp menu (with your slips for the Green Rise under the logo); CLIMB
+carries on with the run (`src/ui/CampMenu.js`). Settings, controls and fullscreen sit behind the gear in the
+top right. Left alone for 20 seconds, the climber sets off up the wall by himself; any key
+brings him back.
+
+## The collection
+
+**COLLECTION** (the campfire, or the pause menu): everything you have met on the mountain, as
+cards, in seven chapters: places, creatures, gems, gear, hazards, wonders and Bram's stamps.
+Found cards show their picture; the rest show their back with a "?" (stamps show their goal
+and your progress). A card you have not looked at yet is tagged NEW and turns over the first
+time you pick it. 31 stamps on five pages (height, rhythm, mountain, finds, daring), from
+"climb 50 m" to "reach 2000 m", plus two secret ones; each pays gems once
+(`src/data/journal.js`, `src/data/logbook.js`, `src/scenes/CollectionScene.js`).
 
 ## End of a run
 
@@ -95,6 +125,22 @@ showing which biome you were stranded in (and your record), perfect moves, best 
 finds (stones, discoveries, viewpoints), gems and slips caught, and any logbook stamps the
 run earned (`src/ui/RunSummary.js`).
 
+The run-ending fall is a short scene of its own: the climber tumbles down through the clouds
+while the height counts back to 0 m, then lands in the cloud sea (`cloudFall()` in ClimbScene).
+
+## Life on the mountain
+
+- **New biome panorama**: climbing into a new biome slides in cinema bars and lets the camera
+  drift up over the new stretch before its title card; the grip clock waits, any key skips it.
+- **Moods**: the climber cheers on a ledge after a streak of 10+, puts the hands on the knees
+  when arriving with little grip, and shivers and hugs themself in the cold.
+- **Animals** (`src/world/Critters.js`): birds perch on holds on the lower mountain and take off
+  when you climb close; mountain goats stand on rest ledges, turn to watch you and jump away
+  when you arrive.
+- **Seasons** (`src/data/seasons.js`): around Halloween (15 Oct - 3 Nov) base camp gets carved
+  pumpkins and bats and Bram sells the PUMPKIN COAT; around Christmas (1 Dec - 6 Jan) snow,
+  fairy lights and baubles, and the SANTA BOBBLE.
+
 ## Game details
 
 - **The mountain gets harder as you climb**: the beat speeds up, timing windows shrink,
@@ -102,6 +148,12 @@ run earned (`src/ui/RunSummary.js`).
 - **Tricks unlock with height**: off-beat rhythms (40 m+), crumbling holds that break after a
   few seconds (150 m+), wind gusts with tighter timing (250 m+), hold notes (180 m+), and
   blind notes that fade out before the line (380 m+).
+- **The high mountain keeps getting harder** after the tempo tops out at 800 m. New kinds of
+  notes appear and get more common all the way to about 3500 m: **mirrored** arrows in pink that
+  you press the other way (950 m+), **doubles**, two stacked arrows pressed together (1200 m+), and
+  **rolls**, a dotted tail you tap again and again until its dots are gone (1450 m+; 3 taps,
+  4 from 2200 m, 5 from 3000 m). From 1700 m climbs get one more input (`mirror`, `chord`,
+  `roll` in the `ramp` of `balanceConfig.js`).
 - **Perfect streaks**: consecutive perfect moves are counted under the grip meter. At 10, 20
   and 30 (then every 10) you get grip back; 20 and 30 in a row unlock the Golden Beanie and
   the Blaze jacket (`streak` in `balanceConfig.js`).
@@ -110,7 +162,9 @@ run earned (`src/ui/RunSummary.js`).
 - **Music**: every biome has its own key, tempo, lead instrument and motif (`music` in
   `src/data/biomes.js`): a plucked string in the Green Rise, a wooden marimba on the Stone
   Wall, a music box in the Frozen Reach, a breathy flute above the clouds, a low bowed
-  string with a slow drum in the Obsidian Spires and FM glass bells in the Crystal Heights.
+  string with a slow drum in the Obsidian Spires, FM glass bells in the Crystal Heights, a dark
+  brass horn over storm drums on the Storm Crown, a slow breathing pad on the Aurora Ridge and
+  a throat-singing drone with war drums on the Dragon's Spine.
   The motif plays under every biome title card and comes back (sometimes varied) while you climb.
 - **Animation**: every reach and pull goes through an in-between frame; topping out on a
   ledge goes elbows-over, knee up, stand. A fall starts with the hands peeling off the hold,
@@ -135,13 +189,35 @@ run earned (`src/ui/RunSummary.js`).
   to route (1.1 s each, bouncing at the ends). Start a climb on the lit route and its hits cost
   no grip (misses still do) and a gem on it is worth double. Nothing is ever taken away
   (`PRISM_LIGHT` in `src/systems/mechanics/PrismLight.js`).
+- **Storms** (Storm Crown): every 30-50 s a storm builds (a rumble and a toast), then rages for
+  about 22 s. While it rages, hanging on a hold (not a ledge) drains grip 5x faster with no
+  grace period; lightning strikes every few seconds (`STORM` in `src/systems/mechanics/Storm.js`).
+- **Swing** (Aurora Ridge): straight one-beat gaps become long-short pairs (4/3 and 2/3 of a
+  beat); held notes, rolls and off-beats keep their timing (`SWING` in
+  `src/systems/mechanics/Swing.js`).
+- **Dragon fire** (Dragon's Spine): the dragon sleeps 26-42 s, wakes over 4 s, then watches
+  for about 24 s. While it watches the screen shakes, the play box sways and tilts, red
+  lightning and thunder roll and it spits fireballs at the sky. 2.5 s after it wakes, and then
+  every 5-8 s, the next hold you grab brings a fire breath: 1.5 s of inhaling (the throat
+  glows), then the flames land on the beat; press the shown arrow to swing clear, or lose 14
+  grip. Above 1950 m it breathes twice. A ledge is safe (`DRAGON_EYE` in
+  `src/systems/mechanics/DragonEye.js`, the dragon itself in `src/world/Dragon.js`).
+- **Every biome looks like its own place**: its own wall outline (`wall.edge`: ivy on the Green
+  Rise, stepped granite blocks on the Stone Wall, icicles in the Frozen Reach, clinging cloud
+  puffs above the clouds, sharp glass facets on the Obsidian Spires and the Storm Crown, crystal
+  shards in the Crystal Heights, rime feathers on the Aurora Ridge, ivory spines on the Dragon's
+  Spine), its own rock pattern (`wall.overlays`), its own props on the wall (pitons, nests,
+  magma vents, chains, frost flowers, bones and gold), its own cloud-sea colour (`sea`) and its
+  own life in the sky (cranes, bats, storm light, shooting stars, dragon smoke). Floating
+  islands only drift above the clouds and among the crystals (`floaters`).
 - **Whiteout** (Frozen Reach): now and then a blizzard rolls in, announced by a toast. During
   the storm the scene washes out and notes only appear shortly before the line (blind notes
   stay visible), but gems turn up twice as often. Wait it out on a ledge or climb through it
   (`WHITEOUT` in `src/systems/mechanics/Whiteout.js`).
 - **Gems**: a route can carry a gem on its target hold (also shown on its route card). Take
   that route to grab it; the other routes' gems fade away. Risky routes carry gems most
-  often. Every area has its own stone (emerald, amber, sapphire, cloud opal, ruby, diamond),
+  often. Every area has its own stone (emerald, amber, sapphire, cloud opal, ruby, diamond,
+  storm topaz, tourmaline, dragon pearl),
   rarer and worth more the higher you go. Every 50 m of height, perfect-streak milestones
   and a new record add a few gems; Hard pays x1.5, Summit x2 (`GEM_INCOME` in `src/data/shop.js`).
 - **The trader** stands at base camp (T, or tap them). GEAR: one-use items, pack up to 3;
@@ -150,11 +226,16 @@ run earned (`src/ui/RunSummary.js`).
   at a time (gem sense, iron grip, steady hands, streak saver). STYLE: buy clothes and chalk
   colours; some need a number of found regional gems first. Gear and perks only work in Normal.
 - **Wardrobe**: in the pause menu, on the title screen and at the trader. It lists only what
-  you own; the STYLE tab shows everything you can still earn or buy.
-- **One free fall per biome** (Normal and Hard): the first fall in a biome sends you back to
-  your last checkpoint as before; a second fall in the same biome ends the run and you start
-  again at 0 m. The HUD shows `1 FALL LEFT` or `NO FALLS LEFT` next to the biome name. Summit
-  keeps its own rule: one fall ends the run.
+  you own; the STYLE tab shows everything you can still earn or buy. Besides clothes and chalk
+  there are **trails** (stardust, wildfire, pixel hearts, rainbow road…) left behind as you
+  move and **hit effects** (star burst, lightning, gem shards…) for perfect hits. Every item has
+  a rarity (common, rare, epic, legendary), new unlocks are tagged NEW, and a preview stage
+  plays trails and hit effects live. At the trader, Bram talks back.
+- **One slip per biome**: the first time you lose your grip in a biome you get the catch
+  prompt as before (caught, or back to your last checkpoint). That uses up the biome's slip:
+  the second slip in the same biome ends the run at once and you start again at 0 m. The HUD
+  shows `1 SLIP LEFT` or `NO SLIPS LEFT` next to the biome name. Summit also ends the run on
+  any fall.
 - **Modes** (title screen): Normal, Hard (stricter timing, hungrier grip, no perfect refills,
   faster ramp) and Summit (Hard rules, and one fall ends the run). Each mode has its own record.
 
@@ -170,6 +251,11 @@ layers and sky tint (`src/render/backdropArt.js`) and an optional mechanic
 
 Settings > ENTER CODE (title screen or pause menu). Entering a code again switches it off.
 - `GEMSTORM`: unlimited gems (and every regional-gem requirement counts as met), for testing the trader.
+- `OPENBOOK`: turns every card in the collection face up (no gear, perks or gems are given, so
+  it is not a cheat and runs still count for the leaderboard). On the save named MAARTEN it
+  also restores the Normal record of 1867 m (already on the online board, so nothing is sent).
+- `GRANDMASTER`: masters every biome at once (all three stars in each), which unlocks all nine
+  mastery outfits. It is not switched off by entering it again.
 
 ## Controls
 
@@ -188,16 +274,28 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
 Every push to `main` runs the tests, builds the game and publishes it to GitHub Pages
 (`.github/workflows/pages.yml`).
 
+The GitHub Pages version is an installable app: on a phone, "Add to Home Screen" (Safari) or
+"Install app" (Chrome); on a computer, the install icon in the address bar. It works offline.
+Updates need no reinstall: the service worker (`public/sw.js`) always fetches the page from the
+network first, so after a push the installed app picks up the new version the next time it is
+opened online (offline it plays the last version it saw). Saves stay in the browser storage of
+that site, so they carry over between versions.
+
 ## Shareable files (`npm run release`)
 
 Written next to the project folder:
-- `above-the-clouds.html`: one file to double-click on a computer. Touch buttons appear automatically on touch screens.
-- `above-the-clouds-mobile.html`: the same game with the touch buttons always on.
+- `above-the-clouds.html`: one file to double-click on a computer. Swipe controls switch on automatically on touch screens.
+- `above-the-clouds-mobile.html`: the same game with the swipe controls always on.
 - `above-the-clouds-web.zip`: contains `index.html`, ready to upload to itch.io, Netlify or GitHub Pages.
 
-On phones: play in landscape. The game leaves room at both sides for the buttons
-(◀ / ▲ on the left, ▲ / ▶ on the right). Holding a button works for hold notes. Tap route
-cards and menu items directly, and use the PAUSE button at the top.
+On phones and tablets you swipe: anywhere on the screen, swipe left, up, right or down for
+that arrow. The arrow counts from the moment your finger touched the screen, so swipe on the
+beat. Keep the finger down for hold notes; two fingers swipe a double. Tap route cards and menu
+items directly, and use the pause button at the top (`src/ui/TouchControls.js`).
+
+Play upright or sideways. Upright the screen is narrower than the mountain (300 px instead of
+480) and the camera follows the climber sideways; the menus have their own upright layout.
+The layout is chosen when the game starts; turn the phone and a button offers to switch.
 
 ## Structure
 
