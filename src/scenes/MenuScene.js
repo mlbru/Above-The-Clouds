@@ -12,8 +12,8 @@ import { Audio } from '../systems/AudioSystem.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
 import { MenuList } from '../ui/MenuList.js';
 import { CampMenu } from '../ui/CampMenu.js';
-import { settingsItems, CONTROLS_TEXT } from '../ui/SettingsMenu.js';
-import { DARES, DARE, MAX_DARES, cleanDares, dareKey, dareLabel, dareScale } from '../data/dares.js';
+import { CONTROLS_TEXT } from '../ui/SettingsMenu.js';
+import { cleanDares, dareLabel, dareScale } from '../data/dares.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
 import { buildClimberTexture } from '../render/textures.js';
 import { BIOMES, biomeMixAt, setBiomeTheme } from '../data/biomes.js';
@@ -173,41 +173,10 @@ export class MenuScene extends Phaser.Scene {
     this.showMain();
   }
 
-  // Bram's dares: pick up to two for the next endless run (data/dares.js).
+  // Bram's dares: a screen of its own (scenes/DaresScene.js).
   showDares() {
-    this.clearUI();
-    const W = GAME_WIDTH / 2;
-    const picked = () => cleanDares(this.prog.settings.dares);
-    const toggle = (id) => {
-      const now = picked();
-      if (now.includes(id)) this.prog.setSetting('dares', now.filter((d) => d !== id));
-      else if (now.length < MAX_DARES) this.prog.setSetting('dares', cleanDares([...now, id]));
-      else { Audio.play('miss'); return; }
-      info();
-    };
-    this.add2(new PixelText(this, W, 26, "BRAM'S DARES", { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.add2(new PixelText(this, W, 44, `PICK UP TO ${MAX_DARES}. EACH ONE: GEMS X${DARE.gemScale}`, { color: COLORS.dim }).setOrigin(0.5, 0));
-    this.panel(W - 110, 56, 220, 12 + (DARES.length + 2) * 11 + 30);
-    const desc = this.add2(new PixelText(this, W, 62 + (DARES.length + 2) * 11, '', { color: '#dfe8ff' }).setOrigin(0.5, 0));
-    const stat = this.add2(new PixelText(this, W, 74 + (DARES.length + 2) * 11, '', { color: COLORS.faint }).setOrigin(0.5, 0));
-    const info = () => {
-      const ids = picked();
-      const best = ids.length ? Math.floor(this.prog.dareBestFor(dareKey(ids, this.mode))) : Math.floor(this.prog.bestFor(this.mode));
-      stat.setText(ids.length ? `${BALANCE.modes[this.mode].label} + ${dareLabel(ids)}  •  GEMS X${dareScale(ids).toFixed(2)}  •  BEST ${best} M` : `NO DARES  •  ${BALANCE.modes[this.mode].label} RECORD ${best} M`);
-    };
-    const items = DARES.map((d) => ({
-      label: () => {
-        if (this.list && this.list.items[this.list.index] && this.list.items[this.list.index].dare === d.id) desc.setText(d.text).setColor(d.color);
-        return `${picked().includes(d.id) ? '[X]' : '[ ]'} ${d.name}`;
-      },
-      dare: d.id,
-      onSelect: () => toggle(d.id),
-    }));
-    items.push({ label: () => { if (this.list && this.list.index === DARES.length) desc.setText('NO DARES: A NORMAL RUN WITH RECORDS.').setColor(COLORS.dim); return 'CLEAR ALL'; }, onSelect: () => { this.prog.setSetting('dares', []); info(); } });
-    items.push({ label: () => { if (this.list && this.list.index === DARES.length + 1) desc.setText('DARED RUNS KEEP THEIR OWN RECORDS.').setColor(COLORS.dim); return 'BACK'; }, onSelect: () => this.showMain() });
-    this.list = new MenuList(this, W, 63, items, { depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
-    info();
-    this.list.refresh();
+    this.scene.launch('Dares', { returnTo: 'Menu' });
+    this.scene.pause();
   }
 
   // The small options menu behind the gear.
@@ -266,12 +235,10 @@ export class MenuScene extends Phaser.Scene {
     this.add2(new PixelText(this, GAME_WIDTH / 2, 82 + (biomes.length + 1) * 11, 'TEST RUN: NO RECORDS, UNLOCKS OR GEMS ARE SAVED', { color: COLORS.dim }).setOrigin(0.5, 0));
   }
 
+  // The settings screen is an overlay of its own (scenes/SettingsScene.js).
   showSettings() {
-    this.clearUI();
-    const items = settingsItems(this.prog, () => this.showMain(), undefined, () => this.showCodeEntry());
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 28, 'SETTINGS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.panel(GAME_WIDTH / 2 - 90, 50, 180, 12 + items.length * 11);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 57, items, { depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
+    this.scene.launch('Settings', { returnTo: 'Menu', onCode: true });
+    this.scene.pause();
   }
 
   showCodeEntry() {

@@ -249,8 +249,10 @@ layers and sky tint (`src/render/backdropArt.js`) and an optional mechanic
 
 ## Bram's dares
 
-**DARES** (chalked on the rock beside the climb at base camp) lets you pick up to two dares for
-the next endless run: **Mirror Mountain** (every ← and → is shown the other way round),
+**DARES** (chalked on the rock beside the climb at base camp) opens Bram's dare board: five worn
+paper cards pinned up at night by the fire, each with its own emblem. Take a dare and Bram's red
+wax seal slams onto the card; he has a line for every dare (`src/scenes/DaresScene.js`, art in
+`src/render/dareArt.js`). Pick up to two dares for the next endless run: **Mirror Mountain** (every ← and → is shown the other way round),
 **Endless Night** (the sun never rises), **Quick Hands** (the beat is 10% faster), **Light Pack**
 (ledges only fill your grip to half) and **Blind Faith** (every note goes blind above 100 m).
 Each dare multiplies the gems you earn by 1.25. A dared run keeps its own record per set of
@@ -259,7 +261,10 @@ has a stamp for reaching 500 m with it on (`src/data/dares.js`).
 
 ## Look and feel settings
 
-Five choices in Settings, so the feel can be tuned per player:
+Settings is a screen of its own (`src/scenes/SettingsScene.js`, rows in `src/ui/SettingsMenu.js`):
+sections for sound, screen, feel and play, every choice shown as a pill you can tap, and a card
+that explains the chosen row and each choice, with a small live demo for the feel rows. It
+saves as you go. Five of the choices tune the feel per player:
 - **CHALK MARKS**: YOUR LINE (prints on used holds plus a dotted chalk line between them, so
   looking down shows the way you came), PRINTS (prints only) or OFF.
 - **BEAT PULSE**: SUBTLE (the hold you are going for pulses on the beat, breath clouds come out

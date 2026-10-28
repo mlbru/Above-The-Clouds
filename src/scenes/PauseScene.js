@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
 import { MenuList } from '../ui/MenuList.js';
-import { settingsItems, CONTROLS_TEXT } from '../ui/SettingsMenu.js';
+import { CONTROLS_TEXT } from '../ui/SettingsMenu.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
 import { levelToMeters } from '../config/gameConfig.js';
 import { toggleFullscreen, isFullscreen } from '../utils/fullscreen.js';
@@ -67,12 +67,10 @@ export class PauseScene extends Phaser.Scene {
     this.scene.pause();
   }
 
+  // The settings screen is an overlay of its own (scenes/SettingsScene.js).
   showSettings() {
-    this.clear();
-    const items = settingsItems(this.prog, () => this.showMain(), undefined, () => this.showCodeEntry());
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 28, 'SETTINGS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.panel(GAME_WIDTH / 2 - 90, 50, 180, 12 + items.length * 11);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 57, items, { onCancel: () => this.showMain() });
+    this.scene.launch('Settings', { returnTo: 'Pause', onCode: true });
+    this.scene.pause();
   }
 
   showCodeEntry() {
