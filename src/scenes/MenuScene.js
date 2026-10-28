@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, PX_PER_METER, LEVEL_PX, RENDER_AHEAD_LEVELS, levelToMeters, camXFor } from '../config/gameConfig.js';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, PX_PER_METER, LEVEL_PX, RENDER_AHEAD_LEVELS, levelToMeters, camXFor, IS_PORTRAIT } from '../config/gameConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
 import { randomSeed } from '../utils/seededRandom.js';
 import { DayNightSystem } from '../systems/DayNightSystem.js';
@@ -10,9 +10,8 @@ import { wipeOut, wipeIn } from '../utils/transition.js';
 import { WallRenderer } from '../world/WallRenderer.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
-import { MenuList } from '../ui/MenuList.js';
+import { FancyMenu } from '../ui/FancyMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
-import { CONTROLS_TEXT } from '../ui/SettingsMenu.js';
 import { cleanDares, dareLabel, dareScale } from '../data/dares.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
 import { buildClimberTexture } from '../render/textures.js';
@@ -183,16 +182,18 @@ export class MenuScene extends Phaser.Scene {
   showOptions() {
     this.clearUI();
     const dev = !!(this.prog.data.cheats && this.prog.data.cheats.devTeleport);
+    const s = this.prog.settings;
     const items = [
-      { label: 'SETTINGS', onSelect: () => this.showSettings() },
-      { label: 'CONTROLS', onSelect: () => this.showControls() },
-      { label: () => (isFullscreen() ? 'WINDOWED' : 'FULLSCREEN'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
-      ...(dev ? [{ label: 'DEV: TELEPORT', onSelect: () => this.showTeleport() }] : []),
-      { label: 'BACK', onSelect: () => this.showMain() },
+      { label: 'SETTINGS', icon: 'gear', color: 0xd8a6ff, onSelect: () => this.showSettings() },
+      { label: 'CONTROLS', icon: 'keys', color: 0x9fd8ff, onSelect: () => this.showControls() },
+      { label: 'FULLSCREEN', icon: 'expand', value: () => (isFullscreen() ? 'ON' : 'OFF'), onSelect: () => toggleFullscreen().then(() => this.list && this.list.refresh()) },
+      { label: 'DEBUG OVERLAY', icon: 'bug', color: 0x8fd16a, value: () => (s.debugOverlay ? 'ON' : 'OFF'), onSelect: () => this.prog.setSetting('debugOverlay', !s.debugOverlay) },
+      ...(dev ? [{ label: 'DEV: TELEPORT', icon: 'flag', color: 0xf0644b, onSelect: () => this.showTeleport() }] : []),
+      { label: 'BACK', icon: 'back', onSelect: () => this.showMain() },
     ];
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 40, 'OPTIONS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.panel(GAME_WIDTH / 2 - 70, 64, 140, 14 + items.length * 12);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 72, items, { depth: DEPTH.hud + 1, spacing: 12, onCancel: () => this.showMain() });
+    const y = IS_PORTRAIT ? 90 : Math.max(48, Math.floor((GAME_HEIGHT - items.length * 15 - 30) / 2));
+    this.add2(new PixelText(this, GAME_WIDTH / 2, y - 22, 'OPTIONS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
+    this.list = new FancyMenu(this, GAME_WIDTH / 2, y, items, { width: 160, depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
   }
 
   // First visit: the camera starts up in the clouds and drifts down to base camp.
@@ -227,12 +228,11 @@ export class MenuScene extends Phaser.Scene {
     this.clearUI();
     this.add2(new PixelText(this, GAME_WIDTH / 2, 40, 'DEV: TELEPORT', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
     const biomes = Object.values(BIOMES).filter((b) => !b.special).sort((a, b) => a.from - b.from);
-    this.panel(GAME_WIDTH / 2 - 90, 64, 180, 14 + (biomes.length + 1) * 11);
-    this.list = new MenuList(this, GAME_WIDTH / 2, 72, [
-      ...biomes.map((b) => ({ label: `${b.name.replace('THE ', '')}  ${b.from} M`, onSelect: () => this.startClimb(false, b.from) })),
-      { label: 'BACK', onSelect: () => this.showMain() },
-    ], { depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 82 + (biomes.length + 1) * 11, 'TEST RUN: NO RECORDS, UNLOCKS OR GEMS ARE SAVED', { color: COLORS.dim }).setOrigin(0.5, 0));
+    this.list = new FancyMenu(this, GAME_WIDTH / 2, 60, [
+      ...biomes.map((b) => ({ label: b.name.replace('THE ', ''), icon: 'flag', value: () => `${b.from} M`, onSelect: () => this.startClimb(false, b.from) })),
+      { label: 'BACK', icon: 'back', onSelect: () => this.showMain() },
+    ], { width: 180, rowH: 12, depth: DEPTH.hud + 1, accent: 0xf0644b, onCancel: () => this.showMain() });
+    this.add2(new PixelText(this, GAME_WIDTH / 2, 64 + this.list.height, 'TEST RUN: NO RECORDS, UNLOCKS OR GEMS ARE SAVED', { color: COLORS.dim }).setOrigin(0.5, 0));
   }
 
   // The settings screen is an overlay of its own (scenes/SettingsScene.js).
@@ -248,12 +248,8 @@ export class MenuScene extends Phaser.Scene {
 
 
   showControls() {
-    this.clearUI();
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 40, 'CONTROLS', { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
-    this.panel(GAME_WIDTH / 2 - 120, 62, 240, 70);
-    this.add2(new PixelText(this, GAME_WIDTH / 2 - 110, 70, CONTROLS_TEXT, { color: COLORS.text }));
-    this.add2(new PixelText(this, GAME_WIDTH / 2, 140, 'PRESS ON THE BEAT: WHEN THE ARROW REACHES THE LINE.', { color: COLORS.dim }).setOrigin(0.5, 0));
-    this.list = new MenuList(this, GAME_WIDTH / 2, 156, [{ label: 'BACK', onSelect: () => this.showMain() }], { depth: DEPTH.hud + 1, onCancel: () => this.showMain() });
+    this.scene.launch('Controls', { returnTo: 'Menu' });
+    this.scene.pause();
   }
 
   openCollection() {

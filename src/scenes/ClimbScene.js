@@ -58,7 +58,7 @@ import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
 import { findCosmetic } from '../data/cosmetics.js';
 import { GEM_TARGET } from '../ui/HUD.js';
-import { toCss, lerpColor } from '../utils/color.js';
+import { toCss, lerpColor, lighten } from '../utils/color.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -88,6 +88,9 @@ const STAND_HAND = 50;
 const biomeMixWeight = (mix, id) => (mix.a.id === id ? 1 - mix.t : 0) + (mix.b.id === id ? mix.t : 0);
 // Milliseconds on a ledge without input before the climber starts to fidget.
 const REST_IDLE_FIRST = 6000;
+// F3 is a media key on most Macs (needs fn), and the ` key sends different
+// codes on European keyboards, so the debug toggle accepts all of these.
+const isDebugKey = (e) => e.code === 'F3' || e.code === 'Backquote' || e.code === 'IntlBackslash' || ['`', '~', '§', '±'].includes(e.key);
 
 function urlSeed() {
   try {
@@ -245,7 +248,7 @@ export class ClimbScene extends Phaser.Scene {
     this.biomeMark = null;
     this.trailAt = null;
     this.biomeId = null;
-    this.debugVisible = false;
+    this.debugVisible = !!this.settings.debugOverlay;
     this.bot = null;
     this.lastJudge = '-';
     this.eventT = 0;
@@ -359,7 +362,7 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
-    if (code === 'F3' || code === 'Backquote') { this.debugVisible = !this.debugVisible; if (!this.debugVisible) this.hud.setDebug(null); return; }
+    if (isDebugKey(event)) { this.setDebug(!this.debugVisible); return; }
     if (code === 'KeyB' && this.debugVisible) {
       const modes = [null, 'perfect', 'sloppy'];
       const next = modes[(modes.indexOf(this.bot ? this.bot.mode : null) + 1) % modes.length];
@@ -403,6 +406,15 @@ export class ClimbScene extends Phaser.Scene {
       default:
         break;
     }
+  }
+
+  // The debug overlay (F3, the ` key, or DEBUG OVERLAY in the pause and
+  // options menus). It stays on between runs until switched off.
+  setDebug(on) {
+    this.debugVisible = on;
+    this.prog.setSetting('debugOverlay', on);
+    if (!on) { this.hud.setDebug(null); if (this.bot) { this.bot = null; this.hud.toast('AUTOPILOT: OFF', COLORS.blue); } }
+    else this.hud.toast('DEBUG ON  •  B: AUTOPILOT', COLORS.green);
   }
 
   pauseGame() {
@@ -2627,7 +2639,9 @@ export class ClimbScene extends Phaser.Scene {
       heightM: climberAlt,
       best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.recordBest,
       modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
-      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT'}`,
+      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : biome.name,
+      slips: this.director || this.expedition ? '' : this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT',
+      accent: lighten(biome.accentC || 0xf2c14e, 0.3),
       ...this.nextBiomeLine(climberAlt),
       grip: this.grip.value,
       gripLow: this.grip.isLow && this.state !== STATE.RESTING,

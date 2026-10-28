@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS = {
   ledgeLife: 'lively',
   // Bram's dares picked for the next endless run (data/dares.js).
   dares: [],
+  // The debug overlay in runs (F3 / ` or the menus).
+  debugOverlay: false,
 };
 
 function memoryStorage() {

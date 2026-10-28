@@ -301,7 +301,7 @@ Settings > ENTER CODE (title screen or pause menu). Entering a code again switch
 | At a ledge | R rest · V view · C photo · T trader (base camp) · Space climb |
 | Trader / wardrobe | ↑ ↓ choose · ← → pack / change · Space buy / wear · Q E tabs · Esc leave |
 | Pause | Esc / P (in fullscreen in Chrome and Edge a tap of Esc pauses; hold Esc to leave fullscreen) |
-| Debug overlay | F3 or ` (then B cycles the autopilot) |
+| Debug overlay | F3, ` or § (European Mac keyboards), or DEBUG OVERLAY in the pause or options menu; it stays on between runs. Then B cycles the autopilot |
 
 ## Deploy
 
