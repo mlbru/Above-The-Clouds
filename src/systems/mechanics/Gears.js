@@ -1,30 +1,34 @@
 // The Clockwork Bastion's rule: some arrows sit on a turning cog. A gear note
-// ticks one step clockwise (left, up, right, left...) on every beat as it
-// slides in, and lands on the arrow to press one beat before the line. Pips
-// above it count the ticks still to come, so you can read it early or wait.
+// comes in pointing the wrong way and turns a quarter clockwise on a beat
+// (left -> up -> right) until it clicks into place, well before the line:
+// watch it turn, wait for the click, then press. It never turns past right,
+// so it always ends on an arrow you can press. Safe routes have no gears.
 export const GEARS = {
   minWeight: 0.5,
-  // Chance per note, how many a route may carry, and the chance of a two-tick gear.
+  // Chance per note, and how many a route may carry (never two in a row).
   noteChance: 0.3,
-  maxPerRoute: 3,
+  maxPerRoute: 2,
+  // Chance that a right arrow turns twice (from left) instead of once.
   twoTickChance: 0.4,
+  // The last turn lands this many beats before the line.
+  settleBeats: 2,
 };
 
 // Clockwise round the three arrows you can press.
 const CYCLE = ['L', 'U', 'R'];
 
-// Ticks a gear note still has to turn at `now`: the last one lands a beat
-// before the note reaches the line.
-export function gearTicks(note, now, beatMs) {
+// Quarter turns a gear note still has to make at `now`: one per beat, the
+// last one `settleBeats` before the note reaches the line.
+export function gearTicks(note, now, beatMs, cfg = GEARS) {
   if (!note.gear) return 0;
-  const left = Math.ceil((note.time - now) / beatMs) - 1;
+  const left = Math.ceil((note.time - now) / beatMs) - cfg.settleBeats;
   return Math.max(0, Math.min(note.gear, left));
 }
 
 // The arrow a gear note shows with `ticks` still to turn.
 export function gearDir(dir, ticks) {
   const i = CYCLE.indexOf(dir);
-  return i < 0 ? dir : CYCLE[(((i - ticks) % 3) + 3) % 3];
+  return i < 0 ? dir : CYCLE[Math.max(0, i - ticks)];
 }
 
 export class Gears {
@@ -39,14 +43,16 @@ export class Gears {
   decorateRoutes(routes) {
     if (this.inside < this.cfg.minWeight) return;
     for (const r of routes) {
-      if (r.gears) continue;
-      let count = 0;
+      if (r.gears || r.type === 'safe') continue;
+      let count = 0, prev = false;
       const notes = r.notes.map((n, i) => {
-        // The very first note has no beats to tick on; doubles and mirrors keep their own look.
-        if (i === 0 || n.still || n.chord || n.mirror || count >= this.cfg.maxPerRoute) return n;
-        if (!this.rng.chance(this.cfg.noteChance)) return n;
+        // How far it can turn without passing right: up once, right up to twice.
+        const room = CYCLE.indexOf(n.dir);
+        const skip = i === 0 || prev || room < 1 || n.still || n.chord || n.mirror || count >= this.cfg.maxPerRoute;
+        if (skip || !this.rng.chance(this.cfg.noteChance)) { prev = false; return n; }
         count++;
-        return { ...n, gear: this.rng.chance(this.cfg.twoTickChance) ? 2 : 1 };
+        prev = true;
+        return { ...n, gear: room === 2 && this.rng.chance(this.cfg.twoTickChance) ? 2 : 1 };
       });
       if (!count) continue;
       r.notes = notes;

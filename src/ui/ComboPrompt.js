@@ -5,7 +5,7 @@ import { lerpColor } from '../utils/color.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { darkAlpha } from '../systems/mechanics/Darkness.js';
-import { gearTicks, gearDir } from '../systems/mechanics/Gears.js';
+import { gearTicks } from '../systems/mechanics/Gears.js';
 import { Audio } from '../systems/AudioSystem.js';
 
 const PX_PER_MS = 0.085;
@@ -224,28 +224,30 @@ export class ComboPrompt {
           g.fillStyle(stillTint(note), 0.8); g.fillRect(bx, TRACK_Y - 8, 1, 17); g.fillRect(ex - 1, TRACK_Y - 8, 1, 17);
         }
       }
-      // Gear notes: the arrow ticks round with the cog, one step per beat,
-      // and pips above it count the ticks still to come.
+      // Gear notes: the arrow comes in turned back and turns clockwise with
+      // its cog, a quarter on a beat, until it clicks into place two beats
+      // before the line. Once locked the cog stops and dims: now press.
       if (note.gear) {
         const ticks = note.result ? 0 : gearTicks(note, now, c.beatMs);
-        const dir = gearDir(note.dir, ticks);
-        if (ticks !== it.ticks) {
-          const first = it.ticks < 0;
+        if (it.ticks < 0) { it.ticks = ticks; it.ang = (-ticks * Math.PI) / 2; }
+        else if (ticks !== it.ticks) {
           it.ticks = ticks;
-          it.big.setTexture(bigKey(note, dir));
-          it.small.setTexture(smallKey(note, dir));
-          it.turnAt = first ? -1e9 : t;
-          if (!first && x < clipR) Audio.play('clank');
+          if (x < clipR) Audio.play('clank');
+          if (ticks === 0) it.lockAt = t;
         }
-        // The cog snaps round a little with each tick.
-        const turn = Math.min(1, (t - (it.turnAt || 0)) / 120);
-        const ang = ((note.gear - ticks - 1 + turn) * Math.PI) / 4;
+        it.ang += ((-ticks * Math.PI) / 2 - it.ang) * Math.min(1, dt / 70);
         const show = !note.result && x < clipR && x > TRACK_X - 6;
-        it.cog.setVisible(show).setPosition(Math.round(x), TRACK_Y).setRotation(ang);
-        it.cogS.setVisible(!note.result).setPosition(it.small.x, it.small.y).setRotation(ang);
-        if (show && ticks > 0) {
-          g.fillStyle(GEAR_TINT, 1);
-          for (let k = 0; k < ticks; k++) g.fillRect(Math.round(x) - ticks * 2 + 1 + k * 4, TRACK_Y - 11, 2, 2);
+        const locked = ticks === 0;
+        it.big.setRotation(it.ang);
+        it.small.setRotation(it.ang);
+        it.cog.setVisible(show).setPosition(Math.round(x), TRACK_Y).setRotation(it.ang).setAlpha(locked ? 0.45 : 1);
+        it.cogS.setVisible(!note.result).setPosition(it.small.x, it.small.y).setRotation(it.ang).setAlpha(locked ? 0.45 : 1);
+        // The click: brackets snap shut around the arrow as it locks.
+        if (show && it.lockAt && t - it.lockAt < 220) {
+          const k = (t - it.lockAt) / 220, r = Math.round(12 - k * 4);
+          g.fillStyle(0xffffff, 1 - k);
+          g.fillRect(Math.round(x) - r, TRACK_Y - 8, 2, 17);
+          g.fillRect(Math.round(x) + r - 1, TRACK_Y - 8, 2, 17);
         }
       }
       // Roll tails: a dotted bar with one pip per tap still needed.

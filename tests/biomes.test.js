@@ -224,25 +224,32 @@ test('swarm beats: hang still for a perfect, move and you are stung', () => {
   assert.ok(moved.swarm);
 });
 
-test('gears: the arrow ticks clockwise each beat and lands a beat early', () => {
+test('gears: the arrow turns clockwise into place, two beats early, never past right', () => {
   assert.equal(gearDir('R', 0), 'R');
   assert.equal(gearDir('R', 1), 'U');
   assert.equal(gearDir('R', 2), 'L');
-  assert.equal(gearDir('L', 1), 'R');
+  assert.equal(gearDir('U', 1), 'L');
   const note = { gear: 2, time: 5000 };
   assert.equal(gearTicks(note, 1000, 500), 2);
-  assert.equal(gearTicks(note, 3900, 500), 2);
-  assert.equal(gearTicks(note, 4100, 500), 1);
-  assert.equal(gearTicks(note, 4600, 500), 0);
+  assert.equal(gearTicks(note, 3400, 500), 2);
+  assert.equal(gearTicks(note, 3600, 500), 1);
+  assert.equal(gearTicks(note, 4100, 500), 0, 'locked two beats before the line');
   assert.equal(gearTicks({ gear: 0, time: 5000 }, 0, 500), 0);
   const g = new Gears(new SeededRandom(2), { ...GEARS, noteChance: 1 });
   g.update(100, 1);
-  const routes = [{ notes: [{ dir: 'L' }, { dir: 'U' }, { dir: 'R', chord: 'L' }, { dir: 'U' }, { dir: 'L' }, { dir: 'R' }] }];
+  const routes = [
+    { type: 'normal', notes: [{ dir: 'L' }, { dir: 'R' }, { dir: 'U' }, { dir: 'L' }, { dir: 'R', chord: 'L' }, { dir: 'U' }, { dir: 'R' }] },
+    { type: 'safe', notes: [{ dir: 'L' }, { dir: 'R' }, { dir: 'U' }] },
+  ];
   g.decorateRoutes(routes);
-  const gears = routes[0].notes.filter((n) => n.gear);
-  assert.equal(gears.length, GEARS.maxPerRoute);
-  assert.ok(!routes[0].notes[0].gear, 'the first note has no beats to tick on');
-  assert.ok(!routes[0].notes[2].gear, 'doubles keep their own look');
+  const notes = routes[0].notes;
+  assert.equal(notes.filter((n) => n.gear).length, GEARS.maxPerRoute);
+  assert.ok(!notes[0].gear, 'the first note has no beats to turn on');
+  assert.ok(notes.every((n) => !n.gear || n.dir !== 'L'), 'a left arrow cannot turn into place clockwise');
+  assert.ok(notes.every((n) => !n.gear || n.gear <= (n.dir === 'R' ? 2 : 1)), 'never turns past right');
+  assert.ok(notes.every((n, i) => !(n.gear && notes[i - 1] && notes[i - 1].gear)), 'never two in a row');
+  assert.ok(!notes[4].gear, 'doubles keep their own look');
+  assert.ok(routes[1].notes.every((n) => !n.gear), 'safe routes have no gears');
 });
 
 test('bone garden: three rattles bring a growl and a few tighter climbs', () => {
