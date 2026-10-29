@@ -6,7 +6,7 @@
 import { BIOMES } from './biomes.js';
 import { gemForBiome } from './gems.js';
 
-const PRICES = { stone: 12, frozen: 25, clouds: 35, hive: 50, obsidian: 65, crystal: 85, clockwork: 110 };
+const PRICES = { stone: 35, frozen: 75, clouds: 105, hive: 150, obsidian: 195, crystal: 255, clockwork: 330 };
 
 export const LIFTS = Object.entries(PRICES).map(([id, price], i, all) => ({
   id,

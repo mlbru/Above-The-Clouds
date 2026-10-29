@@ -66,9 +66,9 @@ test('trader: wallet, gear, packing and using the pack', () => {
   p.addGems(3, 'sapphire');
   assert.equal(p.gems, 3);
   assert.equal(p.found('sapphire'), 1);
-  p.addGems(200);
+  p.addGems(2000);
   assert.ok(p.buyGear('chalk'));
-  assert.equal(p.gems, 203 - GEAR.find((g) => g.id === 'chalk').price);
+  assert.equal(p.gems, 2003 - GEAR.find((g) => g.id === 'chalk').price);
   assert.ok(p.isPacked('chalk'), 'bought gear is packed automatically');
   assert.ok(p.buyGear('chalk'));
   assert.equal(p.owned('chalk'), 2);
@@ -86,7 +86,7 @@ test('trader: wallet, gear, packing and using the pack', () => {
 
 test('trader: perks are bought once and one is active', () => {
   const p = new ProgressionSystem(memory());
-  p.addGems(1000);
+  p.addGems(5000);
   const [a, b] = PERKS;
   assert.ok(p.buyPerk(a.id));
   assert.equal(p.buyPerk(a.id), false, 'no double purchase');
@@ -104,7 +104,7 @@ test('trader: cosmetics with prices and regional gem requirements', () => {
   const mint = COSMETICS.jacket.find((c) => c.id === 'jacket-mint');
   const crown = COSMETICS.hat.find((c) => c.id === 'hat-crown');
   assert.equal(p.cosmeticStatus(mint).state, 'poor');
-  p.addGems(1000);
+  p.addGems(5000);
   assert.equal(p.cosmeticStatus(mint).state, 'buy');
   assert.ok(p.buyCosmetic('jacket', mint));
   assert.equal(p.data.look.jacket, 'jacket-mint');
@@ -177,7 +177,7 @@ test('lift tickets: old Stone and Frozen tickets in a save become new tickets', 
 
 test('trader: rare-stone perks need the stones first', () => {
   const p = new ProgressionSystem(memory());
-  p.data.gems = 1000;
+  p.data.gems = 5000;
   assert.equal(p.buyPerk('diamondeye'), false);
   p.addGems(12, 'diamond');
   assert.equal(p.buyPerk('diamondeye'), false, 'needs two diamonds');

@@ -47,3 +47,19 @@ export function wipeIn(scene, ms = 480) {
   scene.tweens.add({ targets: left, x: -W - 30, duration: ms, ease: 'Cubic.easeOut', onComplete: () => left.destroy() });
   scene.tweens.add({ targets: right, x: GAME_WIDTH + 30, duration: ms, ease: 'Cubic.easeOut', onComplete: () => right.destroy() });
 }
+
+// Clouds roll in, `mid` runs behind them (swap what is on screen), and they
+// roll away again; `done` runs once the view is clear. For changes inside a scene.
+export function cloudPass(scene, mid, done = null, ms = 380) {
+  const left = bank(scene, -1).setX(-W - 30);
+  const right = bank(scene, 1).setX(GAME_WIDTH + 30);
+  scene.tweens.add({ targets: left, x: 0, duration: ms, ease: 'Cubic.easeIn' });
+  scene.tweens.add({
+    targets: right, x: GAME_WIDTH - W, duration: ms, ease: 'Cubic.easeIn',
+    onComplete: () => {
+      mid();
+      scene.tweens.add({ targets: left, x: -W - 30, delay: 120, duration: ms + 100, ease: 'Cubic.easeOut', onComplete: () => left.destroy() });
+      scene.tweens.add({ targets: right, x: GAME_WIDTH + 30, delay: 120, duration: ms + 100, ease: 'Cubic.easeOut', onComplete: () => { right.destroy(); if (done) done(); } });
+    },
+  });
+}

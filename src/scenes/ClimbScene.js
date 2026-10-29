@@ -29,7 +29,8 @@ import { CampMenu } from '../ui/CampMenu.js';
 import { PixelText, COLORS } from '../ui/PixelText.js';
 import { BIOMES, biomeAt, biomeMixAt, biomeStretchAt, nextBiomeAbove, setBiomeTheme, biomeTheme } from '../data/biomes.js';
 import { MASTERY_BIOMES, STARS, masteryGoals, starLabel } from '../data/mastery.js';
-import { LIFTS, liftHeight, liftName } from '../data/lifts.js';
+import { LIFTS, LIFT_BY_ID, liftHeight, liftName } from '../data/lifts.js';
+import { LiftRide } from '../ui/LiftRide.js';
 import { BiomeMechanics } from '../systems/mechanics/index.js';
 import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
 import { DARKNESS } from '../systems/mechanics/Darkness.js';
@@ -243,6 +244,11 @@ export class ClimbScene extends Phaser.Scene {
     this.lifting = false;
     this.starNews = [];
     this.starCalmAt = 0;
+    this.liftRide = null;
+    // Lazily made effects belong to the last run's scene; start fresh.
+    this.ash = null;
+    this.embers = null;
+    this.dragonRed = null;
     this.perk = null;
     this.traderTag = null;
     this.routeGems = [];
@@ -314,10 +320,20 @@ export class ClimbScene extends Phaser.Scene {
     this.startHigh(liftHeight(this.liftTo));
     this.run.heightMarks = Math.floor((this.run.maxHeight || 0) / GEM_INCOME.heightEvery);
     const b = biomeAt(levelToMeters(this.node.level));
-    this.hud.showBanner(b.name, `${liftName(this.liftTo)}  •  ${Math.floor(levelToMeters(this.node.level))} M`);
+    const meters = Math.floor(levelToMeters(this.node.level));
     Audio.setMusicMode(b.music);
-    Audio.play('titlecard');
     this.updateGearHud();
+    // The gondola ride plays while the run waits up there (see update()).
+    this.liftRide = new LiftRide(this, {
+      biome: b, ticket: liftName(this.liftTo), icon: LIFT_BY_ID[this.liftTo].icon, meters,
+      jacket: findCosmetic('jacket', this.prog.data.look.jacket).color,
+      onDone: () => {
+        this.liftRide = null;
+        this.lastFramePerf = performance.now();
+        this.hud.showBanner(b.name, `${liftName(this.liftTo)}  •  ${meters} M`);
+        Audio.play('titlecard');
+      },
+    });
   }
 
   // ---------------------------------------------------------------- timing
@@ -346,6 +362,7 @@ export class ClimbScene extends Phaser.Scene {
     if (event.repeat) return;
     const code = event.code;
     Audio.init();
+    if (this.liftRide) { this.liftRide.skip(); return; }
     this.wakeUp();
     if (this.director && this.tutorialCard.open) {
       if (code === 'Escape' && this.tutorialCard.final) { this.prog.data.tutorialDone = true; this.prog.save(); this.toMenu(); }
@@ -622,7 +639,8 @@ export class ClimbScene extends Phaser.Scene {
         this.dragon.breathe(target, this.cam, this.effects);
         Audio.play('roar');
         Audio.play('flame');
-        this.hud.flashScreen(0xff7a20, 0.22, 300);
+        this.hud.flashScreen(0xff7a20, 0.3, 380);
+        this.time.delayedCall(420, () => { this.scorch(target.x, target.y + 6); Audio.play('sizzle'); });
         if (this.settings.shake) this.cam.shake(420, 0.006);
       });
       return;
@@ -2079,6 +2097,7 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     Audio.setMusicMode(b.music);
+    if (b.id === 'dragon' && h > 0 && !this.director) this.time.delayedCall(this.lifting ? 0 : 700, () => this.dragonEntrance());
     if (h > 0 && !this.lifting && !this.director && !this.expedition) { this.panorama(b, r.isNew); return; }
     this.hud.showBanner(b.name, r.isNew && h > 0 ? 'A NEW PART OF THE MOUNTAIN' : `${Math.floor(h)} M`);
     if (h > 0) { Audio.swell(16); Audio.play('titlecard'); }
@@ -2412,10 +2431,46 @@ export class ClimbScene extends Phaser.Scene {
     else if (event === 'watch') {
       this.hud.showBanner('THE DRAGON IS AWAKE', 'DODGE ITS FIRE ON THE BEAT');
       Audio.play('roar');
-      this.dragon.roar(1200);
-      if (this.settings.shake) this.cam.shake(700, 0.0025);
+      this.time.delayedCall(220, () => Audio.play('roar', { volume: 0.6 }));
+      this.dragon.roar(1600);
+      this.dragonShockwave();
       this.discover('dragon-eye');
     } else if (event === 'close') this.hud.toast('THE DRAGON SETTLES', '#ffd23c');
+  }
+
+  // The roar that wakes it: the world stops for a beat, the screen flashes,
+  // a ring of heat rolls out from its head and the view punches in.
+  dragonShockwave() {
+    this.freezeFrame(140, 0xff6a30);
+    this.hud.flashScreen(0xffb060, this.settings.shake ? 0.4 : 0.15, 500);
+    const head = this.dragon.head;
+    const hx = (head && head.visible ? head.x : GAME_WIDTH / 2) + this.cam.scrollX, hy = (head && head.visible ? head.y : 60) + this.cam.scrollY;
+    [0, 160, 320].forEach((d, i) => this.time.delayedCall(d, () => this.effects.ring(hx, hy, i ? 0xff5a20 : 0xfff0c0, 90 + i * 40, 700)));
+    if (!this.settings.reducedParticles && this.embers && this.embers.active) this.embers.explode(40, GAME_WIDTH / 2, GAME_HEIGHT);
+    if (!this.settings.shake) return;
+    this.cam.shake(900, 0.007);
+    this.cam.zoomTo(1.08, 120, 'Quad.easeOut', true);
+    this.time.delayedCall(260, () => this.cam.zoomTo(1, 700, 'Sine.easeInOut', true));
+  }
+
+  // Climbing into the Dragon's Spine: a brass stab, a far-off roar, the
+  // mountain shudders and the sky flushes red for a moment.
+  dragonEntrance() {
+    Audio.play('dragonSting');
+    this.time.delayedCall(1300, () => { if (this.sys.isActive()) Audio.play('roar', { volume: 0.5 }); });
+    this.hud.flashScreen(0xb01408, 0.25, 900);
+    if (this.settings.shake) this.cam.shake(1400, 0.003);
+  }
+
+  // Scorch marks where the flames hit: black soot with glowing edges that cool off.
+  scorch(x, y) {
+    const g = this.add.graphics().setDepth(DEPTH.decor + 2);
+    for (let i = 0; i < 7; i++) {
+      const sx = x + (Math.random() - 0.5) * 22, sy = y + (Math.random() - 0.5) * 12, r = 2 + Math.random() * 4;
+      g.fillStyle(0x140808, 0.75).fillCircle(sx, sy, r);
+      g.fillStyle(0xff6a20, 0.8).fillCircle(sx + 1, sy - 1, Math.max(1, r * 0.35));
+    }
+    this.tweens.add({ targets: g, alpha: 0, delay: 3500, duration: 4500, onComplete: () => g.destroy() });
   }
 
   // The dragon around the peak (world/Dragon.js), driven by the DragonEye mechanic.
@@ -2432,6 +2487,20 @@ export class ClimbScene extends Phaser.Scene {
       light: day.light,
     });
     this.updatePressure(dt, eye && !this.director ? eye.pressure : 0, b);
+    // Its music: a heartbeat while it sleeps, war drums while it is awake.
+    const near = eye && !this.director && weight >= 0.5 && this.state !== STATE.RUN_OVER;
+    Audio.setDragonMusic(!near ? 0 : eye.phase === 'watching' || eye.phase === 'opening' ? 2 : 1);
+    // Ash drifts down over the whole Spine, thicker while it is awake.
+    if (!this.ash) {
+      this.ash = this.add.particles(0, 0, 'px2', {
+        x: { min: -20, max: GAME_WIDTH + 20 }, y: -4,
+        speedY: { min: 8, max: 22 }, speedX: { min: -14, max: 6 },
+        lifespan: { min: 6000, max: 9000 }, scale: { min: 0.5, max: 1 }, alpha: { start: 0.7, end: 0 },
+        tint: [0x3a3030, 0x5a4a48, 0x8a7a70], frequency: 160, emitting: false,
+      }).setScrollFactor(0).setDepth(DEPTH.weather);
+    }
+    this.ash.emitting = weight > 0.3 && !this.settings.reducedParticles;
+    this.ash.frequency = Math.max(40, 180 - 130 * (this.pressure || 0));
   }
 
   // While the dragon watches, the mountain never sits still: the play box
@@ -2626,7 +2695,9 @@ export class ClimbScene extends Phaser.Scene {
     }
     const frozen = this.tipOpen;
     if (frozen) this.freezeForTip();
-    const dt = frozen ? 0 : Math.min(delta, 100);
+    // The run waits while a lift ticket's gondola ride plays.
+    if (this.liftRide) this.liftRide.update(delta);
+    const dt = frozen || this.liftRide ? 0 : Math.min(delta, 100);
     this.clock += dt;
     this.lastFramePerf = performance.now();
     const now = this.clock;
@@ -2998,6 +3069,7 @@ export class ClimbScene extends Phaser.Scene {
 
   cleanup() {
     setBiomeTheme(null);
+    Audio.setDragonMusic(0);
     this.tweens.timeScale = 1;
     if (this.coat) this.coat.destroy();
     Audio.endSong();

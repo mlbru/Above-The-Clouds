@@ -365,6 +365,13 @@ class AudioSystemImpl {
         this.tone({ freq: 58, toFreq: 84, dur: 2.2, type: 'sawtooth', peak: 0.1, attack: 0.5, bus: this.ambBus });
         this.noiseHit({ dur: 2.4, type: 'bandpass', freq: 300, sweepTo: 700, q: 1.2, peak: 0.3, attack: 0.6, bus: this.ambBus, reverb: 0.5 });
       },
+      // Into the Dragon's Spine: a low brass stab over a deep boom, and a far-off roar.
+      dragonSting() {
+        [38, 45, 50, 51].forEach((m, i) => this.tone({ t: i * 0.01, freq: midiToHz(m), dur: 2.8, type: 'sawtooth', peak: 0.035, attack: 0.02, bus: this.musicBus, reverb: 0.8 }));
+        this.tone({ freq: 60, toFreq: 32, dur: 1.8, peak: 0.3, attack: 0.004, bus: this.musicBus, reverb: 0.6 });
+        this.noiseHit({ dur: 1.4, type: 'lowpass', freq: 220, sweepTo: 60, peak: 0.35, attack: 0.01, bus: this.ambBus, reverb: 0.7 });
+        this.tone({ t: 1.2, freq: 46, toFreq: 70, dur: 2.6, type: 'sawtooth', peak: 0.06, attack: 0.8, bus: this.ambBus, reverb: 0.9 });
+      },
       // Dragon fire: a roaring rush of flame.
       flame() {
         this.noiseHit({ dur: 1.1, type: 'lowpass', freq: 1800, sweepTo: 500, peak: 0.35, attack: 0.08 });
@@ -584,6 +591,9 @@ class AudioSystemImpl {
       this.chirp();
     }
     if (this.music.song) { this.songStep(t); return; }
+    if (this.dragonLevel) this.dragonStep(t);
+    // While the dragon is awake its war music carries everything.
+    if (this.dragonLevel === 2) return;
     const swelling = t < this.music.swellUntil;
     const intensity = swelling ? 1 : this.music.intensity;
     if (t > this.music.nextAt) {
@@ -593,6 +603,74 @@ class AudioSystemImpl {
   }
 
   setMusicIntensity(v) { this.music.intensity = v; }
+
+  // The Dragon's Spine has music of its own, locked to the beat: 0 none,
+  // 1 asleep (a slow heartbeat under a low drone), 2 awake (war drums, a
+  // brass ostinato, a throat drone and cymbal swells, bar after bar).
+  setDragonMusic(level) {
+    if (!this.ctx || level === (this.dragonLevel || 0)) return;
+    const from = this.dragonLevel || 0;
+    this.dragonLevel = level;
+    const t = this.ctx.currentTime;
+    if (!this.dragonBus) { this.dragonBus = this.ctx.createGain(); this.dragonBus.gain.value = 0; this.dragonBus.connect(this.musicBus); }
+    const g = this.dragonBus.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(level ? 1 : 0, t + (level ? 0.4 : 2.5));
+    // Waking up: the fury starts on a crash right away.
+    if (level === 2 && from < 2) { this.dragonAt = t + 0.05; this.dragonBar = 0; this.crash(0.05, 1, this.dragonBus); }
+    else if (level && !from) { this.dragonAt = t + 0.3; this.dragonBar = 0; }
+  }
+
+  dragonStep(t) {
+    if ((this.dragonAt || 0) < t) this.dragonAt = t + 0.1;
+    if (this.dragonAt - t > 0.25) return;
+    const at = this.dragonAt - t;
+    const bus = this.dragonBus;
+    const root = 38; // D, under the biome's own key
+    const bar = this.dragonBar++;
+    if (this.dragonLevel === 1) {
+      // Asleep: a heartbeat every two seconds and a drone that comes and goes.
+      const beat = 60 / 60;
+      this.drum(at, 0.5, bus);
+      this.drum(at + beat * 0.32, 0.3, bus);
+      if (bar % 2 === 0) this.tone({ t: at, freq: midiToHz(root), dur: beat * 4.2, attack: 1.2, type: 'sawtooth', peak: 0.012, bus, reverb: 0.6 });
+      this.dragonAt += beat * 2;
+      return;
+    }
+    // Awake: 4/4 at 100, a phrase of four bars.
+    const beat = 60 / 100;
+    const phrase = bar % 4;
+    // Taiko: a big hit on one, a pair on three, rolls leading into the next phrase.
+    const hits = [[0, 1], [1.5, 0.45], [2, 0.8], [2.5, 0.6], [3, 0.7]];
+    if (phrase === 3) hits.push([3.25, 0.5], [3.5, 0.6], [3.75, 0.8]);
+    for (const [b, v] of hits) this.taiko(at + b * beat, v, bus);
+    // Low brass ostinato: root, root, minor second, fifth (the dragon's scale).
+    const line = phrase === 2 ? [0, 0, 1, 8] : [0, 0, 1, 7];
+    line.forEach((st, i) => this.note('horn', { t: at + i * beat, midi: root + 12 + st, dur: beat * 0.9, peak: 0.05, bus }));
+    // A throat drone under each phrase, and a brass call over the second half.
+    if (phrase === 0) this.note('throat', { t: at, midi: root, dur: beat * 16, peak: 0.035, bus });
+    if (phrase === 2) [[12, 1], [13, 0.5], [17, 0.5], [19, 2]].reduce((b, [st, len]) => {
+      this.note('horn', { t: at + b * beat, midi: root + 12 + st, dur: len * beat * 1.1, peak: 0.045, bus });
+      return b + len;
+    }, 0);
+    // A cymbal swells into every phrase.
+    if (phrase === 3) this.noiseHit({ t: at + beat * 2, dur: beat * 2, type: 'highpass', freq: 6000, peak: 0.05, attack: beat * 1.9, bus, reverb: 0.5 });
+    if (phrase === 0 && bar > 0) this.crash(at, 0.6, bus);
+    // Ticking hats keep the pace.
+    for (let i = 0; i < 8; i++) this.noiseHit({ t: at + i * beat * 0.5, dur: 0.03, type: 'highpass', freq: 8000, peak: i % 2 ? 0.012 : 0.02, bus });
+    this.dragonAt += beat * 4;
+  }
+
+  // A deep taiko: a pitched thump with a skin slap on top.
+  taiko(t, v = 1, bus = this.musicBus) {
+    this.tone({ t, freq: 95, toFreq: 48, dur: 0.6, peak: 0.16 * v, attack: 0.003, bus, reverb: 0.35 });
+    this.noiseHit({ t, dur: 0.08, type: 'bandpass', freq: 900, q: 1.5, peak: 0.07 * v, bus });
+  }
+
+  crash(t, v = 1, bus = this.musicBus) {
+    this.noiseHit({ t, dur: 1.6, type: 'highpass', freq: 4500, sweepTo: 3000, peak: 0.07 * v, attack: 0.003, bus, reverb: 0.7 });
+  }
 
   chirp() {
     const n = 2 + Math.floor(Math.random() * 4);

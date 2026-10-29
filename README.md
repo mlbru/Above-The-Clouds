@@ -234,7 +234,8 @@ while the height counts back to 0 m, then lands in the cloud sea (`cloudFall()` 
   `src/data/mastery.js`. **Lift tickets** (Stone Wall up to the Clockwork Bastion) start a
   Normal run on the first ledge of their biome. A ticket goes on sale once you master the
   biome below it, costs gems, is used up by the run it starts and never takes a pack slot
-  (`src/data/lifts.js`). A lifted start counts as a full pass for that biome's stars. Star news
+  (`src/data/lifts.js`). The ride up plays as a gondola through the clouds (`src/ui/LiftRide.js`;
+  any key skips). A lifted start counts as a full pass for that biome's stars. Star news
   waits until a biome's title card is done, and the run summary shows how close you came.
 - **Wardrobe**: in the pause menu, on the title screen and at the trader. It lists only what
   you own; the STYLE tab shows everything you can still earn or buy. Besides clothes and chalk
