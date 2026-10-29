@@ -4,6 +4,7 @@
 // p: { x, wy, c, idx, lit, seam, dEdge, ov, dn, pal, painter }
 import { bayer, lerpColor } from '../utils/color.js';
 import { hashInts } from '../utils/seededRandom.js';
+import { shadeFossil } from './fossilArt.js';
 
 export const WALL_OVERLAYS = {
   // Moss and grass patches on the lit faces.
@@ -174,23 +175,10 @@ export const WALL_OVERLAYS = {
     else p.c = lerpColor(p.c, pal.rock[0], 0.35);
     if (d > R - 3 && bayer(p.x, p.wy) < 0.18) p.c = pal.accentC;
   },
-  // Bone Garden: the ribs of dead dragons lie in the rock, curved and pale.
+  // Bone Garden: whole skeletons of old dragons lie in the rock (render/fossilArt.js).
   fossils(p) {
-    const { pal } = p;
     if (p.dEdge < 4 || p.seam) return;
-    const C = 90, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
-    const hsh = hashInts(gx, gy, 61);
-    if (hsh % 3 === 0) return;
-    const cx = gx * C + 45 + ((hsh >> 4) % 20) - 10, cy = gy * C + 60;
-    for (let i = 0; i < 4; i++) {
-      // One rib: the top half of an ellipse, the next one a little lower.
-      const rx = 30 - i * 3, ry = 22 - i * 2, oy = cy + i * 8;
-      const u = (p.x - cx) / rx, v = (p.wy - oy) / ry;
-      const e = u * u + v * v;
-      if (p.wy > oy || e < 0.86 || e > 1.06) continue;
-      p.c = e < 0.92 ? pal.accentB : e < 1.0 ? pal.accentA : lerpColor(pal.rock[0], pal.accentA, 0.2);
-      return;
-    }
+    shadeFossil(p);
   },
   // Ash settles on every ledge and lit face; now and then an ember glows in it.
   ash(p) {

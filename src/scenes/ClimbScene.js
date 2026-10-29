@@ -245,6 +245,9 @@ export class ClimbScene extends Phaser.Scene {
     this.starNews = [];
     this.starCalmAt = 0;
     this.liftRide = null;
+    this.lullabyUI = null;
+    this.lullabyFire = false;
+    this.fireFromAbove = false;
     // Lazily made effects belong to the last run's scene; start fresh.
     this.ash = null;
     this.embers = null;
@@ -599,13 +602,17 @@ export class ClimbScene extends Phaser.Scene {
   // While the dragon watches, it breathes fire at a climber hanging on a hold
   // every few seconds (never on a ledge, never mid-climb).
   breathDue() {
+    if (this.lullabyFire && !this.director && !this.tipOpen && this.node && this.node.kind !== 'ledge') return true;
     const eye = this.mechanics && this.mechanics.get('dragonEye');
     return !!(eye && eye.breathDue && !this.director && !this.tipOpen && this.node && this.node.kind !== 'ledge');
   }
 
   startFireBreath() {
     this.dodgeKind = 'fire';
-    this.dodges = this.mechanics.get('dragonEye').startBreath(levelToMeters(this.node.level));
+    // Woken in the Bone Garden it breathes once, from above the screen.
+    this.fireFromAbove = !!this.lullabyFire;
+    this.lullabyFire = false;
+    this.dodges = this.fireFromAbove ? [this.runRng.chance(0.5) ? 'L' : 'R'] : this.mechanics.get('dragonEye').startBreath(levelToMeters(this.node.level));
     this.dodgeIndex = 0;
     this.dodgeHits = 0;
     this.state = STATE.DODGING;
@@ -627,6 +634,22 @@ export class ClimbScene extends Phaser.Scene {
     });
     this.comboUI.showRecovery(this.dodge, { label: fire ? `FIRE! SWING ${dir === 'L' ? 'LEFT' : 'RIGHT'}!` : `DODGE ${dir === 'L' ? 'LEFT' : 'RIGHT'}!`, color: fire ? '#ff9a3c' : COLORS.red });
     this.climber.setPose('brace');
+    if (fire && this.fireFromAbove) {
+      // Out of sight above the Bone Garden: a red glow at the top of the
+      // screen, then the flames pour straight down onto the climber.
+      Audio.play('rumble');
+      const target = { x: this.climber.x + (dir === 'L' ? 6 : -6), y: this.climber.y - 10 };
+      this.hud.flashScreen(0xff5a20, 0.12, leadInMs);
+      this.time.delayedCall(Math.max(0, leadInMs - 260), () => {
+        if (this.dodgeKind !== 'fire') return;
+        this.dragon.fireStream([target.x + (dir === 'L' ? -30 : 30), this.cam.scrollY - 16], target, 36, 11, 1.2, this.effects);
+        Audio.play('flame');
+        this.hud.flashScreen(0xff7a20, 0.3, 380);
+        this.time.delayedCall(420, () => { this.scorch(target.x, target.y + 6); Audio.play('sizzle'); });
+        if (this.settings.shake) this.cam.shake(420, 0.006);
+      });
+      return;
+    }
     if (fire) {
       // It draws breath for the whole lead-in, then the flames land on the beat
       // where the climber hangs now.
@@ -938,7 +961,7 @@ export class ClimbScene extends Phaser.Scene {
         Audio.play(note.swarm ? 'sting' : 'miss');
         if (note.swarm) this.hud.flashScreen(0xf0644b, 0.12, 200);
         if (this.settings.shake) this.cam.shake(90, 0.002);
-        this.boneRattle();
+        this.boneNote('miss');
       }
       this.floatText(note.result === 'miss' ? style.text : note.swarm ? 'BZZZ...' : 'STILL...', note.result === 'miss' ? style.color : note.swarm ? '#ffd870' : COLORS.dim);
       this.tryEnergyBar();
@@ -946,7 +969,7 @@ export class ClimbScene extends Phaser.Scene {
       if (this.combo.done) this.finishCombo();
       return;
     }
-    if (note.result === 'miss') this.boneRattle();
+    this.boneNote(note.result);
     if (note.reason === 'release' || note.reason === 'roll') {
       this.successes = Math.max(0, this.successes - 1);
       this.climber.hold('slip2', 240);
@@ -1859,7 +1882,7 @@ export class ClimbScene extends Phaser.Scene {
     this.comboUI.hide();
     this.clearCrumble();
     const bones = this.mechanics && this.mechanics.get('boneGarden');
-    if (bones) bones.rest();
+    if (bones && bones.rest() === 'calm' && !this.director) this.hud.toast('THE DRAGON SETTLES AGAIN', '#e8dcc0');
     this.climber.stopTweens();
     this.climber.setPosition(node.x, node.y);
     this.climber.setPose('stand');
@@ -2409,20 +2432,103 @@ export class ClimbScene extends Phaser.Scene {
     }
   }
 
-  // The Bone Garden: a miss rattles a skull; the third brings the dragon's growl.
-  boneRattle() {
+  // The Bone Garden: every judged note rings on the bones (mechanics/BoneGarden.js).
+  // Perfect hits play the dragon's lullaby; misses break it and stir the dragon.
+  boneNote(result) {
     const bones = this.mechanics && this.mechanics.get('boneGarden');
-    const ev = bones && bones.onMiss();
-    if (!ev) return;
-    if (ev === 'rattle') {
-      Audio.play('rattle');
-      this.floatText(`A SKULL RATTLES ${bones.rattles}/${bones.cfg.rattlesToGrowl}`, '#e8dcc0', 26);
-      this.tip('bones');
-      return;
+    if (!bones || !bones.active || this.director) return;
+    const { note, event } = bones.onNote(result);
+    const root = BIOMES.bones.music.root + 12;
+    if (note !== null) {
+      Audio.play('bonenote', { midi: root + note });
+      this.floatNote(this.climber.x, this.climber.y - 14, note);
     }
-    Audio.play('roar');
-    if (this.settings.shake) this.cam.shake(700, 0.003);
-    this.hud.showBanner('THE DRAGON GROWLS', `TIGHTER TIMING FOR ${bones.cfg.dreadClimbs} CLIMBS`);
+    else if (result === 'good') Audio.play('boneknock');
+    else {
+      Audio.play('boneclack', { midi: root });
+      this.floatText('THE SONG BREAKS', '#e8dcc0', 26);
+      this.tip('bones');
+    }
+    if (this.lullabyUI) this.lullabyUI.pulse = 1;
+    if (event === 'song') {
+      Audio.play('lullaby');
+      this.hud.showBanner('THE DRAGON SLEEPS DEEPER', 'YOU PLAYED ITS LULLABY');
+      this.awardGems(bones.cfg.songGems);
+      this.effects.sparkle(this.climber.x, this.climber.y - 10, 18);
+      this.effects.ring(this.climber.x, this.climber.y - 10, 0xf4ecd8, 40, 900);
+      for (let i = 0; i < 10; i++) this.time.delayedCall(i * 90, () => this.floatNote(this.climber.x + (Math.random() - 0.5) * 50, this.climber.y - 10, i * 2, 1.6));
+      this.prog.bump('lullabies');
+    } else if (event === 'restless') {
+      this.hud.toast('THE DRAGON GROWS RESTLESS...', '#ff9a3c');
+      Audio.play('rumble');
+      if (this.settings.shake) this.cam.shake(600, 0.002);
+    } else if (event === 'calm') this.hud.toast('THE DRAGON SETTLES AGAIN', '#e8dcc0');
+    else if (event === 'wake') {
+      // It wakes for a moment and its fire pours down the wall on the next hold.
+      this.hud.showBanner('THE DRAGON WAKES', 'ITS FIRE COMES DOWN THE WALL');
+      Audio.play('roar');
+      this.hud.flashScreen(0xb01408, 0.3, 700);
+      if (this.settings.shake) this.cam.shake(900, 0.004);
+      this.lullabyFire = true;
+    }
+  }
+
+  // A note of the lullaby drifts up from the bones and fades: higher notes
+  // drift a little higher. pitch: semitones over the song's root.
+  floatNote(x, y, pitch = 0, size = 1) {
+    const g = this.add.graphics().setDepth(DEPTH.fx + 3);
+    const col = 0xf4ecd8;
+    g.fillStyle(0x16141f, 0.6).fillEllipse(1, 1, 5, 4).fillRect(3, -6, 1, 7);
+    g.fillStyle(col, 1).fillEllipse(0, 0, 5, 4).fillRect(2, -7, 1, 7).fillRect(2, -7, 3, 1).fillRect(4, -6, 1, 2);
+    g.setPosition(Math.round(x), Math.round(y)).setScale(size).setAlpha(0);
+    const sway = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6);
+    this.tweens.add({ targets: g, alpha: 1, duration: 120 });
+    this.tweens.add({ targets: g, y: y - 26 - pitch * 0.8, x: x + sway, duration: 1300, ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: g, alpha: 0, delay: 700, duration: 600, onComplete: () => g.destroy() });
+  }
+
+  // Top centre in the garden: the dragon's eye (opening as it stirs) and the
+  // lullaby's notes, lit as you play them.
+  updateLullaby(dt, bones) {
+    const show = !!(bones && bones.active && !this.director && this.hud.root[0] && this.hud.root[0].visible && this.state !== STATE.RUN_OVER);
+    if (!this.lullabyUI) {
+      if (!show) return;
+      const g = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
+      const label = new PixelText(this, GAME_WIDTH / 2 + 10, 4, 'LULLABY', { color: '#e8dcc0' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud);
+      this.lullabyUI = { g, label, t: 0, pulse: 0, eye: 0 };
+    }
+    const ui = this.lullabyUI;
+    ui.g.setVisible(show); ui.label.setVisible(show);
+    if (!show) return;
+    ui.t += dt;
+    ui.pulse = Math.max(0, ui.pulse - dt / 250);
+    const c = bones.cfg;
+    const k = bones.stir / c.wakes;
+    ui.eye += (k - ui.eye) * Math.min(1, dt / 300);
+    const g = ui.g.clear();
+    const n = c.melody.length, w = 6, x0 = Math.round(GAME_WIDTH / 2 + 10 - (n * w) / 2), y = 14;
+    const ex = x0 - 16, ey = y + 2;
+    // A dark plate so it reads on the busy bone wall.
+    g.fillStyle(0x16141f, 0.78).fillRect(ex - 12, 2, x0 + n * w - ex + 16, 21);
+    g.fillStyle(0x4a4560, 1).fillRect(ex - 12, 22, x0 + n * w - ex + 16, 1);
+    // The notes: little bones, lit as far as you have played; the next one blinks.
+    for (let i = 0; i < n; i++) {
+      const done = i < bones.step, next = i === bones.step;
+      const col = done ? 0xf4ecd8 : next ? (Math.floor(ui.t / 300) % 2 ? 0xe8dcc0 : 0x8a7f74) : 0x3a3434;
+      const lift = done ? Math.round(Math.sin(ui.t / 300 + i * 0.6)) : 0;
+      g.fillStyle(col, 1).fillRect(x0 + i * w, y - lift, 4, 4);
+      if (done) g.fillStyle(0xffffff, 1).fillRect(x0 + i * w, y - lift, 1, 1);
+    }
+    // The eye: shut when deep asleep, open and red as it stirs.
+    const open = Math.round(ui.eye * 4);
+    const red = bones.restless;
+    g.fillStyle(0x16141f, 0.8).fillEllipse(ex, ey, 18, 10);
+    g.fillStyle(red ? 0xff5a20 : 0xe8a040, 1).fillRect(ex - 6, ey, 13, 1);
+    if (open > 0) {
+      g.fillStyle(red ? 0xff5a20 : 0xe8a040, 1).fillEllipse(ex, ey, 12, open * 2 + 1);
+      g.fillStyle(0x16141f, 1).fillRect(ex, ey - open, 1, open * 2 + 1);
+    }
+    ui.label.setColor(red ? '#ff9a3c' : '#e8dcc0').setScale(1 + ui.pulse * 0.15);
   }
 
   // The Dragon's Spine: the eye opens, watches, and closes again.
@@ -2489,7 +2595,11 @@ export class ClimbScene extends Phaser.Scene {
     this.updatePressure(dt, eye && !this.director ? eye.pressure : 0, b);
     // Its music: a heartbeat while it sleeps, war drums while it is awake.
     const near = eye && !this.director && weight >= 0.5 && this.state !== STATE.RUN_OVER;
-    Audio.setDragonMusic(!near ? 0 : eye.phase === 'watching' || eye.phase === 'opening' ? 2 : 1);
+    const bones = this.mechanics && this.mechanics.get('boneGarden');
+    // In the Bone Garden its heartbeat starts once it grows restless.
+    const restless = bones && bones.restless && !this.director && this.state !== STATE.RUN_OVER;
+    Audio.setDragonMusic(near ? (eye.phase === 'watching' || eye.phase === 'opening' ? 2 : 1) : restless ? 1 : 0);
+    this.updateLullaby(dt, bones);
     // Ash drifts down over the whole Spine, thicker while it is awake.
     if (!this.ash) {
       this.ash = this.add.particles(0, 0, 'px2', {

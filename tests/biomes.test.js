@@ -252,24 +252,39 @@ test('gears: the arrow turns clockwise into place, two beats early, never past r
   assert.ok(routes[1].notes.every((n) => !n.gear), 'safe routes have no gears');
 });
 
-test('bone garden: three rattles bring a growl and a few tighter climbs', () => {
+test('bone garden: perfect notes play the lullaby, misses stir the dragon', () => {
   const b = new BoneGarden(new SeededRandom(1));
-  assert.equal(b.onMiss(), null, 'quiet outside the garden');
+  const c = BONE_GARDEN;
+  assert.deepEqual(b.onNote('perfect'), { note: null, event: null }, 'quiet outside the garden');
   b.update(100, 1);
-  assert.equal(b.onMiss(), 'rattle');
-  b.rest();
-  assert.equal(b.rattles, 0, 'a ledge quiets the skulls');
-  assert.deepEqual([b.onMiss(), b.onMiss(), b.onMiss()], ['rattle', 'rattle', 'growl']);
-  for (let i = 0; i < BONE_GARDEN.dreadClimbs; i++) {
-    const routes = [{ windowScale: 1 }];
-    b.decorateRoutes(routes);
-    assert.equal(routes[0].windowScale, BONE_GARDEN.dreadWindow);
-    b.onClimb(routes[0]);
-  }
-  const after = [{ windowScale: 1 }];
-  b.decorateRoutes(after);
-  assert.equal(after[0].windowScale, 1, 'the dread runs out');
-  // Bone holds snap: the garden has extra crumbling holds.
+  assert.equal(b.onNote('perfect').note, c.melody[0]);
+  assert.equal(b.onNote('good').note, null, 'a good hit only knocks');
+  assert.equal(b.step, 1, 'and does not move the song on');
+  b.onNote('miss');
+  assert.equal(b.step, 0, 'a miss starts the song over');
+  assert.equal(b.stir, c.stir.miss + c.stir.good);
+  // Enough misses make it restless (tighter routes), then wake it.
+  const events = [];
+  for (let i = 0; i < 8 && !events.includes('wake'); i++) events.push(b.onNote('miss').event);
+  assert.ok(events.includes('restless') && events.includes('wake'));
+  assert.equal(b.stir, c.afterWake, 'it settles a little after waking');
+  b.stir = c.restless;
+  const routes = [{ windowScale: 1 }];
+  b.decorateRoutes(routes);
+  assert.equal(routes[0].windowScale, c.restlessWindow);
+  assert.equal(b.rest(), 'calm', 'a ledge settles it');
+  // The whole lullaby, note for note, sends it into a deeper sleep.
+  b.stir = 60;
+  const played = [];
+  let last;
+  for (let i = 0; i < c.melody.length; i++) { last = b.onNote('perfect'); played.push(last.note); }
+  assert.deepEqual(played, c.melody);
+  assert.equal(last.event, 'song');
+  assert.ok(b.stir < c.restless);
+  assert.equal(b.step, 0);
+  b.update(100, 0);
+  assert.equal(b.stir, 0, 'out of the garden it all starts over');
+  // Bone holds still snap.
   assert.ok(BIOMES.bones.hazards.crumbling > 0);
 });
 

@@ -734,27 +734,33 @@ function boneRidge({ w, h, seed }) {
   const ridge = smoothRidge(ridgeHeights(rng, w, h * 0.42, 12, 0.5), 3);
   for (let x = 0; x < w; x++) for (let y = Math.round(ridge[x]); y < h; y++) b.set(x, y, y - ridge[x] < 2 ? 0x7a6e68 : 0x2e2826);
   for (let s = 0; s < 3; s++) {
-    const x0 = rng.int(0, w - 1), n = rng.int(6, 9), size = rng.range(20, 34);
+    const x0 = rng.int(0, w - 1), n = rng.int(5, 10), size = rng.range(18, 38), gap = rng.int(5, 9);
+    // Each skeleton leans its own way; its ribs curl as they rise.
+    const lean = rng.range(-8, 8);
     // The spine along the ground, ribs rising from it, biggest in the middle.
     for (let i = 0; i < n; i++) {
-      const rx = x0 + i * 7, gy = Math.round(ridge[((rx % w) + w) % w]);
-      const tall = size * Math.sin(((i + 0.5) / n) * Math.PI);
+      const rx = x0 + i * gap, gy = Math.round(ridge[((rx % w) + w) % w]);
+      let tall = size * Math.sin(((i + 0.5) / n) * Math.PI) * rng.range(0.8, 1.1);
+      if (rng.chance(0.2)) tall *= rng.range(0.3, 0.6); // snapped off
       for (let k = 0; k <= tall; k++) {
-        const bend = Math.round((k / tall) ** 2 * 5);
+        const bend = Math.round((k / tall) ** 2 * lean);
         b.set(rx + bend, Math.round(gy - k), k > tall - 2 ? 0xfff2d8 : 0xd8ccb0);
         b.set(rx + bend + 1, Math.round(gy - k), 0x9a8a70);
       }
       b.set(rx, gy - 1, 0xc8b898); b.set(rx + 3, gy - 2, 0xc8b898);
     }
     // The skull: a long snout, a dark socket and a swept-back horn.
-    const sx = x0 + n * 7 + 6, sy = Math.round(ridge[((sx % w) + w) % w]) - 6;
+    // The skull at the head end, or the tail end, facing either way.
+    const f = rng.chance(0.5) ? 1 : -1;
+    const sx = f > 0 ? x0 + n * gap + 6 : x0 - 10, sy = Math.round(ridge[((sx % w) + w) % w]) - 6;
     for (let y = -6; y <= 6; y++) for (let x = -8; x <= 12; x++) {
       const inSkull = (x / 8) ** 2 + (y / 6) ** 2 <= 1 || (x > 0 && x < 12 && y > -3 + x * 0.1 && y < 4);
-      if (inSkull) b.set(sx + x, sy + y, y < -2 ? 0xfff2d8 : y > 2 ? 0xa89878 : 0xd8ccb0);
+      if (inSkull) b.set(sx + x * f, sy + y, y < -2 ? 0xfff2d8 : y > 2 ? 0xa89878 : 0xd8ccb0);
     }
-    b.set(sx - 1, sy - 1, 0x1a1414); b.set(sx, sy - 1, 0x1a1414); b.set(sx - 1, sy, 0x1a1414);
-    for (let k = 0; k < 10; k++) b.set(sx - 4 - k, sy - 4 - Math.round(k * 0.6), 0xe8dcc0);
-    for (let k = 0; k < 10; k++) b.set(sx - 4 - k, sy - 3 - Math.round(k * 0.6), 0xa89878);
+    b.set(sx - f, sy - 1, 0x1a1414); b.set(sx, sy - 1, 0x1a1414); b.set(sx - f, sy, 0x1a1414);
+    const horn = rng.int(7, 13);
+    for (let k = 0; k < horn; k++) b.set(sx - (4 + k) * f, sy - 4 - Math.round(k * 0.6), 0xe8dcc0);
+    for (let k = 0; k < horn; k++) b.set(sx - (4 + k) * f, sy - 3 - Math.round(k * 0.6), 0xa89878);
   }
   return b.canvas();
 }

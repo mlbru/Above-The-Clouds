@@ -435,6 +435,31 @@ class AudioSystemImpl {
       clank() { this.tone({ freq: 620, dur: 0.03, type: 'square', peak: 0.03 }); this.noiseHit({ dur: 0.03, freq: 2600, q: 6, peak: 0.05 }); },
       // Bone Garden: a skull rattles in its niche; a bone hold snaps.
       rattle() { for (let i = 0; i < 5; i++) this.noiseHit({ t: i * 0.05, dur: 0.03, freq: 1400 + (i % 2) * 500, q: 5, peak: 0.1 }); },
+      // The Bone Garden's xylophone: a hollow, woody note of the lullaby (o.midi).
+      bonenote(o) {
+        const f = midiToHz(o.midi);
+        this.tone({ freq: f, dur: 0.9, type: 'sine', peak: 0.09, attack: 0.002, reverb: 0.55 });
+        this.tone({ freq: f * 2.76, dur: 0.12, type: 'sine', peak: 0.03, attack: 0.001 });
+        this.tone({ freq: f * 2, dur: 0.4, type: 'triangle', peak: 0.012, attack: 0.002, reverb: 0.5 });
+        this.noiseHit({ dur: 0.025, type: 'bandpass', freq: 2400, q: 3, peak: 0.06 });
+      },
+      // A good hit only knocks on the bone: dull, no note.
+      boneknock() {
+        this.tone({ freq: 220, toFreq: 180, dur: 0.12, type: 'triangle', peak: 0.05 });
+        this.noiseHit({ dur: 0.03, type: 'bandpass', freq: 1200, q: 2, peak: 0.06 });
+      },
+      // A miss: a sour clack of two bones a semitone apart.
+      boneclack(o) {
+        const f = midiToHz(o.midi || 61);
+        this.tone({ freq: f, dur: 0.35, type: 'square', peak: 0.025, attack: 0.002, reverb: 0.3 });
+        this.tone({ freq: f * 1.06, dur: 0.35, type: 'square', peak: 0.025, attack: 0.002, reverb: 0.3 });
+        for (let i = 0; i < 3; i++) this.noiseHit({ t: i * 0.04, dur: 0.03, freq: 1400 + (i % 2) * 500, q: 5, peak: 0.08 });
+      },
+      // The lullaby is done: its last note rings with a soft chord and a sigh of breath.
+      lullaby() {
+        [61, 68, 73, 76].forEach((m, i) => this.tone({ t: i * 0.12, freq: midiToHz(m), dur: 2.6, type: 'sine', peak: 0.04, attack: 0.02, reverb: 0.9 }));
+        this.noiseHit({ t: 0.3, dur: 2.2, type: 'lowpass', freq: 500, sweepTo: 200, peak: 0.12, attack: 0.9, bus: this.ambBus, reverb: 0.6 });
+      },
       bonesnap() { this.noiseHit({ dur: 0.06, type: 'highpass', freq: 2200, peak: 0.25 }); this.tone({ freq: 300, toFreq: 120, dur: 0.1, type: 'triangle', peak: 0.08 }); },
       held() { this.tone({ freq: 990, dur: 0.12, type: 'triangle', peak: 0.05 }); this.tone({ t: 0.05, freq: 1480, dur: 0.18, type: 'triangle', peak: 0.04 }); },
       runover() {

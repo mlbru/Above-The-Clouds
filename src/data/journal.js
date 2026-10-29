@@ -28,10 +28,10 @@ const PLACE_TEXT = {
   aurora: 'GREEN LIGHTS SWAY OVER THE ICE, AND THE RHYTHM SWAYS WITH THEM: LONG-SHORT, LONG-SHORT.',
   hive: 'A CLIFF OF WAX AND HONEY. WHEN THE SWARM FLIES PAST, HANG STILL: MOVE AND THEY STING.',
   clockwork: 'A DWARF FORTRESS FULL OF TURNING GEARS. ARROWS ON A COG TURN INTO PLACE ON THE BEAT: WAIT FOR THE CLICK.',
-  bones: 'WHERE OLD DRAGONS CAME TO DIE. BONE HOLDS SNAP IF YOU HANG TOO LONG, AND EVERY SLIP RATTLES A SKULL.',
+  bones: 'WHERE OLD DRAGONS CAME TO DIE. THE RIBS RING LIKE A XYLOPHONE: PERFECT NOTES PLAY THE DRAGON\'S LULLABY, MISSES WAKE IT.',
   dragon: 'A DRAGON SLEEPS AROUND THE PEAK. WHEN IT WAKES THE WHOLE MOUNTAIN SHAKES, AND IT BREATHES FIRE AT YOU. SWING CLEAR ON THE BEAT.',
 };
-const TWIST = { green: 'NO TWIST', stone: 'ROCKFALL', frozen: 'WHITEOUT', clouds: 'THERMALS', obsidian: 'DARKNESS', crystal: 'PRISM LIGHT', storm: 'STORMS', aurora: 'SWING', dragon: 'DRAGON FIRE', hive: 'THE SWARM', clockwork: 'GEARS', bones: 'BONES AND SKULLS' };
+const TWIST = { green: 'NO TWIST', stone: 'ROCKFALL', frozen: 'WHITEOUT', clouds: 'THERMALS', obsidian: 'DARKNESS', crystal: 'PRISM LIGHT', storm: 'STORMS', aurora: 'SWING', dragon: 'DRAGON FIRE', hive: 'THE SWARM', clockwork: 'GEARS', bones: 'THE LULLABY' };
 
 const places = Object.values(BIOMES).filter((b) => !b.special).sort((a, b) => a.from - b.from).map((b) => ({
   id: `place-${b.id}`,

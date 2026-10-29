@@ -1,8 +1,8 @@
 import { DEPTH, LEVEL_PX, levelToY, levelToMeters, GAME_WIDTH, GAME_HEIGHT, CAMERA_ANCHOR, WORLD_WIDTH } from '../config/gameConfig.js';
 import { WallPainter } from '../render/wallArt.js';
-import { holdKey } from '../render/textures.js';
+import { holdKey, BONE_HOLD_VARIANTS } from '../render/textures.js';
 import { biomeAt } from '../data/biomes.js';
-import { SeededRandom } from '../utils/seededRandom.js';
+import { SeededRandom, hashInts } from '../utils/seededRandom.js';
 import { HUT_SIZE } from '../render/campArt.js';
 import { lerpColor } from '../utils/color.js';
 import { currentSeason } from '../data/seasons.js';
@@ -107,13 +107,18 @@ export class WallRenderer {
       for (const node of lv.nodes) {
         if (node.kind === 'ledge') continue;
         const biome = biomeAt(levelToMeters(node.level));
-        const key = holdKey(biome.id, node.kind, node.hazard);
+        let key = holdKey(biome.id, node.kind, node.hazard);
+        // Bone holds: one of several shapes, either way round.
+        const hsh = hashInts(Math.round(node.x), Math.round(node.y), 83);
+        const boneHold = biome.id === 'bones' && node.kind === 'hold' && (!node.hazard || node.hazard === 'crumbling');
+        if (boneHold && hsh % BONE_HOLD_VARIANTS) key += `_v${hsh % BONE_HOLD_VARIANTS}`;
         // A soft shadow under each hold so it sits on the rock instead of on top
         // of it; ice, crystal and aurora holds glow faintly instead.
         const look = HOLD_SHADOW[biome.id] || HOLD_SHADOW.default;
         const shadow = this.scene.add.image(node.x + look.dx, node.y + 3 + look.dy, key).setDepth(DEPTH.holds - 1).setTintFill(look.tint).setAlpha(look.alpha);
         if (look.glow) shadow.setBlendMode('ADD').setScale(1.3);
         const s = this.scene.add.image(node.x, node.y + 3, key).setDepth(DEPTH.holds);
+        if (boneHold && (hsh >> 4) % 2) { s.setFlipX(true); shadow.setFlipX(true); }
         v.holds.set(node.id, s);
         v.objects.push(shadow, s);
       }

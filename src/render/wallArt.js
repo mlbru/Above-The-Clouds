@@ -314,16 +314,36 @@ export class WallPainter {
           set(dx, d > outer ? pal.outline : d < 2.5 ? pal.rock[0] : d > rr - 2 ? (dy < 0 ? pal.accentB : pal.accentA) : pal.rock[2]);
         }
       } else if (style === 'ribs') {
-        // Great ribs jut out of the rock and curve down, pale bone.
-        const P = 20, k = ((wy + (side < 0 ? 0 : 10)) % P + P) % P;
-        const hsh = hashInts(Math.floor((wy + (side < 0 ? 0 : 10)) / P), side, seed + 17);
-        const L = 8 + hsh % 6;
-        if ((hsh >> 4) % 3 === 0 || k > L) continue;
-        const reach = 7 + (hsh >> 7) % 6;
-        const at = (kk) => Math.round(reach * Math.sin((kk / L) * Math.PI / 2));
-        const a = k === 0 ? 1 : at(k - 1) + 1, b = at(k) + 1;
-        for (let dx = Math.min(a, b); dx <= Math.max(a, b) + 1; dx++) set(dx, k === L ? 0xfff6e0 : k < L / 2 ? 0xf0e4c8 : 0xc8b898);
-        set(Math.max(a, b) + 2, pal.outline);
+        // Bones jut out of the rock edge: long ribs curling up or down, short
+        // broken stubs and now and then a knuckle of spine, all different.
+        const P = 24, off = side < 0 ? 0 : 12, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 17);
+        const kind = hsh % 5;
+        if (kind === 0) continue;
+        const L = kind === 4 ? 5 : 6 + (hsh >> 3) % 12;
+        if (k > L + 1) continue;
+        if (kind === 4) {
+          // A vertebra: a round knob with a spike.
+          const dy = k - 3, w = Math.round(Math.sqrt(Math.max(0, 9 - dy * dy)));
+          for (let dx = 1; dx <= w + 1; dx++) set(dx, dy < -1 ? 0xfff6e0 : dy > 1 ? 0xb8a888 : 0xe8dcc0);
+          if (k === 3) { set(w + 2, 0xd8ccb0); set(w + 3, 0xd8ccb0); set(w + 4, pal.outline); }
+          else set(w + 2, pal.outline);
+          continue;
+        }
+        const reach = 5 + (hsh >> 8) % 10;
+        const up = (hsh >> 12) % 2 === 0;
+        const thick = (hsh >> 14) % 3 === 0 ? 2 : 1;
+        const broken = (hsh >> 16) % 4 === 0;
+        // Curl: up-ribs leave low and rise, down-ribs leave high and droop.
+        const kk = up ? L - k : k;
+        const curve = (q) => Math.round(reach * Math.sin(Math.min(1, q / L) * Math.PI / 2) ** (up ? 0.7 : 1.4));
+        if (k > L) continue;
+        const a = kk === 0 ? 1 : curve(kk - 1) + 1, b = curve(kk) + 1;
+        const end = broken ? Math.round(reach * 0.6) : 99;
+        for (let dx = Math.min(a, b); dx <= Math.min(end, Math.max(a, b) + thick); dx++) {
+          set(dx, k === 0 ? 0xfff6e0 : k === L ? 0xa89878 : k < L / 2 ? 0xf0e4c8 : 0xd0c0a0);
+        }
+        set(Math.min(end, Math.max(a, b) + thick) + 1, broken && Math.max(a, b) > end ? 0x8a7a64 : pal.outline);
       } else if (style === 'vines') {
         // Ivy hangs off the edge: a dark strand with bright leaves, now and then.
         const P = 34, k = ((wy + (side < 0 ? 0 : 17)) % P + P) % P;

@@ -57,7 +57,7 @@ export function buildPreviewTexture(scene, key, look) {
 // Holds with a shape of their own: the Amber Hive's wax nubs, the Clockwork
 // Bastion's brass rungs and the Bone Garden's bones (the cracked ones snap).
 // Same frame size as the round holds so everything lines up the same.
-function specialHoldGrid(biome, kind, hazard) {
+function specialHoldGrid(biome, kind, hazard, variant = 0) {
   const jug = kind === 'jug';
   const w = jug ? 16 : 12, h = jug ? 9 : 8;
   const g = new PixelGrid(w + 2, h + 3);
@@ -90,8 +90,21 @@ function specialHoldGrid(biome, kind, hazard) {
     g.set(cx, cy - 1, 0xffffff);
   } else if (biome.id === 'bones' && (!hazard || hazard === 'crumbling')) {
     // A bone: a shaft with knobbly ends. A jug is a vertebra with a spike.
+    // Plain holds come in four shapes (variant): a level bone, a slanted
+    // bone, a fang and a knuckle of spine.
     const bone = 0xe4d8bc, shade = 0xa89878, lit = 0xfff6e0;
-    if (jug) {
+    if (!jug && variant === 1) {
+      g.line(3, h - 1, w - 1, 2, bone, 2.5);
+      for (const [ex, ey] of [[2, h - 1], [w, 2]]) { g.ellipse(ex - 0.8, ey - 0.6, 1.6, 1.5, bone); g.ellipse(ex + 0.8, ey + 0.6, 1.6, 1.5, bone); }
+    } else if (!jug && variant === 2) {
+      g.rect(cx - 4, 1, 9, 2, bone);
+      fillTri(g, cx - 4, 2, cx + 4, 2, cx + 2, h + 1, bone);
+      g.set(cx + 3, h, bone); g.set(cx - 1, 1, 0x8a7a64);
+    } else if (!jug && variant === 3) {
+      g.ellipse(cx, cy, 4, 3.2, bone);
+      g.rect(1, cy - 1, w, 2, bone);
+      fillTri(g, cx - 1, cy - 2, cx + 1, cy - 2, cx, 0, bone);
+    } else if (jug) {
       g.ellipse(cx, cy + 1, 6.5, 3, bone);
       fillTri(g, cx - 2, cy - 1, cx + 2, cy - 1, cx, 0, bone);
       g.ellipse(cx - 4, cy + 1, 1.4, 1.2, 0x3a3028); g.ellipse(cx + 4, cy + 1, 1.4, 1.2, 0x3a3028);
@@ -109,9 +122,8 @@ function specialHoldGrid(biome, kind, hazard) {
       g.line(cx - 1, cy - 2, cx + 1, cy + 2, 0x3a2a22);
       g.set(cx + 2, cy - 1, 0x3a2a22); g.set(cx - 3, cy + 1, 0x8a7a64);
       g.set(cx + 4, h + 1, shade); g.set(cx - 4, h + 2, shade);
-    } else {
-      g.set(cx - 2, cy, 0xf6f3ea); g.set(cx + 1, cy - 1, 0xf6f3ea);
-    }
+    } else if (variant === 3) g.set(cx, cy, 0x3a3028);
+    else { g.set(cx - 2, cy, 0xf6f3ea); g.set(cx + 1, cy - 1, 0xf6f3ea); }
   } else return null;
   g.outline(OUT);
   return g;
@@ -128,8 +140,8 @@ function fillTri(g, x0, y0, x1, y1, x2, y2, c) {
   }
 }
 
-function holdGrid(biome, kind, hazard) {
-  const special = specialHoldGrid(biome, kind, hazard);
+function holdGrid(biome, kind, hazard, variant = 0) {
+  const special = specialHoldGrid(biome, kind, hazard, variant);
   if (special) return special;
   const base = lerpColor(biome.rock[3], biome.holdTint, 0.45);
   let body = base, light = lighten(base, 0.35), dark = darken(base, 0.65);
@@ -168,7 +180,12 @@ export function buildHoldTextures(scene) {
       }
     }
   }
+  // The Bone Garden's other bone shapes.
+  for (let v = 1; v < BONE_HOLD_VARIANTS; v++) {
+    for (const hazard of [null, 'crumbling']) addGrid(scene, `${holdKey('bones', 'hold', hazard)}_v${v}`, holdGrid(BIOMES.bones, 'hold', hazard, v));
+  }
 }
+export const BONE_HOLD_VARIANTS = 4;
 export const holdKey = (biomeId, kind, hazard) => `hold_${biomeId}_${kind}_${hazard || 'none'}`;
 
 function arrowGrid(dir, size) {
