@@ -340,6 +340,25 @@ const PATTERNS = {
     if (r === 1) return 0x0e1226;
     return [0x141a34, 0x24305a, 0x34447a][k];
   },
+  // Honeycomb coat: golden wax cells, a few still full of honey.
+  honeycomb: (x, y, k) => {
+    const row = Math.floor(y / 3), cx = (x + (row % 2) * 2) % 4;
+    if (y % 3 === 0 || cx === 0) return [0x7a4a10, 0x9a5c18, 0xb87a2a][k];
+    if ((Math.floor((x + (row % 2) * 2) / 4) * 3 + row * 5) % 7 === 0) return 0xffb840;
+    return [0xc8902c, 0xe8b04a, 0xffd870][k];
+  },
+  // Tinker's coat: oiled leather, a row of brass rivets and a little cog.
+  brass: (x, y, k) => {
+    if (x % 5 === 2 && y % 4 === 1) return 0xf0c870;
+    if ((x + y) % 11 === 0) return 0x2a1c12;
+    return [0x3a2618, 0x5a3c24, 0x7a5434][k];
+  },
+  // Bone mail: ash-black with pale ribs across the chest.
+  bone: (x, y, k) => {
+    if (y % 3 === 0 && (x % 6 !== 0)) return k === 0 ? 0xa89878 : 0xe8dcc0;
+    if (x % 6 === 0 && y % 3 !== 2) return 0xc8b898;
+    return [0x141214, 0x24201e, 0x3a3430][k];
+  },
   // Dragonscale coat: overlapping red scales with a few gold flecks.
   scales: (x, y, k) => {
     const row = Math.floor(y / 3), sx = (x + (row % 2) * 2) % 4;

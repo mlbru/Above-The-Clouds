@@ -5,6 +5,8 @@
 // glows as it draws breath, then the flames come down on the beat. Swing clear
 // with the arrow shown, like dodging a rock. A ledge is safe: it never breathes
 // at a climber resting there.
+import { LOOP_START } from '../../data/biomes.js';
+
 export const DRAGON_EYE = {
   firstSleepSec: 10,
   sleepSec: [26, 42],
@@ -18,7 +20,7 @@ export const DRAGON_EYE = {
   // How long it draws breath (the warning) before the flames land on the beat.
   breathLeadMs: 1500,
   // Above this height it breathes twice in a row (a second sweep the other way).
-  doubleFrom: 1950,
+  doubleFrom: LOOP_START,
   perfectMs: 110,
   goodMs: 230,
   // Grip lost when the flames catch you.

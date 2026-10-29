@@ -24,6 +24,9 @@ export const COSMETICS = {
     { id: 'jacket-rime', name: 'RIME COAT', color: 0xa8d4ec, pattern: 'rime', requirement: { mastery: 'frozen' } },
     { id: 'jacket-prism', name: 'PRISM SHELL', color: 0xe0dcec, pattern: 'prism', requirement: { mastery: 'crystal' } },
     { id: 'jacket-bolt', name: 'THUNDER JACKET', color: 0x24305a, pattern: 'bolt', requirement: { mastery: 'storm' } },
+    { id: 'jacket-honeycomb', name: 'HONEYCOMB COAT', color: 0xe8b04a, pattern: 'honeycomb', requirement: { mastery: 'hive' } },
+    { id: 'jacket-brass', name: "TINKER'S COAT", color: 0x5a3c24, pattern: 'brass', requirement: { mastery: 'clockwork' } },
+    { id: 'jacket-bone', name: 'BONE MAIL', color: 0x24201e, pattern: 'bone', requirement: { mastery: 'bones' } },
     { id: 'jacket-scales', name: 'DRAGONSCALE COAT', color: 0x8e2a2a, pattern: 'scales', requirement: { mastery: 'dragon' } },
     // Seasonal: Bram only sells these around that holiday (data/seasons.js).
     { id: 'jacket-pumpkin', name: 'PUMPKIN COAT', color: 0xe8761c, requirement: { price: 30, season: 'halloween' } },

@@ -123,13 +123,16 @@ export class Dragon {
 
     // Head position (its neck joint): breathing, a restless sway while it
     // watches, leaning towards the climber, the pull and the lunge.
+    // Asleep it breathes slow and deep (about every 5 s); awake, quick and shallow.
+    const breath = Math.sin(t * 1.25);
+    const deep = 1 - r;
     const hx0 = freeX - dir * Math.min(30, free * 0.25);
-    const sleepPos = [hx0, GAME_HEIGHT - 46];
+    const sleepPos = [hx0, GAME_HEIGHT - 44];
     const lean = watching ? Math.max(-14, Math.min(18, (climber.y - 90) * 0.12)) : 0;
     const watchPos = [hx0 - dir * 6, 66 + lean];
     let hx = lerp(sleepPos[0], watchPos[0], r) + dir * (this.lunge * 34 - this.pull * 16);
     let hy = lerp(sleepPos[1], watchPos[1], r) - this.pull * 10 + this.lunge * 8
-      + Math.sin(t * 0.8) * 1.5 + (Math.sin(t * 1.3) * 3 + Math.sin(t * 3.1) * 1) * r;
+      - breath * lerp(2, 1, r) + (Math.sin(t * 1.3) * 3 + Math.sin(t * 3.1) * 1) * r;
     hx += Math.sin(t * 0.9) * 3 * r;
     hx = Math.round(hx); hy = Math.round(hy);
 
@@ -143,9 +146,16 @@ export class Dragon {
     const heat = 0.35 + 0.25 * Math.sin(t * 2.2) + r * 0.25 + (inhaling ? inhaleK * 0.6 : 0) + (roar ? 0.5 : 0);
     const flip = dir < 0;
     const ox = (x) => (flip ? 1 - x : x);
-    this.head.setTexture(`dragon_head_${jaw}`).setFlipX(flip).setOrigin(ox(HEAD_NECK.x / HEAD_W), HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setTint(tint).setAlpha(alpha);
-    this.headGlow.setTexture(`dragon_head_glow_${jaw}`).setFlipX(flip).setOrigin(ox(HEAD_NECK.x / HEAD_W), HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setAlpha(Math.min(1, heat) * alpha);
-    const local = (p) => [hx + dir * (p.x - HEAD_NECK.x), hy + (p.y - HEAD_NECK.y)];
+    // Asleep the head rests with its chin sunk into the clouds, nodding a
+    // little with every breath; it lifts level as it rears up.
+    const tilt = dir * (0.16 + breath * 0.03) * deep;
+    this.head.setTexture(`dragon_head_${jaw}`).setFlipX(flip).setOrigin(ox(HEAD_NECK.x / HEAD_W), HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setRotation(tilt).setTint(tint).setAlpha(alpha);
+    this.headGlow.setTexture(`dragon_head_glow_${jaw}`).setFlipX(flip).setOrigin(ox(HEAD_NECK.x / HEAD_W), HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setRotation(tilt).setAlpha(Math.min(1, heat) * alpha);
+    const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+    const local = (p) => {
+      const dx = dir * (p.x - HEAD_NECK.x), dy = p.y - HEAD_NECK.y;
+      return [hx + dx * cosT - dy * sinT, hy + dx * sinT + dy * cosT];
+    };
 
     // Neck: from behind the wall, out into the sky, up to the back of the
     // head; a slow wave runs up it, faster and stronger when it is awake.
@@ -156,7 +166,6 @@ export class Dragon {
       [hx - dir * lerp(34, 44, r), hy + lerp(26, 62, r)],
       [hx + dir * 2, hy + 4],
     ];
-    const breath = Math.sin(t * 0.8);
     const waveAmp = lerp(1.5, 4, r) + this.pull * 2;
     const waveSpeed = lerp(1.2, 2.6, r);
     for (let i = 0; i < NECK; i++) {
@@ -172,7 +181,8 @@ export class Dragon {
       if (nx * dir + ny * 0.3 < 0) { nx = -nx; ny = -ny; }
       const wave = Math.sin(u * Math.PI * 2.2 - t * waveSpeed) * waveAmp * Math.sin(u * Math.PI);
       x += nx * wave; y += ny * wave;
-      const rad = lerp(13.5, 8, u) + Math.sin(u * Math.PI) * 1.5 + breath * 0.4 + this.pull * Math.sin(u * Math.PI) * 1.2;
+      // Each breath swells the body near the shoulders most.
+      const rad = lerp(13.5, 8, u) + Math.sin(u * Math.PI) * 1.5 + breath * lerp(0.4, 1, deep) * (1 - u * 0.6) + this.pull * Math.sin(u * Math.PI) * 1.2;
       const px = Math.round(x), py = Math.round(y + breath * u * 1.5);
       this.neck[i].setTexture(segKey(rad)).setPosition(px, py).setTint(tint).setAlpha(alpha);
       this.neckGlow[i].setTexture(glowKey(rad)).setPosition(px, py).setAlpha(Math.max(0, Math.min(1, heat * (0.6 + 0.4 * Math.sin(t * 3 - u * 6)))) * alpha);
@@ -190,9 +200,13 @@ export class Dragon {
     if (phase === 'opening') frame = this.raise > 0.5 ? 2 : 1;
     else if (watching) frame = WING_FLAP[Math.floor(t / (inhaling ? 0.09 : 0.16)) % WING_FLAP.length];
     else if (this.raise > 0.3) frame = 1;
-    this.wing.setTexture(`dragon_wing_${frame}`).setFlipX(flip)
-      .setOrigin(ox(WING_SHOULDER.x / WING_W), WING_SHOULDER.y / WING_H)
-      .setPosition(Math.round(sh[0] - dir * 8), Math.round(sh[1] - 2)).setScale(1.15).setTint(tint).setAlpha(alpha);
+    // Folded (frame 0) it lies back along the body towards the wall, rising
+    // and falling with the breath; spread, it reaches out into the sky.
+    const folded = frame === 0;
+    const wflip = folded ? !flip : flip;
+    this.wing.setTexture(`dragon_wing_${frame}`).setFlipX(wflip)
+      .setOrigin(wflip ? 1 - WING_SHOULDER.x / WING_W : WING_SHOULDER.x / WING_W, WING_SHOULDER.y / WING_H)
+      .setPosition(Math.round(sh[0] - dir * (folded ? 2 : 8)), Math.round(sh[1] - (folded ? 4 + breath : 2))).setScale(1.15).setTint(tint).setAlpha(alpha);
 
     this.updateClaw(dt, side, dir, clawBounds || bounds, ctrl, r, inhaling, tint, alpha, heat);
     this.updateTail(t, side, bounds, watching, tint, alpha, heat);
@@ -203,7 +217,10 @@ export class Dragon {
     const mouthOn = jaw >= 2 || inhaling;
     this.mouthGlow.setVisible(mouthOn).setPosition(throat[0] + dir * 6, throat[1] + jaw * 2)
       .setScale(0.5 + (inhaling ? inhaleK * 0.7 : 0) + (jaw === 3 ? 0.5 : 0)).setAlpha((0.5 + Math.random() * 0.2) * alpha);
-    this.updateSmoke(dt, local({ x: 73, y: 22 }), dir, watching, alpha);
+    // Asleep, a breath of smoke comes out each time the chest falls.
+    const exhale = this.lastBreath !== undefined && this.lastBreath >= 0.98 && breath < 0.98 && r < 0.1;
+    this.lastBreath = breath;
+    this.updateSmoke(dt, local({ x: 73, y: 22 }), dir, watching, alpha, exhale);
     this.updateMotes(dt, local(HEAD_MOUTH), inhaling, alpha);
     this.mouthPos = local(HEAD_MOUTH);
   }
@@ -321,10 +338,11 @@ export class Dragon {
   }
 
   // Smoke curls from the nostril: lazy puffs asleep, sharper ones awake.
-  updateSmoke(dt, [nx, ny], dir, watching, alpha) {
+  // Asleep the puffs come with the breath (exhale) instead of on a timer.
+  updateSmoke(dt, [nx, ny], dir, watching, alpha, exhale) {
     this.smokeIn -= dt;
-    if (this.smokeIn <= 0 && this.smoke.length < 12) {
-      this.smokeIn = watching ? 900 + Math.random() * 900 : 2800 + Math.random() * 1800;
+    if ((exhale || (this.smokeIn <= 0 && watching)) && this.smoke.length < 12) {
+      this.smokeIn = 900 + Math.random() * 900;
       for (let i = 0; i < 2; i++) {
         const p = this.scene.add.image(nx, ny, 'puff').setScrollFactor(0).setDepth(D + 0.9).setTint(watching ? 0x3a2626 : 0x4a3a3a).setAlpha(0).setScale(0.6);
         p.life = -i * 220; p.span = 2400 + Math.random() * 900; p.vx = dir * (0.006 + Math.random() * 0.006); p.vy = -0.012 - Math.random() * 0.006;

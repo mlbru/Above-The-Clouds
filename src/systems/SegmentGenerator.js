@@ -58,6 +58,8 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   const count = rng.int(template.levels[0], template.levels[1]);
   const targetWidth = rng.range(template.width[0], template.width[1]);
   const hazardChance = {
+    // Some biomes (the Bone Garden) have more crumbling holds on top of the height ramp.
+    crumbling: diff.crumbling + (biome.hazards.crumbling || 0),
     loose: (biome.hazards.loose || 0) + ((template.hazardBoost && template.hazardBoost.loose) || 0),
     icy: (biome.hazards.icy || 0) + ((template.hazardBoost && template.hazardBoost.icy) || 0),
   };
@@ -102,7 +104,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
       // Empty rock right above a ledge: the climber stands here, so no holds.
       gapRemaining--;
     } else {
-      const crumbles = rng.chance(diff.crumbling * 0.5);
+      const crumbles = rng.chance(hazardChance.crumbling * 0.5);
       const main = { id: `${level}:0`, level, x: Math.round(x), y, kind: !crumbles && rng.chance(0.08) ? 'jug' : 'hold', hazard: crumbles ? 'crumbling' : null, main: true };
       nodes.push(main);
       let extras = 0;
@@ -115,7 +117,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
           if (ex < l + marginL || ex > r - marginR) continue;
           if (nodes.some((n) => Math.abs(n.x - ex) < gen.minNodeSpacing)) continue;
           let hazard = null;
-          if (rng.chance(diff.crumbling)) hazard = 'crumbling';
+          if (rng.chance(hazardChance.crumbling)) hazard = 'crumbling';
           else if (rng.chance(hazardChance.icy)) hazard = 'icy';
           else if (rng.chance(hazardChance.loose)) hazard = 'loose';
           const kind = !hazard && rng.chance(0.1) ? 'jug' : 'hold';

@@ -5,7 +5,8 @@
 // specs: { dir, gap (beats since previous note), hold (beats), hidden, gust,
 //          mirror (shown the other way round), chord (a second direction
 //          pressed together with dir), roll (taps needed before the tail ends),
-//          still (a beat on which you must NOT press) }.
+//          still (a beat on which you must NOT press), swarm (a still beat
+//          that is the Amber Hive's swarm), gear (ticks a gear note turns) }.
 export const RESULT = { PERFECT: 'perfect', GOOD: 'good', MISS: 'miss' };
 
 export class ComboSystem {
@@ -36,6 +37,8 @@ export class ComboSystem {
         tapsLeft: spec.roll ? spec.roll - 1 : 0,
         mirror: !!spec.mirror,
         still: !!spec.still,
+        swarm: !!spec.swarm,
+        gear: spec.gear || 0,
         chord: spec.chord || null,
         pressed: null,
         hidden: !!spec.hidden,

@@ -198,8 +198,9 @@ export class WallPainter {
   // How far the wall's outline wanders from its bounds on this row. Each biome
   // has its own outline: rounded (default), stepped blocks, or sharp facets.
   edgeOffsets(wy, style) {
-    if (style === 'blocks') {
-      // Stacked granite blocks: the outline holds for a block, then steps.
+    if (style === 'blocks' || style === 'cogs') {
+      // Stacked granite blocks (or the bastion's masonry): the outline holds
+      // for a block, then steps.
       const q = Math.floor(wy / 12) * 12;
       const step = (v) => Math.round(v / 4) * 4;
       return {
@@ -288,6 +289,41 @@ export class WallPainter {
         const w = Math.round(Math.sqrt(rr * rr - dy * dy));
         for (let dx = 1; dx <= w; dx++) set(dx, dy < -rr * 0.4 ? 0xffffff : dy > rr * 0.5 ? 0xc8c0e2 : 0xece8f6);
         set(w + 1, 0xa8a0c8);
+      } else if (style === 'honey') {
+        // Honey oozes over the edge and hangs in long drips with a fat bead.
+        const P = 30, k = ((wy + (side < 0 ? 0 : 15)) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + (side < 0 ? 0 : 15)) / P), side, seed + 11);
+        if (hsh % 3 === 0) continue;
+        const len = 6 + (hsh >> 2) % 14, dx = 2 + (hsh >> 6) % 3;
+        if (k === 0) { for (let d = 1; d <= dx + 2; d++) set(d, d === dx + 2 ? pal.outline : pal.accentB); continue; }
+        if (k > len + 2) continue;
+        if (k > len) { set(dx - 1, k === len + 1 ? pal.accentB : pal.accentA); set(dx, pal.accentA); set(dx + 1, pal.accentA); set(dx + 2, pal.outline); continue; }
+        set(dx, k < 3 ? pal.accentB : pal.accentA);
+        set(dx + 1, pal.outline);
+      } else if (style === 'cogs') {
+        // Half-sunk gears stick out of the bastion walls, teeth and all.
+        const P = 38, k = ((wy + (side < 0 ? 0 : 19)) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + (side < 0 ? 0 : 19)) / P), side, seed + 13);
+        if (hsh % 3 === 0) continue;
+        const rr = 7 + (hsh >> 2) % 5, dy = k - rr - 2;
+        if (Math.abs(dy) > rr + 2) continue;
+        for (let dx = 1; dx <= rr + 3; dx++) {
+          const d = Math.hypot(dx - 1, dy), a = Math.atan2(dy, dx - 1);
+          const outer = rr + (Math.cos(a * 9) > 0.3 ? 2 : 0);
+          if (d > outer + 1) continue;
+          set(dx, d > outer ? pal.outline : d < 2.5 ? pal.rock[0] : d > rr - 2 ? (dy < 0 ? pal.accentB : pal.accentA) : pal.rock[2]);
+        }
+      } else if (style === 'ribs') {
+        // Great ribs jut out of the rock and curve down, pale bone.
+        const P = 20, k = ((wy + (side < 0 ? 0 : 10)) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + (side < 0 ? 0 : 10)) / P), side, seed + 17);
+        const L = 8 + hsh % 6;
+        if ((hsh >> 4) % 3 === 0 || k > L) continue;
+        const reach = 7 + (hsh >> 7) % 6;
+        const at = (kk) => Math.round(reach * Math.sin((kk / L) * Math.PI / 2));
+        const a = k === 0 ? 1 : at(k - 1) + 1, b = at(k) + 1;
+        for (let dx = Math.min(a, b); dx <= Math.max(a, b) + 1; dx++) set(dx, k === L ? 0xfff6e0 : k < L / 2 ? 0xf0e4c8 : 0xc8b898);
+        set(Math.max(a, b) + 2, pal.outline);
       } else if (style === 'vines') {
         // Ivy hangs off the edge: a dark strand with bright leaves, now and then.
         const P = 34, k = ((wy + (side < 0 ? 0 : 17)) % P + P) % P;
@@ -338,6 +374,10 @@ export class WallPainter {
     if (id === 'frozen') { set(0, -1, 0xffffff); set(1, -1, 0xeef6ff); set(-1, 0, 0xeef6ff); return; }
     if (id === 'obsidian' || id === 'crystal' || id === 'storm' || id === 'dragon') { set(1, 0, pal.accentC); set(1, -1, 0xffffff); return; }
     if (id === 'aurora') { set(0, -1, 0xffffff); set(1, -1, pal.accentB); set(-1, 0, pal.accentA); return; }
+    // Honey seeping out of the crack, a gleam of copper, a splinter of bone.
+    if (id === 'hive') { set(0, 1, pal.accentA); set(0, 2, pal.accentB); return; }
+    if (id === 'clockwork') { set(1, 0, pal.accentC); set(1, -1, pal.accentB); return; }
+    if (id === 'bones') { set(1, 0, pal.accentA); set(2, -1, pal.accentB); return; }
     const leaf = pal.accentC || 0x86ad58, dark = pal.accentA || 0x3f6a3c;
     const side = rng.chance(0.5) ? 1 : -1;
     set(side, 0, dark); set(side * 2, -1, leaf); set(side * 3, -1, leaf); set(side, -2, leaf); set(side * 2, -3, dark);

@@ -6,8 +6,8 @@ import { lerpColor } from '../utils/color.js';
 //   - cloud wisps drifting past in front of the climber (more of them higher up)
 //   - small particles that belong to each biome (pollen, dust, ice glitter,
 //     drifting fluff, embers, prism sparkles)
-const WISPS = { green: 0.15, stone: 0.25, frozen: 0.5, clouds: 0.7, obsidian: 0.35, crystal: 0.45, volcano: 0.5, sky: 0.6, storm: 0.6, aurora: 0.3, dragon: 0.55 };
-const WISP_TINT = { obsidian: 0x5a5070, crystal: 0xffe4f6, stone: 0xe4e2dc, volcano: 0x4a3a3a, storm: 0x6a7088, aurora: 0x9ae0c8, dragon: 0x5a3a3a };
+const WISPS = { green: 0.15, stone: 0.25, frozen: 0.5, clouds: 0.7, obsidian: 0.35, crystal: 0.45, volcano: 0.5, sky: 0.6, storm: 0.6, aurora: 0.3, dragon: 0.55, hive: 0.5, clockwork: 0.55, bones: 0.45 };
+const WISP_TINT = { obsidian: 0x5a5070, crystal: 0xffe4f6, stone: 0xe4e2dc, volcano: 0x4a3a3a, storm: 0x6a7088, aurora: 0x9ae0c8, dragon: 0x5a3a3a, hive: 0xffe8c0, clockwork: 0xe8e0d8, bones: 0x7a6e6a };
 
 const MOTES = {
   green: { tex: 'px2', rate: 3, speedX: { min: 3, max: 12 }, speedY: { min: -6, max: 4 }, lifespan: 4500, alpha: { start: 0.9, end: 0 }, scale: { start: 0.5, end: 0.5 }, tint: [0xfff6c0, 0xf4efe4, 0xd8f0a0] },
@@ -23,6 +23,12 @@ const MOTES = {
   aurora: { tex: 'spark', rate: 3, speedX: { min: -2, max: 2 }, speedY: { min: -4, max: 2 }, lifespan: 2200, alpha: { start: 1, end: 0 }, scale: { start: 0.6, end: 0.1 }, tint: [0x5af0a0, 0x9a70f0, 0xc8ffe8], blendMode: 'ADD' },
   // Dragon's Spine: ash flakes and sparks drifting up from the dragon's breath.
   dragon: { tex: 'px2', rate: 6, speedX: { min: -8, max: 8 }, speedY: { min: -30, max: -8 }, lifespan: 2600, alpha: { start: 1, end: 0 }, scale: { start: 0.6, end: 0.3 }, tint: [0xff9a3c, 0xffe08a, 0x6a5a5a, 0x4a3a3a], blendMode: 'ADD' },
+  // Amber Hive: drowsy bees and floating specks of pollen.
+  hive: { tex: 'px2', rate: 4, speedX: { min: -14, max: 14 }, speedY: { min: -6, max: 6 }, lifespan: 3000, alpha: { start: 1, end: 0 }, scale: { start: 0.6, end: 0.5 }, tint: [0x2a1a0a, 0xffd870, 0xfff2c0] },
+  // Clockwork Bastion: puffs of steam drifting up from the vents.
+  clockwork: { tex: 'puff', rate: 2.5, speedX: { min: -3, max: 6 }, speedY: { min: -16, max: -6 }, lifespan: 3200, alpha: { start: 0.3, end: 0 }, scale: { start: 0.2, end: 0.8 }, tint: [0xf0ece4, 0xd8d0c4] },
+  // Bone Garden: grey ash falling slowly, the odd ember among it.
+  bones: { tex: 'px2', rate: 7, speedX: { min: -6, max: 4 }, speedY: { min: 6, max: 16 }, lifespan: 4500, alpha: { start: 0.8, end: 0 }, scale: { start: 0.5, end: 0.5 }, tint: [0xb0a8a0, 0x8a827c, 0xd8d0c8, 0xe06a3a] },
   crystal: { tex: 'spark', rate: 4, speedX: { min: -3, max: 3 }, speedY: { min: -6, max: 2 }, lifespan: 1400, alpha: { start: 1, end: 0 }, scale: { start: 0.7, end: 0.1 }, tint: [0xffc8f0, 0xb8fff4, 0xfff1a8], blendMode: 'ADD' },
 };
 

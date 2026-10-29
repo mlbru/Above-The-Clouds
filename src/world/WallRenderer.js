@@ -12,7 +12,7 @@ const DECOR_TEX = {
   icicles: 'decor_icicles', snowdrift: 'decor_snowdrift', crystals: 'decor_crystals',
   pine: 'decor_cliffpine',
   piton: 'decor_piton', nest: 'decor_nest', vent: 'decor_vent', chain: 'decor_chain',
-  frostfern: 'decor_frostfern', bones: 'decor_bones', coins: 'decor_coins',
+  frostfern: 'decor_frostfern', bones: 'decor_bones', coins: 'decor_coins', comb: 'decor_comb', pipe: 'decor_pipe',
 };
 
 // What sits under each hold, per biome: a dark drop shadow (offset down-right)
@@ -27,6 +27,9 @@ const HOLD_SHADOW = {
   storm: { tint: 0x05060c, alpha: 0.5, dx: -1, dy: 3 },
   aurora: { tint: 0x5af0a0, alpha: 0.22, dx: 0, dy: 0, glow: true },
   dragon: { tint: 0x2a0606, alpha: 0.5, dx: 1, dy: 2 },
+  hive: { tint: 0xffb840, alpha: 0.2, dx: 0, dy: 1, glow: true },
+  clockwork: { tint: 0x0a0806, alpha: 0.5, dx: 1, dy: 3 },
+  bones: { tint: 0x0c0a0a, alpha: 0.45, dx: 1, dy: 2 },
   volcano: { tint: 0xff6a1a, alpha: 0.25, dx: 0, dy: 1, glow: true },
 };
 

@@ -11,7 +11,7 @@ export const ROCKFALL = {
   warnMs: 1500,
   nextMs: 650,
   // From this height the wall drops two rocks in a row.
-  doubleFrom: 210,
+  doubleFrom: 145,
   perfectMs: 110,
   goodMs: 230,
   hitGrip: 12,

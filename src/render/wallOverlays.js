@@ -108,6 +108,96 @@ export const WALL_OVERLAYS = {
     else if (t > 31 && t < 34) p.c = lerpColor(p.c, 0x9a70f0, 0.3);
     if ((hashInts(p.x, p.wy, 17) & 1023) < 2) p.c = pal.accentB;
   },
+  // Amber Hive: the rock is one great comb. Six-sided cells with waxy walls,
+  // some brimming with honey, some empty and dark.
+  honeycomb(p) {
+    const { pal } = p;
+    if (p.dEdge < 3 || p.seam) return;
+    const S = 6;
+    const q = ((Math.sqrt(3) / 3) * p.x - p.wy / 3) / S, r = ((2 / 3) * p.wy) / S;
+    let rq = Math.round(q), rr = Math.round(r);
+    const rs = Math.round(-q - r);
+    const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs + q + r);
+    if (dq > dr && dq > ds) rq = -rr - rs;
+    else if (dr > ds) rr = -rq - rs;
+    const dx = p.x - S * Math.sqrt(3) * (rq + rr / 2), dy = p.wy - S * 1.5 * rr;
+    const d = Math.max(Math.abs(dx), Math.abs(dx * 0.5 + dy * 0.866), Math.abs(dx * 0.5 - dy * 0.866)) / (S * 0.866);
+    if (d > 0.8) {
+      // The wax walls: lit along their top, shadowed below.
+      p.c = dy < 0 && p.lit ? lerpColor(p.c, pal.rock[4], 0.25) : lerpColor(p.c, pal.rock[0], 0.3);
+      return;
+    }
+    // A few cells still hold dark old honey, a few are empty; kept dull so
+    // the bright wax holds stand out against them.
+    const h = hashInts(rq, rr, 43) % 13;
+    if (h === 0) p.c = lerpColor(p.c, 0x8a4a08, 0.45);
+    else if (h === 1) p.c = lerpColor(p.c, pal.rock[0], 0.35);
+  },
+  // Honey runs down the comb in slow drips, a bright bead at the bottom.
+  drips(p) {
+    const { pal } = p;
+    if (p.dEdge < 2 || hashInts(p.x, 0, 47) % 37 !== 0) return;
+    const w = p.painter.ice(p.x * 0.9, p.wy * 0.05);
+    const below = p.painter.ice(p.x * 0.9, (p.wy + 1) * 0.05);
+    if (w > 0.72) p.c = below <= 0.72 ? pal.accentB : lerpColor(p.c, pal.accentA, 0.6);
+  },
+  // Clockwork Bastion: dressed stone blocks with dark mortar; now and then an
+  // iron plate riveted into the wall.
+  masonry(p) {
+    const { pal } = p;
+    if (p.dEdge < 2) return;
+    const row = Math.floor(p.wy / 12), ry = ((p.wy % 12) + 12) % 12;
+    const bx = Math.floor((p.x + (row % 2) * 11) / 22), rx = (((p.x + (row % 2) * 11) % 22) + 22) % 22;
+    if (ry === 0 || rx === 0) { p.c = lerpColor(p.c, pal.rock[0], 0.6); return; }
+    if (ry === 1 && p.lit) p.c = lerpColor(p.c, pal.rock[4], 0.35);
+    if (hashInts(bx, row, 53) % 11 === 0) {
+      p.c = lerpColor(pal.rock[1], 0x4a4e58, 0.5);
+      if ((rx === 2 || rx === 20) && (ry === 2 || ry === 10)) p.c = 0xb8bcc8;
+      else if (ry === 1) p.c = 0x6a6e7a;
+    }
+  },
+  // Great gears set into the masonry, half sunk, copper going green.
+  gears(p) {
+    const { pal } = p;
+    if (p.dEdge < 4) return;
+    const C = 70, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    const hsh = hashInts(gx, gy, 59);
+    if (hsh % 3) return;
+    const cx = gx * C + 20 + (hsh >> 3) % 30, cy = gy * C + 20 + (hsh >> 6) % 30, R = 14 + (hsh >> 9) % 8;
+    const dx = p.x - cx, dy = p.wy - cy, d = Math.hypot(dx, dy);
+    const tooth = Math.cos(Math.atan2(dy, dx) * (8 + (hsh >> 12) % 5)) > 0.3;
+    const outer = R + (tooth ? 3 : 0);
+    if (d > outer + 1) return;
+    if (d > outer) { p.c = lerpColor(p.c, pal.rock[0], 0.6); return; }
+    if (d > R - 3 || d < 3) p.c = lerpColor(pal.accentA, dy < 0 ? pal.accentB : pal.rock[1], dy < 0 ? 0.3 : 0.4);
+    else if (Math.abs(dx) < 1.5 || Math.abs(dy) < 1.5) p.c = lerpColor(pal.accentA, pal.rock[1], 0.5);
+    else p.c = lerpColor(p.c, pal.rock[0], 0.35);
+    if (d > R - 3 && bayer(p.x, p.wy) < 0.18) p.c = pal.accentC;
+  },
+  // Bone Garden: the ribs of dead dragons lie in the rock, curved and pale.
+  fossils(p) {
+    const { pal } = p;
+    if (p.dEdge < 4 || p.seam) return;
+    const C = 90, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    const hsh = hashInts(gx, gy, 61);
+    if (hsh % 3 === 0) return;
+    const cx = gx * C + 45 + ((hsh >> 4) % 20) - 10, cy = gy * C + 60;
+    for (let i = 0; i < 4; i++) {
+      // One rib: the top half of an ellipse, the next one a little lower.
+      const rx = 30 - i * 3, ry = 22 - i * 2, oy = cy + i * 8;
+      const u = (p.x - cx) / rx, v = (p.wy - oy) / ry;
+      const e = u * u + v * v;
+      if (p.wy > oy || e < 0.86 || e > 1.06) continue;
+      p.c = e < 0.92 ? pal.accentB : e < 1.0 ? pal.accentA : lerpColor(pal.rock[0], pal.accentA, 0.2);
+      return;
+    }
+  },
+  // Ash settles on every ledge and lit face; now and then an ember glows in it.
+  ash(p) {
+    const { pal } = p;
+    if (p.lit && p.ov > 0.5 && bayer(p.x, p.wy) < (p.ov - 0.5) * 3) p.c = lerpColor(p.c, 0xc8c0b8, 0.45);
+    if ((hashInts(p.x, p.wy, 67) & 4095) < 2) p.c = pal.accentC;
+  },
   // Glowing mineral veins and scattered glints.
   veins(p) {
     const { pal } = p;

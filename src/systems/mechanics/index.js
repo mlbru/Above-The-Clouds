@@ -9,8 +9,11 @@ import { PrismLight } from './PrismLight.js';
 import { Storm } from './Storm.js';
 import { Swing } from './Swing.js';
 import { DragonEye } from './DragonEye.js';
+import { Swarm } from './Swarm.js';
+import { Gears } from './Gears.js';
+import { BoneGarden } from './BoneGarden.js';
 
-const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, prismLight: PrismLight, storm: Storm, swing: Swing, dragonEye: DragonEye };
+const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, prismLight: PrismLight, storm: Storm, swing: Swing, dragonEye: DragonEye, swarm: Swarm, gears: Gears, boneGarden: BoneGarden };
 
 export class BiomeMechanics {
   constructor(rng) {

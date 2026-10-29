@@ -418,6 +418,17 @@ class AudioSystemImpl {
         this.play('pebble', { count: 6 });
       },
       creak() { this.noiseHit({ dur: 0.18, freq: 500, q: 4, peak: 0.08, attack: 0.03 }); },
+      // Amber Hive: the swarm swells past (a cloud of detuned drones), and a sting.
+      buzz() {
+        for (let i = 0; i < 3; i++) this.tone({ freq: 190 + i * 23, toFreq: 230 + i * 17, dur: 1.6, type: 'sawtooth', peak: 0.025, attack: 0.5, detune: i * 9 });
+        this.noiseHit({ dur: 1.6, freq: 900, q: 3, peak: 0.05, attack: 0.5 });
+      },
+      sting() { this.tone({ freq: 1400, toFreq: 700, dur: 0.12, type: 'square', peak: 0.05 }); this.noiseHit({ dur: 0.08, type: 'highpass', freq: 3000, peak: 0.1 }); },
+      // Clockwork Bastion: a gear note ticks round.
+      clank() { this.tone({ freq: 620, dur: 0.03, type: 'square', peak: 0.03 }); this.noiseHit({ dur: 0.03, freq: 2600, q: 6, peak: 0.05 }); },
+      // Bone Garden: a skull rattles in its niche; a bone hold snaps.
+      rattle() { for (let i = 0; i < 5; i++) this.noiseHit({ t: i * 0.05, dur: 0.03, freq: 1400 + (i % 2) * 500, q: 5, peak: 0.1 }); },
+      bonesnap() { this.noiseHit({ dur: 0.06, type: 'highpass', freq: 2200, peak: 0.25 }); this.tone({ freq: 300, toFreq: 120, dur: 0.1, type: 'triangle', peak: 0.08 }); },
       held() { this.tone({ freq: 990, dur: 0.12, type: 'triangle', peak: 0.05 }); this.tone({ t: 0.05, freq: 1480, dur: 0.18, type: 'triangle', peak: 0.04 }); },
       runover() {
         const r = this.music.root;

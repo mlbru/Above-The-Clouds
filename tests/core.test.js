@@ -172,11 +172,12 @@ test('pruning removes old segments and keeps memory bounded on a long run', () =
 
 test('biome lookup and blending', () => {
   assert.equal(biomeAt(0).id, 'green');
-  assert.equal(biomeAt(200).id, 'stone');
-  assert.equal(biomeAt(350).id, 'frozen');
-  assert.equal(biomeAt(600).id, 'clouds');
+  assert.equal(biomeAt(150).id, 'stone');
+  assert.equal(biomeAt(250).id, 'frozen');
+  assert.equal(biomeAt(400).id, 'clouds');
+  assert.equal(biomeAt(500).id, 'hive');
   assert.ok(biomeAt(5000).id);
-  const mix = biomeMixAt(75);
+  const mix = biomeMixAt(50);
   assert.equal(mix.a.id, 'green');
   assert.equal(mix.b.id, 'stone');
   assert.ok(mix.t > 0 && mix.t < 0.5);
@@ -545,7 +546,7 @@ test('rolls: tap the arrow again before the tail ends, or it is a miss', () => {
 
 test('the high mountain keeps getting harder after the tempo tops out', () => {
   const at = (m) => difficultyAt(m);
-  assert.equal(at(900).mirror, 0);
+  assert.equal(at(800).mirror, 0);
   assert.ok(at(1300).mirror > 0 && at(1300).chord > 0 && at(1300).roll === 0);
   assert.ok(at(2200).roll > at(1600).roll);
   assert.equal(at(1800).extraInputs, 3);

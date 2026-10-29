@@ -15,6 +15,12 @@ import { Mountain } from '../src/systems/SegmentGenerator.js';
 import { Darkness, DARKNESS, darkAlpha } from '../src/systems/mechanics/Darkness.js';
 import { PrismLight, PRISM_LIGHT, litIndex } from '../src/systems/mechanics/PrismLight.js';
 import { ProgressionSystem, sandboxCopy } from '../src/systems/ProgressionSystem.js';
+import { Swarm, SWARM, addSwarm } from '../src/systems/mechanics/Swarm.js';
+import { Gears, GEARS, gearTicks, gearDir } from '../src/systems/mechanics/Gears.js';
+import { BoneGarden, BONE_GARDEN } from '../src/systems/mechanics/BoneGarden.js';
+import { ComboSystem } from '../src/systems/ComboSystem.js';
+import { gemForBiome } from '../src/data/gems.js';
+import { SEGMENT_TEMPLATES } from '../src/data/segments.js';
 
 test('every biome definition is complete', () => {
   for (const b of Object.values(BIOMES)) {
@@ -73,7 +79,7 @@ test('rockfall waits for its biome, then plans one or two dodges', () => {
   assert.equal(r.due, false);
   for (let i = 0; i < 20; i++) r.update(1000, 1);
   assert.ok(r.due);
-  const low = r.start(150);
+  const low = r.start(120);
   assert.equal(low.length, 1);
   assert.ok(['L', 'R'].includes(low[0]));
   assert.equal(r.due, false);
@@ -152,29 +158,112 @@ test('dev save copy never writes the real save', () => {
 });
 
 test('biome stretches tell repeat visits in the high loop apart', () => {
-  assert.equal(biomeStretchAt(130), 'stone@80');
-  assert.equal(biomeStretchAt(290), 'stone@80');
-  assert.notEqual(biomeStretchAt(310), biomeStretchAt(290));
-  const loopA = biomeStretchAt(1960), loopB = biomeStretchAt(1960 + 1250);
+  assert.equal(biomeStretchAt(100), 'stone@55');
+  assert.equal(biomeStretchAt(200), 'stone@55');
+  assert.notEqual(biomeStretchAt(215), biomeStretchAt(200));
+  const loopA = biomeStretchAt(1880), loopB = biomeStretchAt(1880 + 173 * 8);
   assert.equal(loopA.split('@')[0], loopB.split('@')[0]);
   assert.notEqual(loopA, loopB);
 });
 
 test('nextBiomeAbove: the next stretch and where it starts', () => {
-  assert.deepEqual([nextBiomeAbove(0).biome.id, nextBiomeAbove(0).from], ['stone', 80]);
-  assert.deepEqual([nextBiomeAbove(299).biome.id, nextBiomeAbove(299).from], ['frozen', 300]);
-  assert.deepEqual([nextBiomeAbove(600).biome.id, nextBiomeAbove(600).from], ['obsidian', 700]);
-  assert.deepEqual([nextBiomeAbove(1100).biome.id, nextBiomeAbove(1100).from], ['storm', 1200]);
-  assert.deepEqual([nextBiomeAbove(1800).biome.id, nextBiomeAbove(1800).from], ['obsidian', 1950]);
-  assert.deepEqual([nextBiomeAbove(1950).biome.id, nextBiomeAbove(1950).from], ['crystal', 2200]);
+  assert.deepEqual([nextBiomeAbove(0).biome.id, nextBiomeAbove(0).from], ['stone', 55]);
+  assert.deepEqual([nextBiomeAbove(207).biome.id, nextBiomeAbove(207).from], ['frozen', 208]);
+  assert.deepEqual([nextBiomeAbove(400).biome.id, nextBiomeAbove(400).from], ['hive', 486]);
+  assert.deepEqual([nextBiomeAbove(900).biome.id, nextBiomeAbove(900).from], ['clockwork', 1006]);
+  assert.deepEqual([nextBiomeAbove(1400).biome.id, nextBiomeAbove(1400).from], ['bones', 1526]);
+  assert.deepEqual([nextBiomeAbove(1600).biome.id, nextBiomeAbove(1600).from], ['dragon', 1700]);
+  // The dragon stays the last biome of the way up; then the high loop starts.
+  assert.deepEqual([nextBiomeAbove(1800).biome.id, nextBiomeAbove(1800).from], ['hive', 1873]);
+  assert.deepEqual([nextBiomeAbove(1873).biome.id, nextBiomeAbove(1873).from], ['obsidian', 2046]);
 });
 
 test('every biome on the way up is about as long as the others', () => {
   const froms = SEQUENCE.map((id) => BIOMES[id].from).concat(LOOP_START);
   for (let i = 2; i < froms.length - 1; i++) {
     const len = froms[i + 1] - froms[i];
-    assert.ok(len >= 180 && len <= 250, `${SEQUENCE[i]} is ${len} m long`);
+    assert.ok(len >= 120 && len <= 180, `${SEQUENCE[i]} is ${len} m long`);
   }
+  assert.equal(SEQUENCE[SEQUENCE.length - 1], 'dragon');
+  assert.equal(BIOMES.dragon.from, 1700);
+});
+
+test('every biome on the way up has its own gem, segments and backdrop', () => {
+  for (const id of SEQUENCE) {
+    assert.equal(gemForBiome(id).biome, id, `${id} gem`);
+    assert.ok(SEGMENT_TEMPLATES.some((t) => t.biomes.includes(id)), `${id} segments`);
+    if (id !== 'green') assert.ok(BIOMES[id].backdrop.layers.length, `${id} backdrop`);
+  }
+});
+
+test('swarm: some routes get a run of still beats in the middle', () => {
+  const s = new Swarm(new SeededRandom(9), { ...SWARM, chance: 1, safeChance: 1 });
+  const mk = () => [{ type: 'normal', notes: [{ dir: 'L' }, { dir: 'U' }, { dir: 'R' }, { dir: 'U' }] }];
+  const outside = mk();
+  s.decorateRoutes(outside);
+  assert.equal(outside[0].notes.length, 4);
+  s.update(100, 1);
+  const routes = mk();
+  s.decorateRoutes(routes);
+  const notes = routes[0].notes;
+  const still = notes.filter((n) => n.still);
+  assert.ok(still.length === 2 || still.length === 3);
+  assert.ok(still.every((n) => n.swarm));
+  assert.ok(!notes[0].still && !notes[notes.length - 1].still);
+  assert.ok(routes[0].tags.includes('SWARM'));
+  assert.deepEqual(addSwarm([{ dir: 'L' }, { dir: 'R' }], 0, 2).map((n) => (n.still ? 'S' : n.dir)).join(''), 'LSSR');
+});
+
+test('swarm beats: hang still for a perfect, move and you are stung', () => {
+  const combo = new ComboSystem({ notes: addSwarm([{ dir: 'L' }, { dir: 'R' }], 0, 2), beatMs: 500, perfectMs: 60, goodMs: 120, leadInMs: 0 });
+  assert.equal(combo.press('L', 0).judged.result, 'perfect');
+  assert.equal(combo.update(500 + 200).map((n) => n.result).join(), 'perfect');
+  const moved = combo.press('U', 1000).judged;
+  assert.equal(moved.result, 'miss');
+  assert.equal(moved.reason, 'moved');
+  assert.ok(moved.swarm);
+});
+
+test('gears: the arrow ticks clockwise each beat and lands a beat early', () => {
+  assert.equal(gearDir('R', 0), 'R');
+  assert.equal(gearDir('R', 1), 'U');
+  assert.equal(gearDir('R', 2), 'L');
+  assert.equal(gearDir('L', 1), 'R');
+  const note = { gear: 2, time: 5000 };
+  assert.equal(gearTicks(note, 1000, 500), 2);
+  assert.equal(gearTicks(note, 3900, 500), 2);
+  assert.equal(gearTicks(note, 4100, 500), 1);
+  assert.equal(gearTicks(note, 4600, 500), 0);
+  assert.equal(gearTicks({ gear: 0, time: 5000 }, 0, 500), 0);
+  const g = new Gears(new SeededRandom(2), { ...GEARS, noteChance: 1 });
+  g.update(100, 1);
+  const routes = [{ notes: [{ dir: 'L' }, { dir: 'U' }, { dir: 'R', chord: 'L' }, { dir: 'U' }, { dir: 'L' }, { dir: 'R' }] }];
+  g.decorateRoutes(routes);
+  const gears = routes[0].notes.filter((n) => n.gear);
+  assert.equal(gears.length, GEARS.maxPerRoute);
+  assert.ok(!routes[0].notes[0].gear, 'the first note has no beats to tick on');
+  assert.ok(!routes[0].notes[2].gear, 'doubles keep their own look');
+});
+
+test('bone garden: three rattles bring a growl and a few tighter climbs', () => {
+  const b = new BoneGarden(new SeededRandom(1));
+  assert.equal(b.onMiss(), null, 'quiet outside the garden');
+  b.update(100, 1);
+  assert.equal(b.onMiss(), 'rattle');
+  b.rest();
+  assert.equal(b.rattles, 0, 'a ledge quiets the skulls');
+  assert.deepEqual([b.onMiss(), b.onMiss(), b.onMiss()], ['rattle', 'rattle', 'growl']);
+  for (let i = 0; i < BONE_GARDEN.dreadClimbs; i++) {
+    const routes = [{ windowScale: 1 }];
+    b.decorateRoutes(routes);
+    assert.equal(routes[0].windowScale, BONE_GARDEN.dreadWindow);
+    b.onClimb(routes[0]);
+  }
+  const after = [{ windowScale: 1 }];
+  b.decorateRoutes(after);
+  assert.equal(after[0].windowScale, 1, 'the dread runs out');
+  // Bone holds snap: the garden has extra crumbling holds.
+  assert.ok(BIOMES.bones.hazards.crumbling > 0);
 });
 
 test('storm: hanging drains faster only while the storm rages', () => {

@@ -155,9 +155,9 @@ export class Background {
       c.x = Math.round(c.x * 10) / 10;
     }
 
-    // Cloud sea appears once you climb above the cloud layer (~480 m).
+    // Cloud sea appears once you climb above the cloud layer (the Above the Clouds biome).
     // (An expedition theme can bring the sea lower: the sky islands float over it.)
-    const seaFrom = (mix && (mix.t > 0.5 ? mix.b : mix.a).seaFrom) ?? 470;
+    const seaFrom = (mix && (mix.t > 0.5 ? mix.b : mix.a).seaFrom) ?? BIOMES.clouds.from - 10;
     const seaAlpha = Math.max(0, Math.min(1, (alt - seaFrom) / 30));
     const seaY = Math.round(Math.min(GAME_HEIGHT - 48, 150 + Math.max(0, alt - seaFrom - 10) * 0.25));
     // Each high biome colours its sea of clouds: storm grey, dusk violet, ember red.
@@ -172,7 +172,7 @@ export class Background {
     // Floating stones: they only drift where the air holds them up (biomes
     // with `floaters`: above the clouds and among the crystals).
     const floatW = mix ? [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.floaters ? weight(b.id) : 0), 0) : 0;
-    const fa = Math.max(0, Math.min(1, (alt - 520) / 40)) * floatW;
+    const fa = Math.max(0, Math.min(1, (alt - BIOMES.clouds.from - 40) / 40)) * floatW;
     this.floatersVisible = fa > 0.9;
     this.floaters.forEach((f) => {
       f.setVisible(fa > 0).setAlpha(fa).setTint(light);

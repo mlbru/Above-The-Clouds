@@ -25,6 +25,9 @@ export const BRAM_TIPS = {
   crystal: 'SEE THE LIGHT SWEEP? CLIMB THE LIT ROUTE\nAND IT COSTS YOU NO GRIP AT ALL!',
   storm: 'A STORM! HANGING AROUND DRAINS GRIP FAST.\nPICK A ROUTE QUICKLY, OR WAIT ON A LEDGE.',
   swing: 'HEAR HOW IT SWAYS? LONG-SHORT, LONG-SHORT.\nTHE NOTES COME IN PAIRS UP HERE.',
+  swarm: 'THE SWARM! WHEN THE BEES FLY PAST,\nHANG STILL. PRESS ANYTHING AND THEY STING.',
+  gears: 'ARROWS ON A COG TICK ROUND ON THE BEAT:\nLEFT, UP, RIGHT. THE DOTS COUNT THE TICKS LEFT.',
+  bones: 'THAT SKULL RATTLED! THREE RATTLES AND\nTHE DRAGON GROWLS: THE TIMING GETS TIGHTER.',
   dragon: "IT'S DRAWING BREATH! WHEN THE FIRE COMES,\nSWING CLEAR WITH THE ARROW, ON THE BEAT!",
   mirror: 'PINK ARROWS ARE MIRRORED: PRESS THE\nOTHER WAY! A PINK LEFT MEANS RIGHT.',
   double: 'TWO ARROWS STACKED? PRESS BOTH AT\nONCE, ONE WITH EACH HAND.',
@@ -32,4 +35,4 @@ export const BRAM_TIPS = {
 };
 
 // Route tags (from the segment generator) that have their own tip.
-export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', SWING: 'swing' };
+export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears' };

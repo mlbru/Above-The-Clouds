@@ -58,6 +58,25 @@ function thumbGrid(b) {
     for (let x = 0; x < 20; x++) { const y = 14 + Math.round(Math.sin(x / 2.5) * 3); g.set(x, y, 0x8a2a2a); g.set(x, y + 1, 0x6a1c22); if (x % 4 === 0) g.set(x, y - 1, 0xffe08a); }
     for (let i = 0; i < 6; i++) g.set(29 + (i % 3), 10 - i, i % 2 ? 0xff9a3c : 0xffe08a);
   }
+  if (b.id === 'hive') {
+    // A papery hive and a swarm crossing the sky.
+    for (let y = 6; y < 16; y++) for (let x = 6; x < 14; x++) if (((x - 10) / 4) ** 2 + ((y - 11) / 5) ** 2 <= 1) g.set(x, y, y % 3 ? 0xe8c070 : 0xc89040);
+    g.set(10, 13, 0x2a160a);
+    for (let i = 0; i < 12; i++) g.set(4 + ((i * 7) % 16), 3 + ((i * 5) % 6), 0x2a1a0a);
+  }
+  if (b.id === 'clockwork') {
+    // A gear turning in the wall, and a tower with a lit window.
+    for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) {
+      const d = Math.hypot(x, y), tooth = Math.cos(Math.atan2(y, x) * 8) > 0.3;
+      if (d <= (tooth ? 5 : 4) && d >= 2) g.set(31 + x, 14 + y, d > 3 ? 0xf0c870 : 0xb8733a);
+    }
+    g.rect(6, 6, 6, 12, 0x5a4a3c); g.rect(5, 4, 8, 2, 0x5aa08a); g.set(8, 10, 0xffd080);
+  }
+  if (b.id === 'bones') {
+    // A ribcage standing on the ridge, ash in the air.
+    for (let i = 0; i < 5; i++) for (let k = 0; k < 6 - Math.abs(2 - i); k++) g.set(5 + i * 3 + Math.round(k * k * 0.1), 16 - k, 0xe8dcc0);
+    for (let i = 0; i < 14; i++) g.set((i * 11) % 20, (i * 7) % 26, 0xb0a8a0);
+  }
   if (b.id === 'crystal') {
     for (let i = 0; i < 18; i++) g.set(10 + i, 2 + i, i % 2 ? 0xffc8f0 : 0xffffff);
     g.line(33, 28, 32, 20, 0xd8c8ff, 2); g.set(32, 20, 0xffffff);

@@ -40,7 +40,7 @@ export const BIOMES = {
   stone: {
     id: 'stone',
     name: 'THE STONE WALL',
-    from: 80,
+    from: 55,
     rock: [0x26252b, 0x3d3c45, 0x58575f, 0x77757c, 0x9b9a9e],
     outline: 0x151419,
     accentA: 0x6d6a5f, accentB: 0x8e8a7a, accentC: 0xb3ae9b,
@@ -55,8 +55,8 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x6a88b8, bottom: 0xdad8d4, amount: 0.25 },
       layers: [
-        { key: 'bg_stone_granite', paint: 'granite', seed: 101, h: 130, E: 300, f: 0.28, haze: 0.22, fill: 0x2e4a32, depth: DEPTH.mid + 2 },
-        { key: 'bg_stone_pinnacles', paint: 'pinnacles', seed: 111, h: 110, E: 230, f: 0.42, haze: 0.14, fill: 0xa4acb8, depth: DEPTH.mid + 3 },
+        { key: 'bg_stone_granite', paint: 'granite', seed: 101, h: 130, E: 275, f: 0.28, haze: 0.22, fill: 0x2e4a32, depth: DEPTH.mid + 2 },
+        { key: 'bg_stone_pinnacles', paint: 'pinnacles', seed: 111, h: 110, E: 205, f: 0.42, haze: 0.14, fill: 0xa4acb8, depth: DEPTH.mid + 3 },
       ],
     },
     mechanic: 'rockfall',
@@ -65,7 +65,7 @@ export const BIOMES = {
   frozen: {
     id: 'frozen',
     name: 'THE FROZEN REACH',
-    from: 300,
+    from: 208,
     rock: [0x1f2a40, 0x34435f, 0x51648a, 0x7d93b8, 0xb5c8e2],
     outline: 0x121a2b,
     accentA: 0xcfe2f5, accentB: 0xeef6ff, accentC: 0x8ec5f0,
@@ -81,8 +81,8 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x7a98cc, bottom: 0xe8f0fa, amount: 0.35 },
       layers: [
-        { key: 'bg_frozen_glacier', paint: 'glacier', seed: 61, h: 150, E: 560, f: 0.2, haze: 0.2, fill: 0xb4cbe8, depth: DEPTH.far + 6 },
-        { key: 'bg_frozen_seracs', paint: 'seracs', seed: 71, h: 90, E: 430, f: 0.34, haze: 0.12, fill: 0xdfeaf7, depth: DEPTH.far + 7 },
+        { key: 'bg_frozen_glacier', paint: 'glacier', seed: 61, h: 150, E: 468, f: 0.2, haze: 0.2, fill: 0xb4cbe8, depth: DEPTH.far + 6 },
+        { key: 'bg_frozen_seracs', paint: 'seracs', seed: 71, h: 90, E: 338, f: 0.34, haze: 0.12, fill: 0xdfeaf7, depth: DEPTH.far + 7 },
       ],
     },
     mechanic: 'whiteout',
@@ -90,7 +90,7 @@ export const BIOMES = {
   clouds: {
     id: 'clouds',
     name: 'ABOVE THE CLOUDS',
-    from: 480,
+    from: 333,
     rock: [0x2a2440, 0x443a62, 0x63578a, 0x8d7fb0, 0xc0b5dc],
     outline: 0x17132a,
     accentA: 0xf5d6a8, accentB: 0xfff1d6, accentC: 0xa8e0ff,
@@ -106,18 +106,47 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x3a62c0, bottom: 0xf2e8f0, amount: 0.3 },
       layers: [
-        { key: 'bg_clouds_cumulus', paint: 'cumulus', seed: 121, h: 150, E: 1000, f: 0.14, haze: 0.1, fill: 0xdcd6ec, depth: DEPTH.far + 6 },
-        { key: 'bg_clouds_peaks', paint: 'cloudPeaks', seed: 131, h: 110, E: 760, f: 0.2, haze: 0.16, fill: 0xe4e0f0, depth: DEPTH.far + 8 },
+        { key: 'bg_clouds_cumulus', paint: 'cumulus', seed: 121, h: 150, E: 853, f: 0.14, haze: 0.1, fill: 0xdcd6ec, depth: DEPTH.far + 6 },
+        { key: 'bg_clouds_peaks', paint: 'cloudPeaks', seed: 131, h: 110, E: 613, f: 0.2, haze: 0.16, fill: 0xe4e0f0, depth: DEPTH.far + 8 },
       ],
     },
     mechanic: 'thermals',
     floaters: true,
   },
+  hive: {
+    id: 'hive',
+    name: 'THE AMBER HIVE',
+    from: 486,
+    // Old wax and honey: the rock is one great comb, built by giant bees.
+    rock: [0x2a1a0c, 0x4a2e12, 0x74481a, 0xa86e26, 0xd8a040],
+    outline: 0x160c04,
+    accentA: 0xe89420, accentB: 0xffd870, accentC: 0xfff2c0,
+    holdTint: 0xf0d090,
+    windowScale: 0.9, costMultiplier: 1.1, drainMultiplier: 1.1,
+    hazards: { loose: 0.06, icy: 0 },
+    weather: { wind: 0.35, snow: 0, leaves: 0, mist: 0.1 },
+    ambience: { birds: 0.2, stream: 0, wind: 0.35 },
+    music: { root: 57, scale: [0, 2, 4, 6, 7, 9], instrument: 'santur', tempo: 100, octave: 12, motif: [[0, 0.5], [4, 0.5], [7, 0.5], [6, 0.5], [7, 1], [9, 1], [7, 2]] },
+    wall: { overlays: ['honeycomb', 'drips'], ledgeTop: 'accentB', edge: 'honey' },
+    decor: { rocks: 'decor_comb', nest: 'decor_comb' },
+    rest: { viewpoints: ['WAX TERRACE', 'THE DRIPPING SHELF', 'HONEY BALCONY', "QUEEN'S WINDOW"] },
+    backdrop: {
+      sky: { top: 0x4a86d8, bottom: 0xffe2a8, amount: 0.3 },
+      layers: [
+        { key: 'bg_hive_towers', paint: 'hiveTowers', seed: 311, h: 140, E: 786, f: 0.12, haze: 0.12, fill: 0x6a4420, depth: DEPTH.far + 6 },
+        { key: 'bg_hive_cumulus', paint: 'cumulus', seed: 321, h: 150, E: 636, f: 0.18, haze: 0.1, fill: 0xf4e4c8, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'swarm',
+    floaters: true,
+    // A golden cloud sea, lit warm from below.
+    sea: 0xf0cc90,
+  },
   // High-altitude variations so the mountain can keep going.
   obsidian: {
     id: 'obsidian',
     name: 'THE OBSIDIAN SPIRES',
-    from: 700,
+    from: 659,
     rock: [0x16131c, 0x2a2533, 0x433b50, 0x655a78, 0x9384a8],
     outline: 0x0b0a10,
     accentA: 0xd16a8c, accentB: 0xf09ab4, accentC: 0x8a7ad8,
@@ -134,8 +163,8 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x1a1438, bottom: 0x6a3a6a, amount: 0.45 },
       layers: [
-        { key: 'bg_obsidian_spires', paint: 'obsidianSpires', seed: 141, h: 130, E: 1000, f: 0.12, haze: 0.12, fill: 0x14111c, depth: DEPTH.far + 6 },
-        { key: 'bg_obsidian_embers', paint: 'emberRidge', seed: 151, h: 100, E: 850, f: 0.18, haze: 0.06, fill: 0x1e1828, depth: DEPTH.far + 8 },
+        { key: 'bg_obsidian_spires', paint: 'obsidianSpires', seed: 141, h: 130, E: 959, f: 0.12, haze: 0.12, fill: 0x14111c, depth: DEPTH.far + 6 },
+        { key: 'bg_obsidian_embers', paint: 'emberRidge', seed: 151, h: 100, E: 809, f: 0.18, haze: 0.06, fill: 0x1e1828, depth: DEPTH.far + 8 },
       ],
     },
     mechanic: 'darkness',
@@ -145,7 +174,7 @@ export const BIOMES = {
   crystal: {
     id: 'crystal',
     name: 'THE CRYSTAL HEIGHTS',
-    from: 950,
+    from: 832,
     rock: [0x18303a, 0x285060, 0x3e7488, 0x66a2b4, 0xa6dbe2],
     outline: 0x0c1c22,
     accentA: 0xb8fff4, accentB: 0xf0fffb, accentC: 0xffc8f0,
@@ -160,18 +189,45 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x2a4a7a, bottom: 0xf0d8f0, amount: 0.35 },
       layers: [
-        { key: 'bg_crystal_clusters', paint: 'crystalClusters', seed: 161, h: 130, E: 1250, f: 0.1, haze: 0.12, fill: 0x5a8a9c, depth: DEPTH.far + 6 },
-        { key: 'bg_crystal_isles', paint: 'crystalIsles', seed: 171, h: 100, E: 1100, f: 0.15, haze: 0.08, fill: null, depth: DEPTH.far + 8 },
+        { key: 'bg_crystal_clusters', paint: 'crystalClusters', seed: 161, h: 130, E: 1132, f: 0.1, haze: 0.12, fill: 0x5a8a9c, depth: DEPTH.far + 6 },
+        { key: 'bg_crystal_isles', paint: 'crystalIsles', seed: 171, h: 100, E: 982, f: 0.15, haze: 0.08, fill: null, depth: DEPTH.far + 8 },
       ],
     },
     mechanic: 'prismLight',
     floaters: true,
     sea: 0xf8d8f0,
   },
+  clockwork: {
+    id: 'clockwork',
+    name: 'THE CLOCKWORK BASTION',
+    from: 1006,
+    // A dwarf fortress built into the peak: dressed stone, brass and old iron.
+    rock: [0x1c1612, 0x352a20, 0x58452e, 0x86683e, 0xc0985a],
+    outline: 0x0e0a06,
+    accentA: 0xb8733a, accentB: 0xf0c870, accentC: 0x6ad0b8,
+    holdTint: 0xd8c098,
+    windowScale: 0.86, costMultiplier: 1.2, drainMultiplier: 1.2,
+    hazards: { loose: 0.08, icy: 0 },
+    weather: { wind: 0.6, snow: 0, leaves: 0, mist: 0.35 },
+    ambience: { birds: 0, stream: 0, wind: 0.6 },
+    music: { root: 52, scale: [0, 2, 3, 5, 7, 10], instrument: 'musicbox', tempo: 112, octave: 12, motif: [[0, 0.5], [7, 0.5], [3, 0.5], [7, 0.5], [5, 0.5], [7, 0.5], [2, 1], [0, 1]], drum: true },
+    wall: { overlays: ['masonry', 'gears'], ledgeTop: 'accentA', edge: 'cogs' },
+    decor: { pine: 'decor_pipe', piton: 'decor_pipe' },
+    rest: { hut: 0.08, viewpoints: ['GEAR LOFT', 'THE BELL GALLERY', 'STEAM BALCONY', 'IRON TERRACE'] },
+    backdrop: {
+      sky: { top: 0x34445e, bottom: 0xe0b888, amount: 0.4 },
+      layers: [
+        { key: 'bg_clockwork_towers', paint: 'clockTowers', seed: 331, h: 140, E: 1306, f: 0.1, haze: 0.1, fill: 0x2a2420, depth: DEPTH.far + 6 },
+        { key: 'bg_clockwork_crags', paint: 'stormCrags', seed: 341, h: 110, E: 1156, f: 0.16, haze: 0.06, fill: 0x1e1a18, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'gears',
+    sea: 0xb8987a,
+  },
   storm: {
     id: 'storm',
     name: 'THE STORM CROWN',
-    from: 1200,
+    from: 1179,
     rock: [0x181c26, 0x2a3040, 0x404a60, 0x5e6a84, 0x8a96ae],
     outline: 0x0c0e14,
     accentA: 0x6a7aa0, accentB: 0xc8d8ff, accentC: 0xffe45a,
@@ -187,8 +243,8 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x1c2234, bottom: 0x6a7090, amount: 0.6 },
       layers: [
-        { key: 'bg_storm_anvils', paint: 'stormAnvils', seed: 251, h: 140, E: 1500, f: 0.1, haze: 0.08, fill: 0x3a4058, depth: DEPTH.far + 6 },
-        { key: 'bg_storm_crags', paint: 'stormCrags', seed: 261, h: 110, E: 1350, f: 0.16, haze: 0.06, fill: 0x1a1e2a, depth: DEPTH.far + 8 },
+        { key: 'bg_storm_anvils', paint: 'stormAnvils', seed: 251, h: 140, E: 1479, f: 0.1, haze: 0.08, fill: 0x3a4058, depth: DEPTH.far + 6 },
+        { key: 'bg_storm_crags', paint: 'stormCrags', seed: 261, h: 110, E: 1329, f: 0.16, haze: 0.06, fill: 0x1a1e2a, depth: DEPTH.far + 8 },
       ],
     },
     mechanic: 'storm',
@@ -199,7 +255,7 @@ export const BIOMES = {
   aurora: {
     id: 'aurora',
     name: 'THE AURORA RIDGE',
-    from: 1450,
+    from: 1353,
     rock: [0x10202a, 0x1c3440, 0x2c505c, 0x46767c, 0x78aaa4],
     outline: 0x08121a,
     // Snow and ice in cool mint: the bright greens belong to the sky.
@@ -218,14 +274,43 @@ export const BIOMES = {
     backdrop: {
       sky: { top: 0x0c1430, bottom: 0x2a5068, amount: 0.75 },
       layers: [
-        { key: 'bg_aurora_peaks', paint: 'auroraPeaks', seed: 271, h: 130, E: 1750, f: 0.1, haze: 0.1, fill: 0x1c3040, depth: DEPTH.far + 6 },
-        { key: 'bg_aurora_lake', paint: 'auroraLake', seed: 281, h: 90, E: 1600, f: 0.16, haze: 0.04, fill: 0x0e1c26, depth: DEPTH.far + 8 },
+        { key: 'bg_aurora_peaks', paint: 'auroraPeaks', seed: 271, h: 130, E: 1653, f: 0.1, haze: 0.1, fill: 0x1c3040, depth: DEPTH.far + 6 },
+        { key: 'bg_aurora_lake', paint: 'auroraLake', seed: 281, h: 90, E: 1503, f: 0.16, haze: 0.04, fill: 0x0e1c26, depth: DEPTH.far + 8 },
       ],
     },
     mechanic: 'swing',
     sea: 0x3a6078,
     // Polar night: the sun never quite comes up here.
     overcast: 0.95,
+  },
+  bones: {
+    id: 'bones',
+    name: 'THE BONE GARDEN',
+    from: 1526,
+    // Where old dragons came to die: ash-grey rock full of giant bones.
+    rock: [0x1c1a1c, 0x34302e, 0x524c46, 0x7a7268, 0xb0a898],
+    outline: 0x0c0a0a,
+    accentA: 0xd8ccb0, accentB: 0xf4ecd8, accentC: 0xe06a3a,
+    holdTint: 0xe8dcc8,
+    windowScale: 0.84, costMultiplier: 1.25, drainMultiplier: 1.25,
+    // Many of the holds are old bone, and bone snaps (see the crumbling hazard).
+    hazards: { loose: 0.08, icy: 0, crumbling: 0.3 },
+    weather: { wind: 0.4, snow: 0, leaves: 0, mist: 0.3 },
+    ambience: { birds: 0, stream: 0, wind: 0.55 },
+    music: { root: 49, scale: [0, 1, 3, 7, 8], instrument: 'bell', tempo: 70, octave: 12, motif: [[0, 2], [1, 1], [3, 1], [0, 1], [8, 1], [7, 2]], drum: true },
+    wall: { overlays: ['fossils', 'ash'], ledgeTop: 'accentA', edge: 'ribs' },
+    decor: { rocks: 'decor_bones', crystals: 'decor_bones' },
+    rest: { hut: 0, viewpoints: ['THE OSSUARY', 'SKULL BALCONY', 'ASHEN SHELF', 'LAST REST'] },
+    backdrop: {
+      sky: { top: 0x2a2028, bottom: 0xc08870, amount: 0.55 },
+      layers: [
+        { key: 'bg_bones_skeletons', paint: 'boneRidge', seed: 351, h: 140, E: 1826, f: 0.1, haze: 0.1, fill: 0x2a2424, depth: DEPTH.far + 6 },
+        { key: 'bg_bones_ridge', paint: 'stormCrags', seed: 361, h: 100, E: 1676, f: 0.16, haze: 0.06, fill: 0x1e1818, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'boneGarden',
+    sea: 0x8a7470,
+    overcast: 0.6,
   },
   dragon: {
     id: 'dragon',
@@ -349,11 +434,11 @@ export function setBiomeTheme(id) { THEME = id ? BIOMES[id] : null; }
 export function biomeTheme() { return THEME; }
 
 // Order the mountain passes through. After the last entry the high biomes loop.
-// Every biome is about 250 m long (the Green Rise and the Stone Wall are shorter).
-export const SEQUENCE = ['green', 'stone', 'frozen', 'clouds', 'obsidian', 'crystal', 'storm', 'aurora', 'dragon'];
-const LOOP = ['obsidian', 'crystal', 'storm', 'aurora', 'dragon'];
-export const LOOP_START = 1950;
-const LOOP_SPAN = 250;
+// Every high biome is about 173 m long (the four below them are shorter).
+export const SEQUENCE = ['green', 'stone', 'frozen', 'clouds', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
+const LOOP = ['hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
+export const LOOP_START = 1873;
+const LOOP_SPAN = 173;
 export const BLEND_METERS = 18;
 
 function biomeIdAt(h) {

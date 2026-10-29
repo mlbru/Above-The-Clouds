@@ -5,6 +5,8 @@ import { lerpColor } from '../utils/color.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { darkAlpha } from '../systems/mechanics/Darkness.js';
+import { gearTicks, gearDir } from '../systems/mechanics/Gears.js';
+import { Audio } from '../systems/AudioSystem.js';
 
 const PX_PER_MS = 0.085;
 export const THERMAL_TINT = 0xffb45a;
@@ -13,10 +15,15 @@ export const MIRROR_TINT = 0xff6ad8;
 const FLIP = { L: 'R', R: 'L', U: 'U' };
 // What the note looks like on the track (a mirrored note shows the other arrow).
 const shownDir = (note) => (note.mirror ? FLIP[note.dir] : note.dir);
-// Still beats (the Dragon's Eye) show a red pause sign instead of an arrow.
+// Still beats show a red pause sign instead of an arrow; the Amber Hive's
+// swarm beats show an amber bee.
 export const STILL_TINT = 0xf0644b;
-const bigKey = (note) => (note.still ? 'icon_still' : `arrow_${shownDir(note)}`);
-const smallKey = (note) => (note.still ? 'icon_still_s' : `arrow_s_${shownDir(note)}`);
+export const SWARM_TINT = 0xffb840;
+// Gear notes (the Clockwork Bastion) sit on a brass cog.
+export const GEAR_TINT = 0xf0c870;
+const stillTint = (note) => (note.swarm ? SWARM_TINT : STILL_TINT);
+const bigKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm' : note.still ? 'icon_still' : `arrow_${dir}`);
+const smallKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm_s' : note.still ? 'icon_still_s' : `arrow_s_${dir}`);
 const TRACK_W = 200;
 const TRACK_X = Math.round(GAME_WIDTH / 2 - TRACK_W / 2);
 export const HIT_X = TRACK_X + 30;
@@ -33,6 +40,7 @@ const RESULT_STYLE = {
   roll: { text: 'TAP FASTER!', color: COLORS.red, tint: 0xf0644b },
   half: { text: 'BOTH ARROWS!', color: COLORS.red, tint: 0xf0644b },
   moved: { text: 'YOU MOVED!', color: COLORS.red, tint: 0xf0644b },
+  stung: { text: 'STUNG!', color: COLORS.red, tint: 0xf0644b },
 };
 
 // The timing UI: notes slide right-to-left into a fixed target zone.
@@ -115,7 +123,10 @@ export class ComboPrompt {
       // (dotted for a roll).
       const holdBar = note.holdMs ? this.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, 7, 1, 0xf2c14e).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2)
         : note.rollMs ? this.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, 7, 1, 0x9fffd0).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2) : null;
-      this.items.push({ note, big, small, big2, small2, mark: null, holdBar });
+      // A gear note's cog turns behind it, on the track and in the sequence row.
+      const cog = note.gear ? this.add.image(0, TRACK_Y, 'icon_cog').setScrollFactor(0).setDepth(DEPTH.hud + 1.9).setTint(GEAR_TINT) : null;
+      const cogS = note.gear ? this.add.image(small.x, small.y, 'icon_cog_s').setScrollFactor(0).setDepth(DEPTH.hud + 1.9).setTint(0xb8863a) : null;
+      this.items.push({ note, big, small, big2, small2, mark: null, holdBar, cog, cogS, ticks: -1 });
     });
     if (combo.notes.some((n) => n.gust)) {
       this.gustIcon = this.add.image(TRACK_X + TRACK_W - 6, TRACK_Y - 33, 'icon_wind').setOrigin(1, 0).setTint(0x9fd8ff).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false);
@@ -153,7 +164,7 @@ export class ComboPrompt {
     // The target zone always shows the real window of the next note, so it
     // shrinks (and turns wind-blue) while a gust note is coming in.
     const goodW = Math.round(ref.goodMs * PX_PER_MS), perfW = Math.round(ref.perfectMs * PX_PER_MS);
-    const zoneColor = ref.still ? STILL_TINT : ref.gust ? 0x9fd8ff : this.color;
+    const zoneColor = ref.still ? stillTint(ref) : ref.gust ? 0x9fd8ff : this.color;
     g.fillStyle(zoneColor, 0.18);
     g.fillRect(HIT_X - goodW, TRACK_Y - 7, goodW * 2 + 1, 15);
     g.fillStyle(zoneColor, this.flash > 0 ? 0.75 : 0.38);
@@ -203,13 +214,38 @@ export class ComboPrompt {
           g.fillRect(x1, TRACK_Y - 3, 1, 7);
         }
       }
-      // Still beats sit in a dark red band: the stretch where any press is seen.
+      // Still beats sit in a dark band (red, or amber for the swarm): the
+      // stretch where any press is seen.
       if (note.still && !note.result) {
         const sw = Math.round(note.goodMs * 0.85 * PX_PER_MS);
         const bx = Math.max(TRACK_X, Math.round(x - sw)), ex = Math.min(clipR, Math.round(x + sw));
         if (ex > bx) {
-          g.fillStyle(0x6a1c22, 0.55); g.fillRect(bx, TRACK_Y - 8, ex - bx, 17);
-          g.fillStyle(STILL_TINT, 0.8); g.fillRect(bx, TRACK_Y - 8, 1, 17); g.fillRect(ex - 1, TRACK_Y - 8, 1, 17);
+          g.fillStyle(note.swarm ? 0x5a3a0a : 0x6a1c22, 0.55); g.fillRect(bx, TRACK_Y - 8, ex - bx, 17);
+          g.fillStyle(stillTint(note), 0.8); g.fillRect(bx, TRACK_Y - 8, 1, 17); g.fillRect(ex - 1, TRACK_Y - 8, 1, 17);
+        }
+      }
+      // Gear notes: the arrow ticks round with the cog, one step per beat,
+      // and pips above it count the ticks still to come.
+      if (note.gear) {
+        const ticks = note.result ? 0 : gearTicks(note, now, c.beatMs);
+        const dir = gearDir(note.dir, ticks);
+        if (ticks !== it.ticks) {
+          const first = it.ticks < 0;
+          it.ticks = ticks;
+          it.big.setTexture(bigKey(note, dir));
+          it.small.setTexture(smallKey(note, dir));
+          it.turnAt = first ? -1e9 : t;
+          if (!first && x < clipR) Audio.play('clank');
+        }
+        // The cog snaps round a little with each tick.
+        const turn = Math.min(1, (t - (it.turnAt || 0)) / 120);
+        const ang = ((note.gear - ticks - 1 + turn) * Math.PI) / 4;
+        const show = !note.result && x < clipR && x > TRACK_X - 6;
+        it.cog.setVisible(show).setPosition(Math.round(x), TRACK_Y).setRotation(ang);
+        it.cogS.setVisible(!note.result).setPosition(it.small.x, it.small.y).setRotation(ang);
+        if (show && ticks > 0) {
+          g.fillStyle(GEAR_TINT, 1);
+          for (let k = 0; k < ticks; k++) g.fillRect(Math.round(x) - ticks * 2 + 1 + k * 4, TRACK_Y - 11, 2, 2);
         }
       }
       // Roll tails: a dotted bar with one pip per tap still needed.
@@ -239,7 +275,7 @@ export class ComboPrompt {
         // Darkness: every note is a faint shape that flashes up on the beat.
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
-        const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : STILL_TINT) : note.mirror ? (isCur ? 0xffa8ec : MIRROR_TINT) : note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : isCur ? 0xf2c14e : 0xf4efe4;
+        const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? 0xffa8ec : MIRROR_TINT) : note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : isCur ? 0xf2c14e : 0xf4efe4;
         it.big.setTint(tint);
         if (note.chord) {
           // The first arrow already pressed lights up while the other is awaited.
@@ -269,7 +305,7 @@ export class ComboPrompt {
           for (let k = 0; k < 3; k++) g.fillRect(Math.round(x) - 3 + k * 3, TRACK_Y + 6 - ((Math.floor(t / 90) + k * 2) % 5), 1, 2);
         }
         const bob = isCur ? Math.round(1 + Math.sin(t / 90)) : 0;
-        it.small.setTint(note.still ? STILL_TINT : note.mirror ? MIRROR_TINT : note.thermal ? THERMAL_TINT : isCur ? 0xf2c14e : note.gust ? 0x9fd8ff : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
+        it.small.setTint(note.still ? stillTint(note) : note.mirror ? MIRROR_TINT : note.thermal ? THERMAL_TINT : isCur ? 0xf2c14e : note.gust ? 0x9fd8ff : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
         if (it.small2) it.small2.setTint(isCur ? 0xf2c14e : 0xa8a3b8).setY(TRACK_Y - 17 - bob);
       }
       if (it.holdBar) it.holdBar.setVisible(!note.result || note.holding);
@@ -297,7 +333,7 @@ export class ComboPrompt {
   // Visual confirmation for a judged note. Returns the label used.
   judge(note) {
     const it = this.items.find((x) => x.note === note);
-    const key = note.result === 'miss' ? note.reason || 'late' : note.result;
+    const key = note.result === 'miss' ? (note.swarm && note.reason === 'moved' ? 'stung' : note.reason || 'late') : note.result;
     const style = RESULT_STYLE[key] || RESULT_STYLE.late;
     if (!it) return style;
     if (note.result !== 'miss') this.flash = 120;
@@ -318,7 +354,7 @@ export class ComboPrompt {
   }
 
   hide() {
-    this.items.forEach((it) => { it.big.destroy(); if (it.big2) it.big2.destroy(); if (it.small2) it.small2.destroy(); if (it.small) it.small.destroy(); if (it.mark) it.mark.destroy(); if (it.holdBar) it.holdBar.destroy(); });
+    this.items.forEach((it) => { it.big.destroy(); if (it.big2) it.big2.destroy(); if (it.small2) it.small2.destroy(); if (it.small) it.small.destroy(); if (it.mark) it.mark.destroy(); if (it.holdBar) it.holdBar.destroy(); if (it.cog) it.cog.destroy(); if (it.cogS) it.cogS.destroy(); });
     if (this.gustIcon) { this.gustIcon.destroy(); this.gustIcon = null; }
     if (this.glow) { this.glow.destroy(); this.glow = null; }
     this.items = [];

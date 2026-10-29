@@ -20,6 +20,12 @@ export const SEGMENT_TEMPLATES = [
   { id: 'starlit-traverse', name: 'Starlit Traverse', biomes: ['aurora'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['frostfern', 'snowdrift'], features: [] },
   { id: 'scale-wall', name: 'Scale Wall', biomes: ['dragon'], levels: [11, 13], width: [240, 290], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['bones', 'coins'], features: [], hazardBoost: { loose: 0.08 } },
   { id: 'hoard-chimney', name: 'Hoard Chimney', biomes: ['dragon'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['coins', 'bones'], features: ['crack'] },
+  { id: 'comb-face', name: 'Comb Face', biomes: ['hive'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.9, style: 'balanced', difficulty: 3, decor: ['comb', 'rocks'], features: [] },
+  { id: 'honey-chimney', name: 'Honey Chimney', biomes: ['hive'], levels: [10, 12], width: [170, 210], wander: 14, density: 0.7, style: 'crack', difficulty: 3, decor: ['comb'], features: ['crack'] },
+  { id: 'bastion-wall', name: 'Bastion Wall', biomes: ['clockwork'], levels: [11, 13], width: [240, 290], wander: 20, density: 0.85, style: 'balanced', difficulty: 4, decor: ['pipe', 'chain'], features: [] },
+  { id: 'gear-shaft', name: 'Gear Shaft', biomes: ['clockwork'], levels: [10, 12], width: [180, 220], wander: 16, density: 0.7, style: 'crack', difficulty: 4, decor: ['pipe'], features: ['crack'], hazardBoost: { loose: 0.06 } },
+  { id: 'ribcage-slope', name: 'Ribcage Slope', biomes: ['bones'], levels: [10, 12], width: [260, 310], wander: 26, density: 0.85, style: 'traverse', difficulty: 4, decor: ['bones', 'rocks'], features: [] },
+  { id: 'ossuary-chimney', name: 'Ossuary Chimney', biomes: ['bones'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['bones'], features: ['crack'] },
   { id: 'obsidian-fins', name: 'Obsidian Fins', biomes: ['obsidian'], levels: [10, 12], width: [210, 250], wander: 26, density: 0.8, style: 'traverse', difficulty: 4, decor: ['vent', 'crystals'], features: ['crack'], hazardBoost: { loose: 0.1 } },
 ];
 

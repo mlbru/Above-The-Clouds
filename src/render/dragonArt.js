@@ -328,6 +328,66 @@ function drawWing(open, sweep) {
   return g;
 }
 
+// The wing folded flat for sleep, lying back along the body: the forearm
+// rises to a hump at the wrist, the fingers trail back from it side by side
+// and the membrane hangs between them in pleats, lit on top, creased below.
+// Same frame and shoulder as the open wing, but drawn trailing the other way
+// round (world/Dragon.js flips it so it lies back towards the wall).
+function drawFoldedWing() {
+  const g = new PixelGrid(WING_W, WING_H);
+  const S = [WING_SHOULDER.x, WING_SHOULDER.y];
+  const elbow = [S[0] - 26, S[1] - 9];
+  const wrist = [S[0] - 9, S[1] - 33];
+  const tips = [[76, 114], [86, 121], [97, 127], [109, 132]];
+  const flank = [S[0] - 3, S[1] + 6];
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const memb = [S, wrist];
+  const ends = [...tips, flank];
+  for (let i = 0; i < tips.length; i++) {
+    const a = ends[i], b = ends[i + 1];
+    memb.push(a);
+    for (let k = 1; k < 6; k++) {
+      const t = k / 6, sag = Math.sin(t * Math.PI) * (i < tips.length - 1 ? 0.12 : 0.06);
+      memb.push([lerp(lerp(a[0], b[0], t), wrist[0], sag), lerp(lerp(a[1], b[1], t), wrist[1], sag)]);
+    }
+  }
+  fillPoly(g, memb, 1);
+  // Pleats: the angle around the wrist says which panel a pixel is in and
+  // how far down it, so every fold is light at its top and dark in its crease.
+  const angs = tips.map(([x, y]) => Math.atan2(y - wrist[1], x - wrist[0]));
+  for (let y = 0; y < g.h; y++) {
+    for (let x = 0; x < g.w; x++) {
+      if (g.get(x, y) !== 1) continue;
+      const a = Math.atan2(y - wrist[1], x - wrist[0]);
+      let f = 1;
+      for (let i = 0; i < angs.length - 1; i++) {
+        const lo = Math.min(angs[i], angs[i + 1]), hi = Math.max(angs[i], angs[i + 1]);
+        if (a >= lo && a <= hi) { f = (angs[i] - a) / (angs[i] - angs[i + 1]); break; }
+      }
+      const d = Math.hypot(x - wrist[0], y - wrist[1]) / 70;
+      g.set(x, y, ramp(P.membrane, 0.95 - f * 0.75 - d * 0.25, x, y));
+    }
+  }
+  // Bones on top: upper arm, forearm up to the wrist, fingers trailing back.
+  g.line(S[0], S[1], elbow[0], elbow[1], P.ramp[2], 5);
+  g.line(elbow[0], elbow[1], wrist[0], wrist[1], P.ramp[2], 5);
+  g.line(elbow[0] - 1, elbow[1] - 2, wrist[0] - 2, wrist[1] - 1, P.ramp[3], 1);
+  tips.forEach((tp) => {
+    g.line(wrist[0], wrist[1], tp[0], tp[1], P.ramp[3], 2);
+    g.line(wrist[0] - 1, wrist[1] - 1, lerp(wrist[0], tp[0], 0.85), lerp(wrist[1], tp[1], 0.85) - 1, P.ramp[4], 1);
+    g.set(tp[0], tp[1], P.horn[2]);
+    g.set(tp[0] + 1, tp[1], P.horn[1]);
+  });
+  g.ellipse(elbow[0], elbow[1], 3.5, 3, P.ramp[3]);
+  g.ellipse(wrist[0], wrist[1], 3.5, 3.5, P.ramp[3]);
+  g.set(wrist[0] - 1, wrist[1] - 2, P.ramp[4]);
+  // The hooked thumb claw on top of the wrist.
+  taper(g, [wrist[0], wrist[1] - 2], [wrist[0] - 1, wrist[1] - 10], [wrist[0] + 5, wrist[1] - 12], 3, 1, P.horn[1]);
+  g.set(wrist[0] + 5, wrist[1] - 12, P.horn[2]);
+  g.outline(P.outline);
+  return g;
+}
+
 // ---------------------------------------------------------------- plates
 // A round armour plate (neck and tail), lit from the top left, with scales.
 function drawSegment(r, glowOut = null) {
@@ -464,7 +524,8 @@ export function buildDragonTextures(scene) {
     addGrid(scene, `dragon_claw_${grip}`, g);
     addGrid(scene, `dragon_claw_glow_${grip}`, glow);
   });
-  WING_FRAMES.forEach(([open, down], i) => addGrid(scene, `dragon_wing_${i}`, drawWing(open, down)));
+  // Frame 0 (asleep) is the wing folded flat along the back.
+  WING_FRAMES.forEach(([open, down], i) => addGrid(scene, `dragon_wing_${i}`, i === 0 ? drawFoldedWing() : drawWing(open, down)));
   SEG_RADII.forEach((r) => {
     const glow = new PixelGrid(r * 2 + 3, r * 2 + 3);
     addGrid(scene, `dragon_seg_${r}`, drawSegment(r, glow));

@@ -79,9 +79,10 @@ export const BALANCE = {
     // rolls (tap the same arrow again and again before the tail ends).
     // They keep growing long after everything else has topped out, so the
     // climb never flattens: ~30% by the first loop, still rising until 3500 m.
-    mirror: [950, 3200, 0.5],
-    chord: [1200, 3400, 0.45],
-    roll: [1450, 3500, 0.5],
+    // Each one arrives with its biome: the Crystal Heights, Storm Crown, Aurora Ridge.
+    mirror: [832, 3200, 0.5],
+    chord: [1179, 3400, 0.45],
+    roll: [1353, 3500, 0.5],
     rollTaps: [{ from: 0, taps: 3 }, { from: 2200, taps: 4 }, { from: 3000, taps: 5 }],
     rollBeats: 1.5,
     // A press of a chord's second arrow may come this much after the first.

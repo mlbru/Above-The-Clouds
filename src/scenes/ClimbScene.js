@@ -751,7 +751,8 @@ export class ClimbScene extends Phaser.Scene {
     this.crumbleAt = this.clock + ms;
     this.crumbleTotal = ms;
     const g = this.add.graphics().setDepth(DEPTH.fx + 4);
-    const label = new PixelText(this, 0, 0, 'CRUMBLING!', { color: COLORS.red }).setOrigin(0.5, 0).setDepth(DEPTH.fx + 4);
+    this.boneHold = biomeAt(levelToMeters(node.level)).id === 'bones';
+    const label = new PixelText(this, 0, 0, this.boneHold ? 'CRACKING!' : 'CRUMBLING!', { color: COLORS.red }).setOrigin(0.5, 0).setDepth(DEPTH.fx + 4);
     this.crumbleUI = { g, label, creakT: 0 };
     Audio.play('creak');
     this.tip('crumbling');
@@ -770,19 +771,19 @@ export class ClimbScene extends Phaser.Scene {
     const hold = this.wall.getHold(this.node.id);
     if (hold) hold.x = this.node.x + (left < 1500 ? (Math.floor(this.clock / 60) % 2 ? 1 : -1) : 0);
     this.crumbleUI.creakT += dt;
-    if (this.crumbleUI.creakT > 700) { this.crumbleUI.creakT = 0; Audio.play('creak'); this.effects.pebbleFall(this.node.x, this.node.y + 4, 1, 0x8a7f74); }
+    if (this.crumbleUI.creakT > 700) { this.crumbleUI.creakT = 0; Audio.play('creak'); this.effects.pebbleFall(this.node.x, this.node.y + 4, 1, this.boneHold ? 0xe8dcc0 : 0x8a7f74); }
     if (left <= 0) {
       const node = this.node;
       this.clearCrumble();
-      Audio.play('crumble');
-      this.effects.pebbleFall(node.x, node.y + 3, 10, 0x8a7f74);
+      Audio.play(this.boneHold ? 'bonesnap' : 'crumble');
+      this.effects.pebbleFall(node.x, node.y + 3, 10, this.boneHold ? 0xe8dcc0 : 0x8a7f74);
       this.effects.chalk(node.x, node.y);
       const hs = this.wall.getHold(node.id);
       if (hs) {
         const debris = this.add.image(hs.x, hs.y, hs.texture.key).setDepth(DEPTH.fx);
         this.tweens.add({ targets: debris, y: debris.y + 120, angle: 200, alpha: 0, duration: 900, ease: 'Quad.easeIn', onComplete: () => debris.destroy() });
       }
-      this.floatText('THE HOLD BROKE!', COLORS.red, 12);
+      this.floatText(this.boneHold ? 'THE BONE SNAPPED!' : 'THE HOLD BROKE!', COLORS.red, 12);
       this.startSlip();
     }
   }
@@ -817,6 +818,9 @@ export class ClimbScene extends Phaser.Scene {
     }
     this.thermalEarned = false;
     this.gustAnnounced = null;
+    this.swarmFlown = new Set();
+    const bones = this.mechanics && this.mechanics.get('boneGarden');
+    if (bones) bones.onClimb(route);
     let windowScale = route.windowScale;
     if (this.gear.crampons && route.hazard === 'icy') windowScale /= BALANCE.hazards.icy.windowScale;
     if (this.gear.chalk && levelToMeters(this.node.level) < GEAR_FX.chalkUntil) windowScale *= GEAR_FX.chalkWindow;
@@ -830,7 +834,7 @@ export class ClimbScene extends Phaser.Scene {
       const mirror = this.dares.includes('mirror');
       notes = notes.map((n) => ({
         ...n,
-        mirror: n.mirror || (mirror && !n.still && !n.chord && (n.dir === 'L' || n.dir === 'R')),
+        mirror: n.mirror || (mirror && !n.still && !n.chord && !n.gear && (n.dir === 'L' || n.dir === 'R')),
         hidden: n.hidden || (blind && !n.still),
       }));
     }
@@ -904,6 +908,23 @@ export class ClimbScene extends Phaser.Scene {
       this.run.streakSaved = true;
       this.floatText('STREAK SAVED', '#ff9a3c', 20);
     } else this.breakStreak();
+    // A still beat moves nothing: let it pass and you hung on; press and you
+    // were seen (the swarm stings).
+    if (note.still) {
+      if (note.result === 'miss') {
+        this.climber.hold('slip2', 240);
+        Audio.play(note.swarm ? 'sting' : 'miss');
+        if (note.swarm) this.hud.flashScreen(0xf0644b, 0.12, 200);
+        if (this.settings.shake) this.cam.shake(90, 0.002);
+        this.boneRattle();
+      }
+      this.floatText(note.result === 'miss' ? style.text : note.swarm ? 'BZZZ...' : 'STILL...', note.result === 'miss' ? style.color : note.swarm ? '#ffd870' : COLORS.dim);
+      this.tryEnergyBar();
+      if (this.grip.isEmpty) { this.startSlip(); return; }
+      if (this.combo.done) this.finishCombo();
+      return;
+    }
+    if (note.result === 'miss') this.boneRattle();
     if (note.reason === 'release' || note.reason === 'roll') {
       this.successes = Math.max(0, this.successes - 1);
       this.climber.hold('slip2', 240);
@@ -1286,6 +1307,14 @@ export class ClimbScene extends Phaser.Scene {
       this.floatText('GUST INCOMING', COLORS.blue, 16);
     }
     this.gustActive = !!gust && gust.time - now < 1300;
+    // The Amber Hive: the swarm comes in a moment before its first beat.
+    if (!this.swarmFlown) this.swarmFlown = new Set();
+    const swarm = combo.notes.find((n) => n.swarm && !n.result && !this.swarmFlown.has(n.index));
+    if (swarm && swarm.time - now < 900) {
+      let beats = 0;
+      for (let i = swarm.index; combo.notes[i] && combo.notes[i].swarm; i++) { this.swarmFlown.add(i); beats++; }
+      this.flySwarm((swarm.time - now) + beats * combo.beatMs + 300);
+    }
     // A gust shoves the climber; a roll is a quick scrabble for the hold.
     const rolling = combo.activeHolds.some((h) => h.note.rollMs);
     this.climber.offsetX = (this.gustActive && Math.floor(now / 140) % 2) || (rolling && Math.floor(now / 60) % 2) ? 1 : 0;
@@ -1807,6 +1836,8 @@ export class ClimbScene extends Phaser.Scene {
     this.routeUI.hide();
     this.comboUI.hide();
     this.clearCrumble();
+    const bones = this.mechanics && this.mechanics.get('boneGarden');
+    if (bones) bones.rest();
     this.climber.stopTweens();
     this.climber.setPosition(node.x, node.y);
     this.climber.setPose('stand');
@@ -1889,7 +1920,7 @@ export class ClimbScene extends Phaser.Scene {
     this.tweens.add({ targets: title, alpha: 1, duration: 900, delay: 500, yoyo: true, hold: ms - 2600 });
     Audio.play('sunrise');
     Audio.swell(12);
-    if (levelToMeters(this.node.level) > 480) this.discover('sunrise-above');
+    if (levelToMeters(this.node.level) > BIOMES.clouds.from) this.discover('sunrise-above');
     this.time.delayedCall(ms - 700, () => {
       this.tweens.add({ targets: bars[0], y: 0, duration: 700, ease: 'Quad.easeIn' });
       this.tweens.add({ targets: bars[1], y: H, duration: 700, ease: 'Quad.easeIn', onComplete: () => { bars.forEach((b) => b.destroy()); rays.destroy(); title.destroy(); if (!this.atCamp) this.hud.setVisible(true); } });
@@ -2284,6 +2315,45 @@ export class ClimbScene extends Phaser.Scene {
       this.lightning();
     } else if (event === 'clear') this.hud.toast('THE STORM PASSES', '#ffe45a');
     else if (event === 'strike') this.lightning();
+  }
+
+  // The Amber Hive: a swarm of bees streams across the wall past the climber
+  // for `ms`, buzzing, while its still beats run.
+  flySwarm(ms) {
+    Audio.play('buzz');
+    const cam = this.cam;
+    const fromLeft = Math.random() < 0.5;
+    const y0 = this.climber.y - 10;
+    for (let i = 0; i < 26; i++) {
+      const bee = this.add.image(0, 0, 'px2').setDepth(DEPTH.fx + 2).setTint(i % 4 ? 0x2a1a0a : 0xffd870).setScale(i % 4 ? 1 : 0.8);
+      const st = { k: 0 }, phase = Math.random() * Math.PI * 2, lane = (Math.random() - 0.5) * 50, lag = Math.random() * 0.25;
+      this.tweens.add({
+        targets: st, k: 1, duration: ms, ease: 'Linear',
+        onUpdate: () => {
+          const k = Math.max(0, Math.min(1, (st.k - lag) / (1 - lag)));
+          const sx = fromLeft ? -20 + k * (GAME_WIDTH + 40) : GAME_WIDTH + 20 - k * (GAME_WIDTH + 40);
+          bee.setPosition(Math.round(cam.scrollX + sx + Math.sin(st.k * 40 + phase) * 4), Math.round(y0 + lane + Math.sin(st.k * 23 + phase) * 6));
+          bee.setVisible(k > 0 && k < 1);
+        },
+        onComplete: () => bee.destroy(),
+      });
+    }
+  }
+
+  // The Bone Garden: a miss rattles a skull; the third brings the dragon's growl.
+  boneRattle() {
+    const bones = this.mechanics && this.mechanics.get('boneGarden');
+    const ev = bones && bones.onMiss();
+    if (!ev) return;
+    if (ev === 'rattle') {
+      Audio.play('rattle');
+      this.floatText(`A SKULL RATTLES ${bones.rattles}/${bones.cfg.rattlesToGrowl}`, '#e8dcc0', 26);
+      this.tip('bones');
+      return;
+    }
+    Audio.play('roar');
+    if (this.settings.shake) this.cam.shake(700, 0.003);
+    this.hud.showBanner('THE DRAGON GROWLS', `TIGHTER TIMING FOR ${bones.cfg.dreadClimbs} CLIMBS`);
   }
 
   // The Dragon's Spine: the eye opens, watches, and closes again.
@@ -2762,8 +2832,9 @@ export class ClimbScene extends Phaser.Scene {
     if (!combo || combo.done) return;
     if (b.plans === null || b.plansFor !== combo) { b.plans = {}; b.plansFor = combo; }
     const note = combo.current;
-    // Between notes (e.g. a hold note still running) there is nothing to press.
-    if (!note) return;
+    // Between notes (e.g. a hold note still running) there is nothing to press,
+    // and on a still beat the bot hangs still.
+    if (!note || note.still) return;
     if (!b.plans[note.index]) {
       const sloppy = b.mode === 'sloppy';
       const off = sloppy ? (Math.random() * 2 - 1) * 260 : (Math.random() * 2 - 1) * 40;

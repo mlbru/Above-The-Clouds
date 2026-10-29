@@ -653,7 +653,113 @@ function dragonCoils({ w, h, seed }) {
   return b.canvas();
 }
 
-const PAINTERS = { glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils };
+// Amber Hive: golden rock towers rising out of the clouds, giant papery hives
+// hanging under their overhangs, specks of bees around them.
+function hiveTowers({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const b = layerBuffer(w, h);
+  const towers = Array.from({ length: 7 }, () => ({ cx: rng.int(0, w - 1), hw: rng.range(9, 17), top: rng.range(10, 70) }));
+  towers.sort((a, c) => c.top - a.top);
+  for (const t of towers) {
+    for (let dx = -Math.ceil(t.hw) - 3; dx <= t.hw + 3; dx++) {
+      // A tower bulges near the top (the overhang) and narrows below it.
+      const x = t.cx + dx;
+      for (let y = Math.round(t.top); y < h; y++) {
+        const k = (y - t.top) / (h - t.top);
+        const half = t.hw * (k < 0.12 ? 1.2 : 0.85 + Math.sin(k * 9 + t.cx) * 0.08);
+        if (Math.abs(dx) > half) continue;
+        const f = dx / half;
+        let c = f < -0.45 ? 0xd8a050 : f > 0.4 ? 0x6a4018 : 0xa86e2c;
+        if (y - t.top < 2) c = 0xf0c070;
+        if ((y + Math.floor(dx * 0.3)) % 9 === 0 && f > -0.6) c = lerpColor(c, 0x4a2a10, 0.4);
+        b.set(x, y, c);
+      }
+    }
+    // The hive: a striped paper teardrop under the overhang.
+    if (rng.chance(0.75)) {
+      const hx = t.cx + (rng.chance(0.5) ? -1 : 1) * (t.hw + 5), hy = t.top + 10, rx = rng.range(7, 11), ry = rng.range(11, 16);
+      for (let y = Math.floor(hy - ry); y <= hy + ry; y++) for (let x = Math.floor(hx - rx); x <= hx + rx; x++) {
+        const u = (x - hx) / rx, v = (y - hy) / ry;
+        if (u * u + v * v * (v < 0 ? 1.4 : 1) > 1) continue;
+        let c = ((y - Math.floor(hy - ry)) % 4 < 2) ? 0xe8c070 : 0xc89040;
+        if (u > 0.5) c = lerpColor(c, 0x7a4a18, 0.4);
+        b.set(x, y, c);
+      }
+      b.set(hx, Math.round(hy + ry * 0.4), 0x2a160a); b.set(hx + 1, Math.round(hy + ry * 0.4), 0x2a160a);
+      for (let k = 0; k < 4; k++) b.set(hx + rng.range(-14, 14), Math.round(hy + rng.range(-10, 14)), 0x2a1a0a);
+    }
+  }
+  return b.canvas();
+}
+
+// Clockwork Bastion: a dwarf fortress on the far peaks, towers with lit
+// windows, copper roofs gone green, and a great clock on the tallest.
+function clockTowers({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const b = layerBuffer(w, h);
+  const base = h - 34;
+  // The curtain wall, crenellated, along the whole ridge.
+  for (let x = 0; x < w; x++) {
+    const top = base + Math.round(Math.sin(x / 40) * 3) - (x % 8 < 4 ? 3 : 0);
+    for (let y = top; y < h; y++) b.set(x, y, y - top < 1 ? 0x8a7058 : (x % 8 === 0 ? 0x3a2e26 : 0x5a4a3c));
+  }
+  const towers = Array.from({ length: 6 }, (_, i) => ({ cx: Math.round((i + rng.range(0.1, 0.9)) * (w / 6)), hw: rng.int(7, 13), tall: rng.int(30, 70) }));
+  const big = towers.reduce((a, t) => (t.tall > a.tall ? t : a));
+  big.tall = Math.max(big.tall, 80); big.hw = Math.max(big.hw, 12);
+  for (const t of towers) {
+    const top = base - t.tall;
+    for (let dx = -t.hw; dx <= t.hw; dx++) {
+      for (let y = top; y < h; y++) b.set(t.cx + dx, y, dx < -t.hw + 2 ? 0x8a7058 : dx > t.hw - 3 ? 0x3a2e26 : 0x5a4a3c);
+    }
+    // A pointed copper roof.
+    for (let k = 0; k < t.hw + 4; k++) for (let dx = -(t.hw + 2 - k); dx <= t.hw + 2 - k; dx++) b.set(t.cx + dx, top - k, dx < 0 ? 0x5aa08a : 0x34685a);
+    // Rows of lit windows.
+    for (let y = top + 8; y < base - 4; y += 9) for (let dx = -t.hw + 3; dx <= t.hw - 3; dx += 5) if (rng.chance(0.55)) { b.set(t.cx + dx, y, 0xffd080); b.set(t.cx + dx, y + 1, 0xd8963a); }
+  }
+  // The clock face, with its hands near the hour.
+  const cy = base - big.tall + 14, r = big.hw - 3;
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const d = Math.hypot(x, y);
+    if (d <= r) b.set(big.cx + x, cy + y, d > r - 1.2 ? 0xd8a850 : 0xf0e4c0);
+  }
+  for (let k = 0; k < r - 2; k++) { b.set(big.cx, cy - k, 0x2a2018); if (k < r - 4) b.set(big.cx + Math.round(k * 0.7), cy + Math.round(k * 0.4), 0x2a2018); }
+  return b.canvas();
+}
+
+// Bone Garden: an ash ridge on which the skeletons of old dragons lie, ribs
+// standing up like the frames of burnt-out houses, a skull at the end.
+function boneRidge({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const b = layerBuffer(w, h);
+  const ridge = smoothRidge(ridgeHeights(rng, w, h * 0.42, 12, 0.5), 3);
+  for (let x = 0; x < w; x++) for (let y = Math.round(ridge[x]); y < h; y++) b.set(x, y, y - ridge[x] < 2 ? 0x7a6e68 : 0x2e2826);
+  for (let s = 0; s < 3; s++) {
+    const x0 = rng.int(0, w - 1), n = rng.int(6, 9), size = rng.range(20, 34);
+    // The spine along the ground, ribs rising from it, biggest in the middle.
+    for (let i = 0; i < n; i++) {
+      const rx = x0 + i * 7, gy = Math.round(ridge[((rx % w) + w) % w]);
+      const tall = size * Math.sin(((i + 0.5) / n) * Math.PI);
+      for (let k = 0; k <= tall; k++) {
+        const bend = Math.round((k / tall) ** 2 * 5);
+        b.set(rx + bend, Math.round(gy - k), k > tall - 2 ? 0xfff2d8 : 0xd8ccb0);
+        b.set(rx + bend + 1, Math.round(gy - k), 0x9a8a70);
+      }
+      b.set(rx, gy - 1, 0xc8b898); b.set(rx + 3, gy - 2, 0xc8b898);
+    }
+    // The skull: a long snout, a dark socket and a swept-back horn.
+    const sx = x0 + n * 7 + 6, sy = Math.round(ridge[((sx % w) + w) % w]) - 6;
+    for (let y = -6; y <= 6; y++) for (let x = -8; x <= 12; x++) {
+      const inSkull = (x / 8) ** 2 + (y / 6) ** 2 <= 1 || (x > 0 && x < 12 && y > -3 + x * 0.1 && y < 4);
+      if (inSkull) b.set(sx + x, sy + y, y < -2 ? 0xfff2d8 : y > 2 ? 0xa89878 : 0xd8ccb0);
+    }
+    b.set(sx - 1, sy - 1, 0x1a1414); b.set(sx, sy - 1, 0x1a1414); b.set(sx - 1, sy, 0x1a1414);
+    for (let k = 0; k < 10; k++) b.set(sx - 4 - k, sy - 4 - Math.round(k * 0.6), 0xe8dcc0);
+    for (let k = 0; k < 10; k++) b.set(sx - 4 - k, sy - 3 - Math.round(k * 0.6), 0xa89878);
+  }
+  return b.canvas();
+}
+
+const PAINTERS = { hiveTowers, clockTowers, boneRidge, glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils };
 
 export function buildBackdropTextures(scene, biomes) {
   for (const biome of Object.values(biomes)) {

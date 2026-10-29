@@ -54,7 +54,83 @@ export function buildPreviewTexture(scene, key, look) {
   FRAME_NAMES.forEach((name, i) => tex.add(name, 0, i * FRAME_W, 0, FRAME_W, FRAME_H));
 }
 
+// Holds with a shape of their own: the Amber Hive's wax nubs, the Clockwork
+// Bastion's brass rungs and the Bone Garden's bones (the cracked ones snap).
+// Same frame size as the round holds so everything lines up the same.
+function specialHoldGrid(biome, kind, hazard) {
+  const jug = kind === 'jug';
+  const w = jug ? 16 : 12, h = jug ? 9 : 8;
+  const g = new PixelGrid(w + 2, h + 3);
+  const cx = (w + 2) / 2, cy = h / 2 + 1;
+  if (biome.id === 'hive' && !hazard) {
+    // A six-sided wax cap, honey pooled in its middle.
+    const r = jug ? 7 : 5.4, ry = r * 0.8;
+    const hex = [0, 1, 2, 3, 4, 5].map((i) => [cx + Math.cos((i / 6) * Math.PI * 2) * r, cy + Math.sin((i / 6) * Math.PI * 2) * ry]);
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+      let inside = false;
+      for (let i = 0, j = 5; i < 6; j = i++) {
+        const [xi, yi] = hex[i], [xj, yj] = hex[j];
+        if ((yi > y + 0.5) !== (yj > y + 0.5) && x + 0.5 < ((xj - xi) * (y + 0.5 - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      if (inside) g.set(x, y, y < cy - ry * 0.4 ? 0xf8d890 : y > cy + ry * 0.5 ? 0x9a5c18 : 0xd8a048);
+    }
+    g.ellipse(cx, cy + 0.5, r * 0.45, ry * 0.4, 0xe88a14);
+    g.set(cx - 1, cy, 0xffe8a0);
+    g.set(cx + 1, cy + ry + 1, 0xe88a14);
+    g.set(cx + 1, cy + ry + 2, 0xffb840);
+  } else if (biome.id === 'clockwork' && !hazard) {
+    // A brass rung bolted to an iron plate.
+    g.rect(1, 2, w, h - 2, 0x2a2420);
+    g.rect(2, 3, w - 2, h - 4, 0x3e3428);
+    const bar = jug ? 3 : 2;
+    g.rect(3, cy - 1, w - 4, bar + 1, 0xb8863a);
+    g.rect(3, cy - 1, w - 4, 1, 0xf0c870);
+    g.rect(3, cy + bar - 1, w - 4, 1, 0x7a5420);
+    for (const bx of [2, w - 1]) { g.set(bx, 3, 0x9a9aa4); g.set(bx, h - 1, 0x9a9aa4); }
+    g.set(cx, cy - 1, 0xffffff);
+  } else if (biome.id === 'bones' && (!hazard || hazard === 'crumbling')) {
+    // A bone: a shaft with knobbly ends. A jug is a vertebra with a spike.
+    const bone = 0xe4d8bc, shade = 0xa89878, lit = 0xfff6e0;
+    if (jug) {
+      g.ellipse(cx, cy + 1, 6.5, 3, bone);
+      fillTri(g, cx - 2, cy - 1, cx + 2, cy - 1, cx, 0, bone);
+      g.ellipse(cx - 4, cy + 1, 1.4, 1.2, 0x3a3028); g.ellipse(cx + 4, cy + 1, 1.4, 1.2, 0x3a3028);
+    } else {
+      g.rect(3, cy - 1, w - 4, 3, bone);
+      for (const ex of [2.5, w - 0.5]) { g.ellipse(ex, cy - 1.2, 1.8, 1.6, bone); g.ellipse(ex, cy + 1.6, 1.8, 1.6, bone); }
+    }
+    for (let x = 0; x < g.w; x++) for (let y = 0; y < g.h; y++) {
+      if (g.get(x, y) !== bone) continue;
+      if (g.get(x, y - 1) === null) g.set(x, y, lit);
+      else if (g.get(x, y + 1) === null) g.set(x, y, shade);
+    }
+    if (hazard === 'crumbling') {
+      // Cracked through: the tell that it will not hold for long.
+      g.line(cx - 1, cy - 2, cx + 1, cy + 2, 0x3a2a22);
+      g.set(cx + 2, cy - 1, 0x3a2a22); g.set(cx - 3, cy + 1, 0x8a7a64);
+      g.set(cx + 4, h + 1, shade); g.set(cx - 4, h + 2, shade);
+    } else {
+      g.set(cx - 2, cy, 0xf6f3ea); g.set(cx + 1, cy - 1, 0xf6f3ea);
+    }
+  } else return null;
+  g.outline(OUT);
+  return g;
+}
+
+function fillTri(g, x0, y0, x1, y1, x2, y2, c) {
+  const minY = Math.floor(Math.min(y0, y1, y2)), maxY = Math.ceil(Math.max(y0, y1, y2));
+  for (let y = minY; y <= maxY; y++) for (let x = Math.floor(Math.min(x0, x1, x2)); x <= Math.ceil(Math.max(x0, x1, x2)); x++) {
+    const px = x + 0.5, py = y + 0.5;
+    const d1 = (px - x1) * (y0 - y1) - (x0 - x1) * (py - y1);
+    const d2 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+    const d3 = (px - x0) * (y2 - y0) - (x2 - x0) * (py - y0);
+    if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) g.set(x, y, c);
+  }
+}
+
 function holdGrid(biome, kind, hazard) {
+  const special = specialHoldGrid(biome, kind, hazard);
+  if (special) return special;
   const base = lerpColor(biome.rock[3], biome.holdTint, 0.45);
   let body = base, light = lighten(base, 0.35), dark = darken(base, 0.65);
   if (hazard === 'loose') { body = 0xa8743e; light = 0xd09a5a; dark = 0x6e4422; }
@@ -196,6 +272,22 @@ function decorGrids() {
   const coins = new PixelGrid(12, 6);
   coins.ellipse(6, 4.5, 5.5, 1.8, 0xd8a030); coins.ellipse(5, 3, 3, 1.4, 0xf0c050); coins.set(4, 2, 0xffe08a); coins.set(8, 4, 0xffe08a); coins.set(2, 4, 0xff6a4a);
   coins.outline(0x100606); d.coins = coins;
+  // Amber Hive: a lump of comb, a few cells still capped, honey oozing out.
+  const comb = new PixelGrid(15, 10);
+  comb.ellipse(7, 6, 7, 4, 0xb87a2a);
+  for (let k = 0; k < 6; k++) {
+    const x = 2 + (k % 3) * 4 + (k > 2 ? 2 : 0), y = k > 2 ? 7 : 4;
+    comb.rect(x, y, 3, 2, k % 2 ? 0xf0c060 : 0x6a3e10);
+    comb.set(x + 1, y, k % 2 ? 0xfff0b0 : 0x8a5418);
+  }
+  comb.set(10, 9, 0xe88a14); comb.set(10, 8, 0xffb840);
+  comb.outline(0x160c04); d.comb = comb;
+  // Clockwork Bastion: a steam pipe coming out of the rock, with a valve wheel.
+  const pipe = new PixelGrid(14, 14);
+  pipe.rect(0, 9, 10, 4, 0x6a5440); pipe.rect(0, 9, 10, 1, 0xb89060); pipe.rect(9, 3, 4, 10, 0x6a5440); pipe.rect(9, 3, 1, 10, 0xb89060);
+  pipe.rect(8, 8, 6, 6, 0x58452e); pipe.rect(8, 1, 6, 3, 0x86683e); pipe.rect(8, 1, 6, 1, 0xf0c870);
+  pipe.ellipse(4, 6, 2.6, 2.6, 0xb8733a); pipe.set(4, 6, 0x2a2420); pipe.line(4, 3, 4, 9, 0xd8a050); pipe.line(1, 6, 7, 6, 0xd8a050);
+  pipe.outline(0x0e0a06); d.pipe = pipe;
   // Base-camp tent
   const tent = new PixelGrid(28, 16);
   for (let y = 0; y < 13; y++) for (let x = 13 - y; x <= 14 + y; x++) tent.set(x, y + 2, x < 14 ? 0xe07a2e : 0xb85a1e);
@@ -312,6 +404,27 @@ function uiTextures(scene) {
   for (const [key, n, bw] of [['still', 11, 3], ['still_s', 7, 2]]) {
     const g = new PixelGrid(n, n);
     g.rect(1, 1, bw, n - 2, 0xffffff); g.rect(n - 1 - bw, 1, bw, n - 2, 0xffffff);
+    g.outline(OUT); addGrid(scene, `icon_${key}`, g);
+  }
+  // Swarm beats (the Amber Hive): a bee, striped body and two wings.
+  for (const [key, n] of [['swarm', 11], ['swarm_s', 7]]) {
+    const g = new PixelGrid(n, n);
+    const s = n / 11;
+    g.ellipse(5.5 * s, 7 * s, 4.2 * s, 2.8 * s, 0xffffff);
+    for (let x = 0; x < n; x++) if (Math.round(x / s) % 3 === 1) for (let y = 0; y < n; y++) if (g.get(x, y) !== null) g.set(x, y, 0x6a6a6a);
+    g.ellipse(3.5 * s, 3 * s, 2 * s, 1.8 * s, 0xd8d8d8);
+    g.ellipse(7 * s, 3 * s, 2 * s, 1.8 * s, 0xd8d8d8);
+    g.outline(OUT); addGrid(scene, `icon_${key}`, g);
+  }
+  // Gear notes (the Clockwork Bastion): a cog behind the arrow, two sizes.
+  for (const [key, n] of [['cog', 17], ['cog_s', 11]]) {
+    const g = new PixelGrid(n, n);
+    const c = (n - 1) / 2, r = n / 2 - 2.2, teeth = 8;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const a = Math.atan2(y - c, x - c), d = Math.hypot(x - c, y - c);
+      const tooth = Math.cos(a * teeth) > 0.35;
+      if (d <= r + (tooth ? 1.6 : 0) && d >= r * 0.62) g.set(x, y, 0xffffff);
+    }
     g.outline(OUT); addGrid(scene, `icon_${key}`, g);
   }
   const ring = new PixelGrid(21, 21);
