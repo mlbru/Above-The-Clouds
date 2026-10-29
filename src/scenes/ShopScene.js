@@ -624,7 +624,6 @@ export class ShopScene extends Phaser.Scene {
         else button(this.prog.data.activePerk === row.item.id ? 'ACTIVE (TURN OFF)' : 'MAKE ACTIVE', COLORS.green, () => this.togglePerk(row.item));
         line('ONE PERK CAN BE ACTIVE AT A TIME.', COLORS.faint);
       }
-      if (row.item.lift && !locked) line('ONE TICKET AT A TIME. PACKING ONE SWAPS THE OTHER.', COLORS.blue);
       if (!this.gearAllowed) line('ONLY WORKS IN NORMAL MODE.', COLORS.red);
       else if (this.departed && row.kind === 'gear') line('THIS RUN HAS STARTED: NEW GEAR GOES WITH YOUR NEXT RUN.', COLORS.blue);
       else line(row.kind === 'gear' ? 'USED UP WHEN YOU LEAVE BASE CAMP. NORMAL MODE ONLY.' : 'NORMAL MODE ONLY.', COLORS.faint);

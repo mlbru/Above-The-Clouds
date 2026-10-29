@@ -11,6 +11,7 @@ import { LeaderboardScene } from './scenes/LeaderboardScene.js';
 import { SettingsScene } from './scenes/SettingsScene.js';
 import { DaresScene } from './scenes/DaresScene.js';
 import { ControlsScene } from './scenes/ControlsScene.js';
+import { MapScene } from './scenes/MapScene.js';
 import { installFullscreenKey } from './utils/fullscreen.js';
 import { installTouchControls, isTouchDevice } from './ui/TouchControls.js';
 import { Audio } from './systems/AudioSystem.js';
@@ -29,7 +30,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, CollectionScene, ExpeditionScene, LeaderboardScene, SettingsScene, DaresScene, ControlsScene],
+  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, CollectionScene, ExpeditionScene, LeaderboardScene, SettingsScene, DaresScene, ControlsScene, MapScene],
   disableContextMenu: true,
 });
 

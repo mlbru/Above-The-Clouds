@@ -2,21 +2,31 @@ import { GAME_WIDTH, GAME_HEIGHT, DEPTH, IS_PORTRAIT, IS_TOUCH } from '../config
 import { PixelText, COLORS } from './PixelText.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { JOURNAL_CHAPTERS, journalProgress } from '../data/journal.js';
+import { BIOMES } from '../data/biomes.js';
+import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 
 // Base camp as a menu, used by the title screen and by base camp during a
 // run: the logo, one floating word over each spot at camp (the wall is CLIMB,
 // the campfire COLLECTION, the signpost EXPEDITIONS, Bram the SHOP, the tent
-// the WARDROBE), a bobbing arrow and a warm glow on the chosen one, and a
+// the WARDROBE, the lift station left of the wall the MAP), a bobbing arrow and a warm glow on the chosen one, and a
 // gear in the corner. ← → choose, Space / ↑ go; the mouse works too.
 //
 // opts: {
 //   camp: the camp ledge node; spots: the wall renderer's campSpots
-//   actions: { climb, collection, expeditions, shop, wardrobe, dares } (omit to hide)
+//   actions: { climb, collection, expeditions, shop, wardrobe, dares, map } (omit to hide)
 //   dares(): the badge under DARES (what is picked)
 //   subtitle(): the line under the logo
 //   mode(): { text, color } under CLIMB, or null; onDown(): ↓ on CLIMB
 //   onGear(); onBoard() (the leaderboard trophy beside the gear, omit to hide)
 // }
+// Under MAP: the picked lift ticket, else your mastery stars.
+function mapBadge(prog) {
+  const lift = prog.data.lift;
+  if (lift) return `LIFT: ${BIOMES[lift].name.replace(/^THE /, '')}`;
+  const stars = MASTERY_BIOMES.reduce((n, id) => n + prog.stars(id).length, 0);
+  return `★${stars}/${MASTERY_BIOMES.length * STARS.length}`;
+}
+
 export class CampMenu {
   constructor(scene, opts) {
     this.scene = scene;
@@ -68,6 +78,8 @@ export class CampMenu {
       a.collection && sp.fire && { id: 'collection', label: 'COLLECTION', x: sp.fire.x, y: sp.fire.y - 20, badge: unseen ? `${unseen} NEW` : `${j.seen}/${j.total}`, badgeNew: !!unseen, go: a.collection },
       a.expeditions && sp.sign && { id: 'expeditions', label: 'EXPEDITIONS', x: sp.sign.x, y: sp.sign.y - 34, go: a.expeditions },
       a.climb && { id: 'climb', label: 'CLIMB', x: camp.x, y: camp.y - 62, go: a.climb },
+      // The mountain map (lift tickets and mastery): on the rock left of the climb.
+      a.map && { id: 'map', label: 'MAP', x: camp.x - 62, y: camp.y - 96, badge: mapBadge(prog), badgeNew: false, go: a.map },
       // Bram's dares: chalked on the rock beside the start of the climb.
       a.dares && { id: 'dares', label: 'DARES', x: camp.x + 62, y: camp.y - 96, badge: o.dares ? o.dares() : null, badgeNew: false, go: a.dares },
       a.shop && sp.trader && { id: 'shop', label: 'SHOP', x: sp.trader.x, y: sp.trader.y - 40, badge: `◆${prog.gems}`, go: a.shop },

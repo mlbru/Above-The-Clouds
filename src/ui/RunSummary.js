@@ -2,7 +2,8 @@ import { PixelText, COLORS, drawPanel } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { biomeAt } from '../data/biomes.js';
-import { GEM_ORDER } from '../data/gems.js';
+import { GEM_ORDER, gemForBiome } from '../data/gems.js';
+import { STARS } from '../data/mastery.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
@@ -26,7 +27,7 @@ function fitList(names, maxW) {
 // The end-of-run screen: how high you got, where on the mountain you were
 // stranded, and what the run was worth. Numbers count up one after another.
 // s: { modeLabel, reached, best, isRecord, reason, perfects, bestStreak,
-//      caught, finds[], stones{}, gems, wallet, stamps[] }
+//      caught, finds[], stones{}, gems, wallet, stamps[], mastery[] }
 // Optional (expedition summit): title, titleColor, recordLine, strandedLabel.
 export class RunSummary {
   constructor(scene, s, { onAgain, onTitle, onBoard = null, boardLabel = '[L] LEADERBOARD' }) {
@@ -109,6 +110,16 @@ export class RunSummary {
     }
     if (s.finds.length) { text(W, y, `FOUND: ${fitList(s.finds, GAME_WIDTH - 60)}`, COLORS.blue); y += 10; }
     if (s.stamps.length) { text(W, y, `LOGBOOK: ${fitList(s.stamps.map((st) => st.name), GAME_WIDTH - 60)}`, COLORS.gold); y += 10; }
+    // Mastery: how close this run came in its highest biomes.
+    for (const m of s.mastery || []) {
+      const stars = STARS.map((k) => (m.stars.includes(k) ? '★' : '☆')).join('');
+      const done = m.stars.length >= STARS.length;
+      const gem = gemForBiome(m.biome);
+      const line = done ? `${stars} ${m.name} MASTERED`
+        : `${stars} ${m.name}   STREAK ${Math.min(m.streak, m.goals.streak)}/${m.goals.streak}   ${gem.name} ${Math.min(m.gems, m.goals.gems)}/${m.goals.gems}`;
+      text(W, y, line, done ? COLORS.gold : m.color);
+      y += 10;
+    }
     text(W, y + 2, `WALLET ◆${s.wallet}`, '#9fe8ff');
 
     const fy = Math.max(y + 18, 222);

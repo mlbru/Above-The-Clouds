@@ -218,13 +218,24 @@ while the height counts back to 0 m, then lands in the cloud sea (`cloudFall()` 
   that route to grab it; the other routes' gems fade away. Risky routes carry gems most
   often. Every area has its own stone (emerald, amber, sapphire, cloud opal, ruby, diamond,
   storm topaz, tourmaline, dragon pearl),
-  rarer and worth more the higher you go. Every 50 m of height, perfect-streak milestones
+  rarer and worth more the higher you go. Every 60 m of height, perfect-streak milestones
   and a new record add a few gems; Hard pays x1.5, Summit x2 (`GEM_INCOME` in `src/data/shop.js`).
+  `node tests/balanceSim.mjs --economy` shows gems per run and per hour for four kinds of
+  player, how often a run earns each mastery star, and what everything costs in runs and hours.
 - **The trader** stands at base camp (T, or tap them). GEAR: one-use items, pack up to 3;
   they are used up when you leave base camp at the start of a Normal run (chalk bag,
   energy bar, crampons, quickdraws, spare rope, lucky charm). PERKS: bought once, one active
   at a time (gem sense, iron grip, steady hands, streak saver). STYLE: buy clothes and chalk
   colours; some need a number of found regional gems first. Gear and perks only work in Normal.
+- **The mountain map** (MAP, on the rock left of the climb at base camp): the whole climb as
+  one peak with a band per biome, its three mastery stars and its reward. **Biome mastery**:
+  in one pass through a biome, climb all of it without a slip, hit a streak of perfects (12 in
+  the Green Rise up to 35 at the top) and grab its own stones; the goals are in
+  `src/data/mastery.js`. **Lift tickets** (Stone Wall up to the Clockwork Bastion) start a
+  Normal run on the first ledge of their biome. A ticket goes on sale once you master the
+  biome below it, costs gems, is used up by the run it starts and never takes a pack slot
+  (`src/data/lifts.js`). A lifted start counts as a full pass for that biome's stars. Star news
+  waits until a biome's title card is done, and the run summary shows how close you came.
 - **Wardrobe**: in the pause menu, on the title screen and at the trader. It lists only what
   you own; the STYLE tab shows everything you can still earn or buy. Besides clothes and chalk
   there are **trails** (stardust, wildfire, pixel hearts, rainbow road…) left behind as you

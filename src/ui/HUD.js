@@ -191,6 +191,8 @@ export class HUD {
     const scale = 2;
     const fullW = measureLine(title) * scale;
     const left = Math.round(GAME_WIDTH / 2 - fullW / 2);
+    // Scene time when the card has faded out (others wait for it, see ClimbScene.showStars()).
+    this.bannerUntil = sc.time.now + 55 * ([...title].length + 4) + 2800 + 900;
     if (this.cardTimer) this.cardTimer.remove();
     sc.tweens.killTweensOf([this.banner, this.bannerSub, this.cardLines]);
     this.banner.setOrigin(0, 0).setX(left).setText('').setAlpha(1);

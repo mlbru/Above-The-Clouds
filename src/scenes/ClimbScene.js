@@ -28,7 +28,8 @@ import { RestMenu } from '../ui/RestMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
 import { PixelText, COLORS } from '../ui/PixelText.js';
 import { BIOMES, biomeAt, biomeMixAt, biomeStretchAt, nextBiomeAbove, setBiomeTheme, biomeTheme } from '../data/biomes.js';
-import { MASTERY_BIOMES, masteryGoals, starLabel } from '../data/mastery.js';
+import { MASTERY_BIOMES, STARS, masteryGoals, starLabel } from '../data/mastery.js';
+import { LIFTS, liftHeight, liftName } from '../data/lifts.js';
 import { BiomeMechanics } from '../systems/mechanics/index.js';
 import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
 import { DARKNESS } from '../systems/mechanics/Darkness.js';
@@ -188,6 +189,7 @@ export class ClimbScene extends Phaser.Scene {
         expeditions: () => { this.registry.set('openExpeditions', true); this.toMenu(); },
         shop: () => this.openTrader(),
         wardrobe: () => this.openOverlay('Shop', { mode: 'wardrobe', returnTo: 'Climb' }),
+        map: () => this.openOverlay('Map', { returnTo: 'Climb', departed: !!(this.run && this.run.departed), mode: this.mode }),
       },
       subtitle: () => {
         const best = Math.floor(this.recordBest);
@@ -239,6 +241,8 @@ export class ClimbScene extends Phaser.Scene {
     this.gear = {};
     this.liftTo = null;
     this.lifting = false;
+    this.starNews = [];
+    this.starCalmAt = 0;
     this.perk = null;
     this.traderTag = null;
     this.routeGems = [];
@@ -303,14 +307,14 @@ export class ClimbScene extends Phaser.Scene {
     if (this.state === STATE.ROUTE_SELECT) { this.routeUI.hide(); this.enterRouteSelect(); }
   }
 
-  // A lift ticket from the trader: the run starts up in a higher biome.
+  // A lift ticket (picked on the mountain map): the run starts on the first
+  // ledge of a higher biome.
   rideLift() {
-    const ticket = GEAR_BY_ID[this.liftTo];
     // Height you skip pays no gems; only what you climb from there on does.
-    this.startHigh(ticket.lift);
+    this.startHigh(liftHeight(this.liftTo));
     this.run.heightMarks = Math.floor((this.run.maxHeight || 0) / GEM_INCOME.heightEvery);
     const b = biomeAt(levelToMeters(this.node.level));
-    this.hud.showBanner(b.name, `${ticket.name}  •  ${Math.floor(levelToMeters(this.node.level))} M`);
+    this.hud.showBanner(b.name, `${liftName(this.liftTo)}  •  ${Math.floor(levelToMeters(this.node.level))} M`);
     Audio.setMusicMode(b.music);
     Audio.play('titlecard');
     this.updateGearHud();
@@ -954,7 +958,7 @@ export class ClimbScene extends Phaser.Scene {
       const hx = this.climber.x + (note.dir === 'L' ? -10 : note.dir === 'R' ? 10 : 0), hy = this.climber.y - 2;
       if (note.result === 'perfect') {
         this.run.perfects++;
-        this.passProgress('perfects');
+        this.passProgress('perfect');
         this.outfit.onPerfect();
         Audio.play('perfect', { streak: this.run.streak });
         // Sparks, ring and shake length grow with the streak.
@@ -1041,6 +1045,7 @@ export class ClimbScene extends Phaser.Scene {
     }
     this.run.streak = 0;
     this.run.streakSaved = false;
+    if (this.run.pass) this.run.pass.run = 0;
     this.hud.setStreak(0);
   }
 
@@ -1141,10 +1146,8 @@ export class ClimbScene extends Phaser.Scene {
     const used = this.prog.consumePack();
     this.gear = {};
     this.liftTo = null;
-    used.forEach((id) => {
-      if (GEAR_BY_ID[id].lift) this.liftTo = id;
-      else this.gear[id] = id === 'charm' ? GEAR_FX.charmGems : 1;
-    });
+    used.forEach((id) => { this.gear[id] = id === 'charm' ? GEAR_FX.charmGems : 1; });
+    this.liftTo = this.prog.useLift();
     this.perk = this.prog.data.activePerk;
     this.run.bare = !used.length && !this.perk;
     if (used.length) {
@@ -1794,6 +1797,7 @@ export class ClimbScene extends Phaser.Scene {
       gems: this.run.gems,
       wallet: this.prog.gems,
       stamps: this.run.stamps,
+      mastery: this.masteryLines(),
     }, {
       onAgain: () => this.climbAgain(),
       onTitle: () => this.toMenu(),
@@ -2223,31 +2227,77 @@ export class ClimbScene extends Phaser.Scene {
     // flawless star (never while a lift ticket or dev start carries you up).
     const next = !!cur && biomeStretchAt(from - 0.01) === cur.key;
     if (next && !this.lifting && cur.full && !this.run.biomeFalls[cur.key]) this.earnStar(cur.biome, 'flawless');
+    if (cur) cur.run = 0;
     let pass = this.run.passes[key];
     if (!pass) {
-      const full = start ? from === 0 : next && !this.lifting;
-      pass = this.run.passes[key] = { key, from, biome: biomeAt(h).id, full, perfects: 0, gems: 0 };
+      // A lift ticket sets you down at the start of its biome: that pass counts in full.
+      const lifted = this.lifting && this.liftTo && from === liftHeight(this.liftTo);
+      const full = start ? from === 0 : (next && !this.lifting) || !!lifted;
+      pass = this.run.passes[key] = { key, from, biome: biomeAt(h).id, full, run: 0, streak: 0, gems: 0 };
     }
     this.run.pass = pass;
   }
 
+  // kind: 'perfect' (the streak inside this pass grows) or 'gems'.
   passProgress(kind) {
     const pass = this.run.pass;
     if (!pass || !MASTERY_BIOMES.includes(pass.biome)) return;
+    const goals = masteryGoals(pass.biome);
+    if (kind === 'perfect') {
+      pass.streak = Math.max(pass.streak, ++pass.run);
+      if (pass.run === goals.streak) this.earnStar(pass.biome, 'streak');
+      return;
+    }
     pass[kind]++;
-    if (pass[kind] === masteryGoals(pass.biome)[kind]) this.earnStar(pass.biome, kind);
+    if (pass[kind] === goals[kind]) this.earnStar(pass.biome, kind);
   }
 
+  // The star is saved at once; the news waits for a calm moment (see showStars()).
   earnStar(biomeId, star) {
     if (!MASTERY_BIOMES.includes(biomeId)) return;
     const r = this.prog.earnStar(biomeId, star);
     if (!r.isNew) return;
-    const n = this.prog.stars(biomeId).length;
-    const b = biomeAt(BIOMES[biomeId].from);
-    this.hud.toast(`${'★'.repeat(n)}${'☆'.repeat(3 - n)} ${b.name.replace(/^THE /, '')}: ${starLabel(biomeId, star)}`, COLORS.gold);
+    (this.starNews || (this.starNews = [])).push({ biomeId, star, n: this.prog.stars(biomeId).length, unlocks: r.unlocks });
+    this.starCalmAt = this.clock + 600;
+  }
+
+  // Star news never talks over a biome's title card: it waits until the
+  // panorama and the card are done, then plays one star at a time.
+  showStars() {
+    if (!this.starNews || !this.starNews.length || this.inPanorama || this.clock < (this.starCalmAt || 0)) return;
+    if (this.time.now < (this.hud.bannerUntil || 0) || this.state === STATE.FALLING || this.state === STATE.RUN_OVER) return;
+    const { biomeId, star, n, unlocks } = this.starNews.shift();
+    const name = BIOMES[biomeId].name.replace(/^THE /, '');
+    this.hud.toast(`${'★'.repeat(n)}${'☆'.repeat(STARS.length - n)} ${name}: ${starLabel(biomeId, star)}`, COLORS.gold);
     Audio.play('discovery');
-    if (n === 3) this.time.delayedCall(1400, () => this.hud.showBanner(`${b.name} MASTERED`, 'A NEW ITEM AT THE TRADER\'S WARDROBE'));
-    r.unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+    unlocks.forEach((u) => this.hud.toast(`UNLOCKED: ${u.name}`, COLORS.gold));
+    this.starCalmAt = this.clock + 1600;
+    if (n === STARS.length) {
+      const lift = LIFTS.find((l) => l.after === biomeId);
+      this.hud.showBanner(`${BIOMES[biomeId].name} MASTERED`, lift ? `${liftName(lift.id)} FOR SALE ON THE MAP` : 'A NEW ITEM IN THE WARDROBE');
+      this.starCalmAt = this.clock + 3200;
+    }
+  }
+
+  // For the run summary: the best you did toward mastery in the two highest
+  // biomes of this run (a lift or dev start's partial passes count too).
+  masteryLines() {
+    if (this.director || this.expedition || biomeTheme() || this.dared) return [];
+    const best = {};
+    for (const p of Object.values(this.run.passes || {})) {
+      if (!MASTERY_BIOMES.includes(p.biome)) continue;
+      const b = best[p.biome] || (best[p.biome] = { biome: p.biome, from: p.from, streak: 0, gems: 0 });
+      b.streak = Math.max(b.streak, p.streak);
+      b.gems = Math.max(b.gems, p.gems);
+      b.from = Math.max(b.from, p.from);
+    }
+    // Biomes a lift carried you past show nothing, unless that is all there is.
+    let list = Object.values(best).sort((a, b) => b.from - a.from);
+    if (list.some((b) => b.streak || b.gems)) list = list.filter((b, i) => !i || b.streak || b.gems);
+    return list.slice(0, 2).map((b) => ({
+      ...b, goals: masteryGoals(b.biome), stars: this.prog.stars(b.biome), name: BIOMES[b.biome].name.replace(/^THE /, ''),
+      color: toCss(lerpColor(BIOMES[b.biome].accentA, 0xffffff, 0.35)),
+    }));
   }
 
   // 50 m before the next biome: a quiet heads-up and a line on the wall where it starts.
@@ -2580,6 +2630,7 @@ export class ClimbScene extends Phaser.Scene {
     this.clock += dt;
     this.lastFramePerf = performance.now();
     const now = this.clock;
+    this.showStars();
     this.city.update(dt);
     this.dayNight.update(dt);
     // ENDLESS NIGHT: the clock never gets past midnight.

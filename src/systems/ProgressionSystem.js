@@ -3,6 +3,7 @@ import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, PACK_SLOTS } from '../data/shop.js';
 import { STAMPS } from '../data/logbook.js';
 import { STARS, MASTERY_BIOMES } from '../data/mastery.js';
+import { LIFT_BY_ID } from '../data/lifts.js';
 import { currentSeason } from '../data/seasons.js';
 
 const KEY = 'above-the-clouds-save-v1';
@@ -61,6 +62,10 @@ function freshData() {
     gemsFound: {},
     inventory: {},
     packed: [],
+    // Lift tickets owned, { [biomeId]: count }, and the one picked for the
+    // next Normal run (null: start at base camp). See data/lifts.js.
+    tickets: {},
+    lift: null,
     perks: [],
     activePerk: null,
     cheats: {},
@@ -88,6 +93,7 @@ export class ProgressionSystem {
       this.storage = memoryStorage();
     }
     this.data = this.load();
+    this.migrate();
     // Cosmetics you have not looked at yet show as NEW. Older saves start with
     // everything they already own marked as seen.
     if (!Array.isArray(this.data.seen)) this.data.seen = [...this.data.unlocked];
@@ -106,9 +112,25 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw);
       // Items without a requirement (including ones added in later versions) are always owned.
       const unlocked = [...new Set([...(parsed.unlocked || []), ...base.unlocked])];
-      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions }, mastery: { ...parsed.mastery }, dareBest: { ...parsed.dareBest } };
+      return { ...base, ...parsed, unlocked, bestByMode: { ...base.bestByMode, ...parsed.bestByMode }, look: { ...base.look, ...parsed.look }, settings: { ...base.settings, ...parsed.settings }, gemsFound: { ...parsed.gemsFound }, inventory: { ...parsed.inventory }, counters: { ...parsed.counters }, expeditions: { ...parsed.expeditions }, mastery: { ...parsed.mastery }, dareBest: { ...parsed.dareBest }, tickets: { ...parsed.tickets } };
     } catch {
       return base;
+    }
+  }
+
+  // Saves from before the mountain map: the old Stone and Frozen tickets were
+  // gear in the pack; the mastery star for perfects is now a streak star.
+  migrate() {
+    const d = this.data;
+    for (const [old, id] of [['lift-stone', 'stone'], ['lift-frozen', 'frozen']]) {
+      if (d.inventory[old]) d.tickets[id] = (d.tickets[id] || 0) + d.inventory[old];
+      if (d.packed.includes(old) && !d.lift) d.lift = id;
+      delete d.inventory[old];
+    }
+    d.packed = d.packed.filter((id) => GEAR_BY_ID[id]);
+    for (const list of Object.values(d.mastery)) {
+      const i = list.indexOf('perfects');
+      if (i >= 0) list.splice(i, 1, ...(list.includes('streak') ? [] : ['streak']));
     }
   }
 
@@ -323,18 +345,8 @@ export class ProgressionSystem {
     const g = GEAR_BY_ID[id];
     if (!g || this.lockedReason(g) || !this.spend(g.price)) return false;
     this.data.inventory[id] = this.owned(id) + 1;
-    if (!this.data.packed.includes(id) && this.data.packed.length < PACK_SLOTS) this.packLift(id) || this.data.packed.push(id);
+    if (!this.data.packed.includes(id) && this.data.packed.length < PACK_SLOTS) this.data.packed.push(id);
     this.save();
-    return true;
-  }
-
-  // Only one lift ticket goes with you: packing one swaps out the other.
-  packLift(id) {
-    if (!GEAR_BY_ID[id].lift) return false;
-    const p = this.data.packed;
-    const other = p.findIndex((k) => GEAR_BY_ID[k] && GEAR_BY_ID[k].lift);
-    if (other >= 0) p[other] = id;
-    else p.push(id);
     return true;
   }
 
@@ -344,10 +356,8 @@ export class ProgressionSystem {
   togglePack(id) {
     const p = this.data.packed;
     if (p.includes(id)) { p.splice(p.indexOf(id), 1); this.save(); return false; }
-    if (this.owned(id) < 1) return null;
-    const swapsLift = GEAR_BY_ID[id].lift && p.some((k) => GEAR_BY_ID[k] && GEAR_BY_ID[k].lift);
-    if (p.length >= PACK_SLOTS && !swapsLift) return null;
-    if (!this.packLift(id)) p.push(id);
+    if (this.owned(id) < 1 || p.length >= PACK_SLOTS) return null;
+    p.push(id);
     this.save();
     return true;
   }
@@ -363,6 +373,46 @@ export class ProgressionSystem {
     this.data.packed = this.data.packed.filter((id) => this.owned(id) > 0);
     this.save();
     return used;
+  }
+
+  // ---------- lift tickets (data/lifts.js) ----------
+  mastered(biomeId) { return this.stars(biomeId).length >= STARS.length; }
+  tickets(id) { return this.data.tickets[id] || 0; }
+
+  // What the map can do with a ticket: locked | buy | poor (with the price).
+  liftStatus(id) {
+    const l = LIFT_BY_ID[id];
+    if (!l) return { state: 'locked' };
+    if (!this.mastered(l.after)) return { state: 'locked', price: l.price, needs: l.after };
+    return { state: this.gems >= l.price ? 'buy' : 'poor', price: l.price };
+  }
+
+  // A bought ticket is picked for the next run right away.
+  buyLift(id) {
+    if (this.liftStatus(id).state !== 'buy' || !this.spend(LIFT_BY_ID[id].price)) return false;
+    this.data.tickets[id] = this.tickets(id) + 1;
+    this.data.lift = id;
+    this.save();
+    return true;
+  }
+
+  // Picks the ticket for the next run (null: base camp). Needs one in hand.
+  setLift(id) {
+    if (id && this.tickets(id) < 1) return false;
+    this.data.lift = id || null;
+    this.save();
+    return true;
+  }
+
+  // The picked ticket when a Normal run leaves base camp: spends it and
+  // returns its biome id, or null. The pick stays while you have more.
+  useLift() {
+    const id = this.data.lift;
+    if (!id || this.tickets(id) < 1) { this.data.lift = null; return null; }
+    this.data.tickets[id]--;
+    if (!this.data.tickets[id]) this.data.lift = null;
+    this.save();
+    return id;
   }
 
   hasPerk(id) { return this.data.perks.includes(id); }

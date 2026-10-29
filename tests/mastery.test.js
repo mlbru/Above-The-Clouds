@@ -9,7 +9,7 @@ const memory = () => { const m = new Map(); return { getItem: (k) => m.get(k) ??
 test('mastery: every biome on the way up has goals', () => {
   for (const id of MASTERY_BIOMES) {
     const g = masteryGoals(id);
-    assert.ok(g.perfects > 0 && g.gems > 0, id);
+    assert.ok(g.streak > 0 && g.gems > 0, id);
   }
 });
 
@@ -25,7 +25,7 @@ test('mastery: stars are kept once, survive a reload, and three free the reward'
   const p = new ProgressionSystem(storage);
   assert.equal(p.earnStar('storm', 'flawless').isNew, true);
   assert.equal(p.earnStar('storm', 'flawless').isNew, false);
-  assert.equal(p.earnStar('storm', 'perfects').unlocks.length, 0);
+  assert.equal(p.earnStar('storm', 'streak').unlocks.length, 0);
   assert.deepEqual(p.earnStar('storm', 'gems').unlocks.map((u) => u.id), ['jacket-bolt']);
   const again = new ProgressionSystem(storage);
   assert.deepEqual([...again.stars('storm')].sort(), [...STARS].sort());

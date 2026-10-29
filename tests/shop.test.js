@@ -5,6 +5,7 @@ import { Mountain } from '../src/systems/SegmentGenerator.js';
 import { ProgressionSystem } from '../src/systems/ProgressionSystem.js';
 import { GEMS, gemForBiome } from '../src/data/gems.js';
 import { GEAR, PERKS, PACK_SLOTS } from '../src/data/shop.js';
+import { LIFTS, LIFT_BY_ID } from '../src/data/lifts.js';
 import { COSMETICS } from '../src/data/cosmetics.js';
 import { biomeAt } from '../src/data/biomes.js';
 import { levelToMeters } from '../src/config/gameConfig.js';
@@ -111,6 +112,8 @@ test('trader: cosmetics with prices and regional gem requirements', () => {
   assert.equal(p.cosmeticStatus(crown).state, 'locked', 'needs a diamond first');
   assert.equal(p.buyCosmetic('hat', crown), false);
   p.addGems(12, 'diamond');
+  assert.equal(p.cosmeticStatus(crown).state, 'locked', 'one diamond is not enough');
+  p.addGems(12, 'diamond');
   assert.equal(p.cosmeticStatus(crown).state, 'buy');
   // Achievement items cannot be bought.
   const blaze = COSMETICS.jacket.find((c) => c.id === 'jacket-blaze');
@@ -131,25 +134,53 @@ test('trader: old saves without gem data still load', () => {
   assert.ok(p.isUnlocked('jacket-sun'), 'earned items are kept');
 });
 
-test('trader: lift tickets unlock with your Normal record and only one is packed', () => {
+test('lift tickets: open with mastery of the biome below, cost gems, keep out of the pack', () => {
   const p = new ProgressionSystem(memory());
-  p.data.gems = 500;
-  assert.ok(p.lockedReason(GEAR.find((g) => g.id === 'lift-stone')));
-  assert.equal(p.buyGear('lift-stone'), false);
-  p.recordHeight(420, 'normal');
-  assert.equal(p.lockedReason(GEAR.find((g) => g.id === 'lift-stone')), null);
-  assert.match(p.lockedReason(GEAR.find((g) => g.id === 'lift-frozen')), /SAPPHIRE/);
-  p.addGems(3, 'sapphire');
-  assert.ok(p.buyGear('lift-stone') && p.buyGear('lift-frozen'));
-  assert.deepEqual(p.data.packed, ['lift-frozen']);
-  assert.equal(p.togglePack('lift-stone'), true);
-  assert.deepEqual(p.data.packed, ['lift-stone']);
+  p.data.gems = 1000;
+  assert.equal(LIFTS.length, 7, 'Stone Wall up to the Clockwork Bastion');
+  assert.deepEqual(LIFTS.map((l) => l.after), ['green', 'stone', 'frozen', 'clouds', 'hive', 'obsidian', 'crystal']);
+  for (let i = 1; i < LIFTS.length; i++) assert.ok(LIFTS[i].price > LIFTS[i - 1].price, 'higher tickets cost more');
+  assert.equal(p.liftStatus('stone').state, 'locked');
+  assert.equal(p.buyLift('stone'), false);
+  ['flawless', 'streak'].forEach((k) => p.earnStar('green', k));
+  assert.equal(p.liftStatus('stone').state, 'locked', 'two stars are not enough');
+  p.earnStar('green', 'gems');
+  assert.equal(p.liftStatus('stone').state, 'buy');
+  assert.equal(p.liftStatus('frozen').state, 'locked');
+  assert.ok(p.buyLift('stone'));
+  assert.equal(p.gems, 1000 - LIFT_BY_ID.stone.price);
+  assert.equal(p.data.lift, 'stone', 'a bought ticket is picked');
+  ['chalk', 'energy', 'rope'].forEach((id) => p.buyGear(id));
+  assert.equal(p.data.packed.length, PACK_SLOTS, 'the ticket takes no pack slot');
+  assert.ok(p.buyLift('stone'));
+  assert.equal(p.useLift(), 'stone');
+  assert.equal(p.data.lift, 'stone', 'still picked while you have one left');
+  assert.equal(p.useLift(), 'stone');
+  assert.equal(p.data.lift, null);
+  assert.equal(p.useLift(), null, 'no ticket: base camp');
+  assert.equal(p.setLift('stone'), false, 'cannot pick a ticket you do not have');
+  p.data.gems = 0;
+  assert.equal(p.liftStatus('stone').state, 'poor');
+});
+
+test('lift tickets: old Stone and Frozen tickets in a save become new tickets', () => {
+  const s = memory();
+  s.setItem('above-the-clouds-save-v1', JSON.stringify({ version: 1, inventory: { 'lift-frozen': 2, 'lift-stone': 1, chalk: 1 }, packed: ['chalk', 'lift-frozen'], mastery: { green: ['flawless', 'perfects'] } }));
+  const p = new ProgressionSystem(s);
+  assert.equal(p.tickets('frozen'), 2);
+  assert.equal(p.tickets('stone'), 1);
+  assert.equal(p.data.lift, 'frozen');
+  assert.deepEqual(p.data.packed, ['chalk']);
+  assert.equal(p.owned('lift-frozen'), 0);
+  assert.deepEqual(p.stars('green'), ['flawless', 'streak'], 'the old perfects star is kept as the streak star');
 });
 
 test('trader: rare-stone perks need the stones first', () => {
   const p = new ProgressionSystem(memory());
-  p.data.gems = 500;
+  p.data.gems = 1000;
   assert.equal(p.buyPerk('diamondeye'), false);
+  p.addGems(12, 'diamond');
+  assert.equal(p.buyPerk('diamondeye'), false, 'needs two diamonds');
   p.addGems(12, 'diamond');
   assert.equal(p.buyPerk('diamondeye'), true);
   assert.ok(PERKS.find((x) => x.id === 'rubyheart').needs.gem === 'ruby');

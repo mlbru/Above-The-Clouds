@@ -124,6 +124,7 @@ export class MenuScene extends Phaser.Scene {
           shop: () => this.openShop(),
           wardrobe: () => this.openWardrobe(),
           dares: () => this.showDares(),
+          map: () => this.showMap(),
         },
         dares: () => {
           const ids = cleanDares(this.prog.settings.dares);
@@ -170,6 +171,12 @@ export class MenuScene extends Phaser.Scene {
     Audio.play('ui');
     this.buildWorld();
     this.showMain();
+  }
+
+  // Lift tickets and mastery: the mountain map (scenes/MapScene.js).
+  showMap() {
+    this.scene.launch('Map', { returnTo: 'Menu', mode: this.mode });
+    this.scene.pause();
   }
 
   // Bram's dares: a screen of its own (scenes/DaresScene.js).

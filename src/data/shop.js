@@ -1,30 +1,27 @@
 // What the base camp trader sells besides clothes.
 // Gear is used up: pack up to PACK_SLOTS items, and they are spent when you
 // leave base camp at the start of a Normal run. Perks are bought once; one can
-// be active at a time. Gear and perks only work in Normal mode.
+// be active at a time. Gear and perks only work in Normal mode. Lift tickets
+// live in data/lifts.js and have a place of their own.
 export const PACK_SLOTS = 3;
 
 export const GEAR = [
-  { id: 'chalk', name: 'CHALK BAG', price: 6, icon: 'item_chalk', text: 'SLIGHTLY WIDER TIMING WINDOWS UNTIL 100 M.' },
-  { id: 'energy', name: 'ENERGY BAR', price: 10, icon: 'item_energy', text: 'WHEN YOUR GRIP RUNS OUT, EAT IT: +25 GRIP. ONCE.' },
-  { id: 'crampons', name: 'CRAMPONS', price: 14, icon: 'item_crampons', text: 'ICY HOLDS ARE AS EASY AS NORMAL HOLDS.' },
-  { id: 'quickdraws', name: 'QUICKDRAWS', price: 10, icon: 'item_quickdraws', text: 'CRUMBLING HOLDS LAST 50% LONGER.' },
-  { id: 'rope', name: 'SPARE ROPE', price: 25, icon: 'item_rope', text: 'CATCHES YOU ONCE WHEN YOU MISS A SLIP RECOVERY.' },
-  { id: 'charm', name: 'LUCKY CHARM', price: 20, icon: 'item_charm', text: 'THE NEXT 5 GEMS YOU GRAB COUNT DOUBLE.' },
-  // Lift tickets: skip the start and begin the run on the first ledge of a higher biome.
-  // Only one goes with you; they open up once your Normal record is high enough.
-  { id: 'lift-stone', name: 'STONE WALL TICKET', price: 8, icon: 'item_ticket_stone', lift: 80, needs: { best: 150 }, text: 'START YOUR NEXT RUN AT THE STONE WALL (80 M).' },
-  { id: 'lift-frozen', name: 'FROZEN REACH TICKET', price: 20, icon: 'item_ticket_frozen', lift: 300, needs: { best: 400, gem: 'sapphire', count: 1 }, text: 'START YOUR NEXT RUN IN THE FROZEN REACH (300 M).' },
+  { id: 'chalk', name: 'CHALK BAG', price: 12, icon: 'item_chalk', text: 'SLIGHTLY WIDER TIMING WINDOWS UNTIL 100 M.' },
+  { id: 'energy', name: 'ENERGY BAR', price: 20, icon: 'item_energy', text: 'WHEN YOUR GRIP RUNS OUT, EAT IT: +25 GRIP. ONCE.' },
+  { id: 'crampons', name: 'CRAMPONS', price: 28, icon: 'item_crampons', text: 'ICY HOLDS ARE AS EASY AS NORMAL HOLDS.' },
+  { id: 'quickdraws', name: 'QUICKDRAWS', price: 20, icon: 'item_quickdraws', text: 'CRUMBLING HOLDS LAST 50% LONGER.' },
+  { id: 'rope', name: 'SPARE ROPE', price: 50, icon: 'item_rope', text: 'CATCHES YOU ONCE WHEN YOU MISS A SLIP RECOVERY.' },
+  { id: 'charm', name: 'LUCKY CHARM', price: 40, icon: 'item_charm', text: 'THE NEXT 5 GEMS YOU GRAB COUNT DOUBLE.' },
 ];
 
 export const PERKS = [
-  { id: 'gemsense', name: 'GEM SENSE', price: 80, icon: 'perk_gemsense', text: 'GEMS SHOW UP 25% MORE OFTEN.' },
-  { id: 'irongrip', name: 'IRON GRIP', price: 90, icon: 'perk_irongrip', text: 'GRIP DRAINS 10% SLOWER WHILE YOU HANG.' },
-  { id: 'steady', name: 'STEADY HANDS', price: 110, icon: 'perk_steady', text: 'THE FIRST MISS ON EACH CLIMB COSTS HALF GRIP.' },
-  { id: 'streaksaver', name: 'STREAK SAVER', price: 140, icon: 'perk_streaksaver', text: 'ONE GOOD HIT PER STREAK DOES NOT BREAK IT.' },
+  { id: 'gemsense', name: 'GEM SENSE', price: 200, icon: 'perk_gemsense', text: 'GEMS SHOW UP 25% MORE OFTEN.' },
+  { id: 'irongrip', name: 'IRON GRIP', price: 225, icon: 'perk_irongrip', text: 'GRIP DRAINS 10% SLOWER WHILE YOU HANG.' },
+  { id: 'steady', name: 'STEADY HANDS', price: 275, icon: 'perk_steady', text: 'THE FIRST MISS ON EACH CLIMB COSTS HALF GRIP.' },
+  { id: 'streaksaver', name: 'STREAK SAVER', price: 350, icon: 'perk_streaksaver', text: 'ONE GOOD HIT PER STREAK DOES NOT BREAK IT.' },
   // Bought with gems, but only for climbers who found the rare stones up high.
-  { id: 'rubyheart', name: 'RUBY HEART', price: 160, icon: 'perk_rubyheart', needs: { gem: 'ruby', count: 2 }, text: 'EVERY PERFECT HIT GIVES 1 GRIP BACK.' },
-  { id: 'diamondeye', name: 'DIAMOND EYE', price: 220, icon: 'perk_diamondeye', needs: { gem: 'diamond', count: 1 }, text: 'TIMING WINDOWS 8% WIDER, ALL THE WAY UP.' },
+  { id: 'rubyheart', name: 'RUBY HEART', price: 400, icon: 'perk_rubyheart', needs: { gem: 'ruby', count: 3 }, text: 'EVERY PERFECT HIT GIVES 1 GRIP BACK.' },
+  { id: 'diamondeye', name: 'DIAMOND EYE', price: 550, icon: 'perk_diamondeye', needs: { gem: 'diamond', count: 2 }, text: 'TIMING WINDOWS 8% WIDER, ALL THE WAY UP.' },
 ];
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((g) => [g.id, g]));
@@ -35,7 +32,7 @@ export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));
 
 // Gem income besides the stones on the wall.
 export const GEM_INCOME = {
-  heightEvery: 50, // +1 for every 50 m of new height in a run
+  heightEvery: 60, // +1 for every 60 m of new height in a run
   streak: { 10: 2, 20: 3, 30: 5, later: 3 },
   record: 5,
   modeScale: { normal: 1, hard: 1.5, summit: 2 },

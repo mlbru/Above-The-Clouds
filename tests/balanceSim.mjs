@@ -13,6 +13,11 @@ import { applySwing } from '../src/systems/mechanics/Swing.js';
 import { DRAGON_EYE } from '../src/systems/mechanics/DragonEye.js';
 
 import { SeededRandom } from '../src/utils/seededRandom.js';
+import { GEMS } from '../src/data/gems.js';
+import { GEM_INCOME, GEAR, PERKS } from '../src/data/shop.js';
+import { LIFTS } from '../src/data/lifts.js';
+import { COSMETICS } from '../src/data/cosmetics.js';
+import { MASTERY_BIOMES, masteryGoals } from '../src/data/mastery.js';
 
 // Share of time a whiteout is raging while you climb in the Frozen Reach.
 const W = WHITEOUT;
@@ -37,6 +42,31 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
   const grip = new GripSystem(BALANCE, modeCfg);
   let node = m.getLevel(0) ? m.getLevel(0).nodes[0] : (m.ensureLevel(10), m.getLevel(0).nodes[0]);
   let checkpoint = node, best = 0, slips = 0, falls = 0, moves = 0;
+  // Economy (--economy): gems earned in the run and progress per biome pass.
+  let gems = 0, streak = 0, pass = null;
+  const passes = {};
+  const stars = {};
+  const star = (biome, kind) => { (stars[biome] || (stars[biome] = new Set())).add(kind); };
+  const enterPass = (h) => {
+    const key = biomeStretchAt(h);
+    if (pass && pass.key === key) return;
+    const from = Number(key.split('@')[1]);
+    const next = !!pass && biomeStretchAt(from - 0.01) === pass.key;
+    if (next && pass.full && !pass.slipped) star(pass.biome, 'flawless');
+    if (pass) pass.run = 0;
+    pass = passes[key] || (passes[key] = { key, biome: biomeAt(h).id, full: pass ? next : from === 0, slipped: false, perfects: 0, run: 0, streak: 0, gems: 0 });
+  };
+  const goal = (kind) => { const g = MASTERY_BIOMES.includes(pass.biome) && masteryGoals(pass.biome); if (g && pass[kind] >= g[kind]) star(pass.biome, kind); };
+  const onResult = (res) => {
+    if (res === 'perfect') {
+      streak++; pass.perfects++;
+      pass.run++; pass.streak = Math.max(pass.streak, pass.run); goal('streak');
+      const ms = BALANCE.streak.milestones.find((x) => x.at === streak);
+      const last = BALANCE.streak.milestones[BALANCE.streak.milestones.length - 1].at;
+      if (ms || (streak > last && (streak - last) % BALANCE.streak.every === 0)) gems += GEM_INCOME.streak[streak] || GEM_INCOME.streak.later;
+    } else { streak = 0; pass.run = 0; }
+  };
+  enterPass(0);
   const mrng = new SeededRandom(seed * 7 + 1);
   // One free fall per biome; a second fall in the same biome ends the run.
   const biomeFalls = {};
@@ -100,6 +130,7 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
       if (n.roll) { const failed = []; c.updateHolds(n.time + n.rollMs + 1, failed); judged.push(...failed); }
       judged.filter((x) => x && !x.still).forEach((x) => {
         if (!lit || x.result === 'miss') grip.applyNote(route, x.result);
+        onResult(x.result);
       });
       if (res.judged && res.judged.holding && Math.random() < wrong * 2) { c.release(n.dir, n.time + 50); grip.applyNote(route, 'miss'); }
       if (grip.isEmpty) { empty = true; break; }
@@ -108,12 +139,19 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
     if (!empty) {
       const ok = s.miss <= BALANCE.combo.maxMissesForSuccess;
       grip.applyComboEnd(s, ok);
-      if (ok) node = route.target;
+      if (ok) {
+        const gem = m.routeGem(route);
+        if (gem) { m.takeGem(gem); gems += GEMS[gem.type].value; if (GEMS[gem.type].biome === pass.biome) { pass.gems++; goal('gems'); } }
+        node = route.target;
+      }
       if (ok && route.thermal && c.notes[route.thermal.note].result === 'perfect') node = route.thermal.to;
       if (grip.isEmpty) empty = true;
     }
     if (empty) {
       slips++;
+      streak = 0;
+      pass.run = 0;
+      pass.slipped = true;
       const rec = Math.abs(gauss() * sd) <= BALANCE.slip.goodMs * modeCfg.catchScale && Math.random() > wrong;
       if (modeCfg.permadeath && !rec) { falls++; break; }
       if (RULE && !rec) {
@@ -128,11 +166,57 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
       } else { falls++; node = checkpoint; grip.restoreFull(); }
     }
     best = Math.max(best, node.level * 1.5);
+    enterPass(node.level * 1.5);
   }
-  return { best, slips, falls };
+  gems += Math.floor(best / GEM_INCOME.heightEvery);
+  return { best, slips, falls, gems, stars, passes, moves };
 }
 
+const ECONOMY = process.argv.includes('--economy');
 const players = { expert: { sd: 45, wrong: 0.01 }, good: { sd: 75, wrong: 0.03 }, average: { sd: 110, wrong: 0.05 }, novice: { sd: 150, wrong: 0.08 } };
+if (ECONOMY) {
+  // Gems per Normal run, and how often a run earns each mastery star.
+  const RUNS = 40;
+  const income = {}, perHour = {};
+  console.log('--- ECONOMY (NORMAL, one run, no gear)');
+  for (const [name, p] of Object.entries(players)) {
+    const runs = Array.from({ length: RUNS }, (_, i) => simulate(p, 2000 + i, 'normal'));
+    const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
+    // A move (decide, climb the notes) takes about five seconds.
+    const minutes = avg((r) => r.moves) * 5 / 60;
+    console.log(`${name.padEnd(8)} best ${avg((r) => r.best).toFixed(0).padStart(5)} m   gems/run ${avg((r) => r.gems).toFixed(0).padStart(4)}   run ~${minutes.toFixed(0)} min   gems/hour ${(avg((r) => r.gems) / minutes * 60).toFixed(0)}`);
+    perHour[name] = avg((r) => r.gems) / minutes * 60;
+    const line = MASTERY_BIOMES.map((b) => {
+      const pct = (k) => Math.round((100 * runs.filter((r) => r.stars[b] && r.stars[b].has(k)).length) / RUNS);
+      return `${b.slice(0, 5)} ${pct('flawless')}/${pct('streak')}/${pct('gems')}`;
+    }).filter((x) => !/ 0\/0\/0$/.test(x));
+    console.log(`         stars % (flawless/streak/gems): ${line.join('  ')}`);
+    if (process.argv.includes('--passes')) {
+      // Median best perfect streak and gems in a full pass through each biome.
+      const med = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : '-'; };
+      const rows = MASTERY_BIOMES.map((b) => {
+        const ps = runs.flatMap((r) => Object.values(r.passes).filter((q) => q.biome === b && q.full));
+        return ps.length >= RUNS / 4 ? `${b.slice(0, 5)} ${med(ps.map((q) => q.streak))}s ${med(ps.map((q) => q.gems))}g` : null;
+      }).filter(Boolean);
+      console.log(`         median pass: ${rows.join('  ')}`);
+    }
+    income[name] = avg((r) => r.gems);
+  }
+  // What things cost in runs for each player (gems per run from above).
+  const all = Object.values(COSMETICS).flat().filter((c) => c.requirement && c.requirement.price && !c.requirement.season);
+  const prices = all.map((c) => c.requirement.price).sort((a, b) => a - b);
+  const items = [
+    ...GEAR.map((g) => [`gear ${g.id}`, g.price]),
+    ...PERKS.map((q) => [`perk ${q.id}`, q.price]),
+    ['cosmetic cheapest', prices[0]], ['cosmetic median', prices[Math.floor(prices.length / 2)]], ['cosmetic dearest', prices[prices.length - 1]],
+    ['all cosmetics', prices.reduce((a, b) => a + b, 0)],
+    ...LIFTS.map((l) => [`ticket ${l.id}`, l.price]),
+  ];
+  console.log('--- RUNS TO BUY (price / gems per run), then HOURS OF PLAY');
+  console.log(`${''.padEnd(22)}${Object.keys(players).map((n) => n.padStart(9)).join('')}`);
+  for (const [label, price] of items) console.log(`${`${label} ◆${price}`.padEnd(22)}${Object.keys(players).map((n) => (price / Math.max(1, income[n])).toFixed(1).padStart(9)).join('')}   ${Object.keys(players).map((n) => `${(price / perHour[n]).toFixed(1)}h`.padStart(7)).join('')}`);
+  process.exit(0);
+}
 for (const mode of ['normal', 'hard', 'summit']) {
   console.log(`--- ${mode.toUpperCase()} (${MAX_MOVES} moves max)`);
   for (const [name, p] of Object.entries(players)) {

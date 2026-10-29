@@ -1,5 +1,6 @@
 // Procedural art for gems, trader goods and the base camp trader.
 import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { LIFTS, liftColors } from '../data/lifts.js';
 import { darken, lighten } from '../utils/color.js';
 import { GEMS } from '../data/gems.js';
 
@@ -87,8 +88,6 @@ const ITEM_ICONS = {
     g.set(3, 3, lite); g.set(7, 3, lite); g.set(5, 5, 0x2f7a3a);
     g.line(6, 8, 8, 10, 0x2f7a3a);
   },
-  item_ticket_stone: (g) => ticket(g, 0x8a8478, 0xf2a03c),
-  item_ticket_frozen: (g) => ticket(g, 0x9fd8ff, 0x4f86f0),
   perk_rubyheart: (g) => {
     const r = 0xe0344f;
     g.ellipse(3.5, 4, 2.4, 2.4, r); g.ellipse(7.5, 4, 2.4, 2.4, r);
@@ -203,6 +202,8 @@ export function buildShopTextures(scene) {
   for (const gem of Object.values(GEMS)) add(scene, `gem_${gem.id}`, gemGrid(gem.color));
   add(scene, 'icon_gem', gemGrid(0x6fd6ff));
   for (const [key, draw] of Object.entries(ITEM_ICONS)) add(scene, key, icon(draw));
+  // One lift ticket per biome, in its colours (data/lifts.js).
+  for (const l of LIFTS) { const c = liftColors(l.id); add(scene, l.icon, icon((g) => ticket(g, c.band, c.peak))); }
   addFrames(scene, 'npc_trader', [traderGrid(false), traderGrid(true), traderGrid(false, true)]);
   addFrames(scene, 'bram_face', [portraitGrid(false), portraitGrid(true)]);
   add(scene, 'decor_stall', stallGrid());
