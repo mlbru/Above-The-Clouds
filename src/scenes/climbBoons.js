@@ -66,11 +66,13 @@ export const climbBoons = {
   buildCairn(s) {
     const n = s.node;
     const side = n.x > 240 ? -1 : 1;
-    const x = n.x + side * 26, y = n.y + 1;
-    const pillar = this.add.image(x, y - 70, 'glow').setBlendMode('ADD').setTint(0x9fc8ff).setScale(0.9, 4.4).setAlpha(0.16).setDepth(DEPTH.holds);
-    const cairn = this.add.image(x, y, 'shrine_cairn').setOrigin(0.5, 1).setDepth(DEPTH.holds + 1);
-    const runeGlow = this.add.image(x, y - 14, 'glow').setBlendMode('ADD').setTint(0x9fd8ff).setScale(0.5).setAlpha(0.5).setDepth(DEPTH.holds + 2);
-    const rune = this.add.image(x - 1, y - 14, 'shrine_rune').setTint(0xc8f0ff).setDepth(DEPTH.holds + 2);
+    const x = n.x + side * 30, y = n.y + 1;
+    // Bigger than a hold, so it reads from a few ledges below: a shaft of pale
+    // light over it, the stones, and a rune that glows like ice in the dark.
+    const pillar = this.add.image(x, y - 90, 'glow').setBlendMode('ADD').setTint(0xa8d8ff).setScale(1.1, 5.4).setAlpha(0.22).setDepth(DEPTH.holds);
+    const cairn = this.add.image(x, y, 'shrine_cairn').setOrigin(0.5, 1).setScale(1.5).setDepth(DEPTH.holds + 1);
+    const runeGlow = this.add.image(x, y - 21, 'glow').setBlendMode('ADD').setTint(0xbfeaff).setScale(0.9).setAlpha(0.7).setDepth(DEPTH.holds + 2);
+    const rune = this.add.image(x - 1, y - 21, 'shrine_rune').setTint(0xe8fbff).setScale(1.5).setDepth(DEPTH.holds + 2);
     s.cairn = { pillar, cairn, rune, runeGlow, x, y };
   },
 
@@ -87,11 +89,11 @@ export const climbBoons = {
       const c = s.cairn;
       if (!c) continue;
       if (s.used) { c.rune.setAlpha(0.15); c.runeGlow.setAlpha(0); c.pillar.setAlpha(0); continue; }
-      const a = 0.6 + 0.4 * Math.sin(this.clock / 380);
+      const a = 0.65 + 0.35 * Math.sin(this.clock / 380);
       c.rune.setAlpha(a);
-      c.runeGlow.setAlpha(0.3 + 0.3 * a);
-      c.pillar.setAlpha(0.1 + 0.06 * a);
-      if (!this.settings.reducedParticles && Math.random() < dt / 260) this.effects.sparkle(c.x + (Math.random() - 0.5) * 12, c.y - 10 - Math.random() * 14, 1);
+      c.runeGlow.setAlpha(0.45 + 0.35 * a).setScale(0.8 + 0.15 * a);
+      c.pillar.setAlpha(0.14 + 0.1 * a);
+      if (!this.settings.reducedParticles && Math.random() < dt / 200) this.effects.sparkle(c.x + (Math.random() - 0.5) * 16, c.y - 14 - Math.random() * 20, 1);
     }
   },
 

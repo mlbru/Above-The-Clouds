@@ -335,6 +335,29 @@ export class WallRenderer {
     if (tm.exists(v.texKey)) tm.remove(v.texKey);
     tm.addCanvas(v.texKey, job.canvas);
     v.image = this.scene.add.image(0, job.top, v.texKey).setOrigin(0, 0).setDepth(DEPTH.wall);
+    if (job.rim) {
+      v.rims = ['l', 'r'].map((side) => {
+        const key = `${v.texKey}_rim${side}`;
+        if (tm.exists(key)) tm.remove(key);
+        tm.addCanvas(key, job.rim[side]);
+        return this.scene.add.image(0, job.top, key).setOrigin(0, 0).setDepth(DEPTH.wall + 1).setBlendMode('ADD').setAlpha(0);
+      });
+      this.applyRim(v);
+    }
+  }
+
+  // The light of the hour along the wall's edges: { l: [color, alpha], r: [color, alpha] }.
+  setRim(light) {
+    this.rimLight = light;
+    for (const v of this.visuals.values()) this.applyRim(v);
+  }
+
+  applyRim(v) {
+    if (!v.rims || !this.rimLight) return;
+    ['l', 'r'].forEach((side, i) => {
+      const [color, alpha] = this.rimLight[side];
+      v.rims[i].setTint(color).setAlpha(alpha).setVisible(alpha > 0.01);
+    });
   }
 
   // Forces every queued wall to finish (used at startup / respawn).
@@ -404,6 +427,7 @@ export class WallRenderer {
     if (!v) return;
     v.objects.forEach((o) => o.destroy());
     if (v.image) v.image.destroy();
+    (v.rims || []).forEach((img) => { const key = img.texture.key; img.destroy(); if (this.scene.textures.exists(key)) this.scene.textures.remove(key); });
     if (this.trader && !this.trader.active) this.trader = null;
     if (this.scene.textures.exists(v.texKey)) this.scene.textures.remove(v.texKey);
     this.animated = this.animated.filter((a) => a.seg !== index);

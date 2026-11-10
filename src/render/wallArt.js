@@ -43,6 +43,8 @@ export class WallPainter {
       : { x: n.x, top: n.y - 5, rx: n.kind === 'jug' ? 17 : 14, depth: 22 })) : null;
     const job = {
       segment, canvas, ctx, img, top, h, row: 0, done: false, waterfallX, islands,
+      // The wall's outline per row, for the rim light (see paintRim).
+      edges: new Array(h),
       prevRows: [this.heightRow(top - 3), this.heightRow(top - 2), this.heightRow(top - 1)],
       step: (maxRows) => {
         const end = Math.min(h, job.row + maxRows);
@@ -50,12 +52,47 @@ export class WallPainter {
         if (job.row >= h) {
           if (!job.islands) this.paintCracks(job, cracks);
           ctx.putImageData(img, 0, 0);
+          if (!job.islands) job.rim = this.paintRim(job);
           job.done = true;
         }
         return job.done;
       },
     };
     return job;
+  }
+
+  // Rim light: two white masks hugging the left and right outline of the
+  // wall, brightest on the very edge and fading a few pixels in. The climb
+  // tints them with the light of the hour and shows the side facing the sun.
+  paintRim(job) {
+    const make = (side) => {
+      const c = makeCanvas(W, job.h);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      const fall = [1, 0.62, 0.32, 0.16, 0.07];
+      for (let row = 0; row < job.h; row++) {
+        const e = job.edges[row];
+        if (!e) continue;
+        const [l, r] = e;
+        // Where the outline steps sideways (a ledge lip, an overhang), the
+        // light catches the step too: widen the rim there.
+        const prev = job.edges[row - 1];
+        const step = prev ? Math.min(6, Math.abs((side < 0 ? prev[0] - l : prev[1] - r))) : 0;
+        fall.forEach((a, k) => {
+          ctx.globalAlpha = a;
+          const x = side < 0 ? l + 1 + k : r - 1 - k;
+          ctx.fillRect(x, row, 1, 1);
+        });
+        if (step > 1) {
+          ctx.globalAlpha = 0.5;
+          if (side < 0) ctx.fillRect(Math.min(l, prev[0]) + 1, row, step, 1);
+          else ctx.fillRect(Math.max(r, prev[1]) - step, row, step, 1);
+        }
+      }
+      ctx.globalAlpha = 1;
+      return c;
+    };
+    return { l: make(-1), r: make(1) };
   }
 
   heightRow(wy) {
@@ -115,6 +152,7 @@ export class WallPainter {
       return;
     }
 
+    job.edges[row] = [l, r];
     const gap = segment.chasm ? {
       x: 240 + (this.edge(wy * 0.03, 3.3) - 0.5) * 16,
       half: 40 + (this.edge(wy * 0.06, 7.7) - 0.5) * 14,

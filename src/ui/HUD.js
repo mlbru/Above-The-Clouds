@@ -2,7 +2,7 @@ import { PixelText, COLORS, drawPanel } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT } from '../config/gameConfig.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { Audio } from '../systems/AudioSystem.js';
-import { lerpColor } from '../utils/color.js';
+import { lerpColor, darken } from '../utils/color.js';
 
 const TOAST_Y = 41;
 // The biome title card; upright it drops below the HUD, which fills the narrow top.
@@ -19,17 +19,20 @@ export class HUD {
     const d = DEPTH.hud;
     this.root = [];
     const add = (o) => { o.setScrollFactor(0).setDepth(d); this.root.push(o); return o; };
+    // Backing plates go first so every readout sits on its own dark glass,
+    // readable over the busiest rock.
+    this.plates = add(scene.add.graphics());
     this.icon = add(scene.add.image(8, 7, 'icon_mtn').setOrigin(0, 0));
     this.height = add(new PixelText(scene, 20, 6, '0 M').setScale(2));
-    this.best = add(new PixelText(scene, 8, 20, '', { color: COLORS.dim }));
-    this.biome = add(new PixelText(scene, 8, 29, '', { color: COLORS.faint }));
+    this.best = add(new PixelText(scene, 20, 13, '', { color: COLORS.dim }));
+    this.biome = add(new PixelText(scene, 8, 23, '', { color: COLORS.text }));
     // How far to the next area ("FROZEN REACH IN 80 M").
-    this.next = add(new PixelText(scene, 8, 38, '', { color: COLORS.faint }));
-    this.gripIcon = add(scene.add.image(GAME_WIDTH - 88, 7, 'icon_grip').setOrigin(0, 0));
-    this.gripLabel = add(new PixelText(scene, GAME_WIDTH - 79, 8, 'GRIP'));
+    this.next = add(new PixelText(scene, 8, 32, '', { color: COLORS.faint }));
+    this.gripIcon = add(scene.add.image(GAME_WIDTH - 94, 6, 'icon_grip').setOrigin(0, 0));
+    this.gripLabel = add(new PixelText(scene, GAME_WIDTH - 84, 7, 'GRIP'));
     this.gripBar = add(scene.add.graphics());
-    this.gripValue = add(new PixelText(scene, GAME_WIDTH - 10, 17, '100', { color: COLORS.dim }).setOrigin(1, 0));
-    this.streak = add(new PixelText(scene, GAME_WIDTH - 10, 27, '', { color: COLORS.gold }).setOrigin(1, 0));
+    this.gripValue = add(new PixelText(scene, GAME_WIDTH - 9, 7, '100', { color: COLORS.text }).setOrigin(1, 0));
+    this.streak = add(new PixelText(scene, GAME_WIDTH - 8, 31, '', { color: COLORS.gold }).setOrigin(1, 0));
     this.gemIcon = add(scene.add.image(7, 47, 'icon_gem').setOrigin(0, 0));
     this.gemText = add(new PixelText(scene, 18, 48, '0', { color: GEM_COLOR }));
     this.gearIcons = [];
@@ -52,25 +55,36 @@ export class HUD {
     this.blink = 0;
   }
 
-  update(dt, { heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripLow, gripCritical, modeLabel = '' }) {
+  update(dt, { heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripMax = 100, gripLow, gripCritical, modeLabel = '', accent = 0xf2c14e, slip = null }) {
     this.next.setText(nextLine).setColor(nextColor);
     this.height.setText(`${Math.max(0, heightM).toFixed(0)} M`);
     this.best.setText(`BEST ${best.toFixed(0)} M${modeLabel ? '  ' + modeLabel : ''}`);
+    this.best.setX(20 + this.height.width * 2 + 6);
     this.biome.setText(biomeName);
     this.blink += dt;
+    this.drawPlates(accent, slip);
     const g = this.gripBar;
     g.clear();
-    const x = GAME_WIDTH - 88, y = 17, segs = 12, sw = 5;
-    drawPanel(g, x - 2, y - 2, segs * sw + 3, 9, { alpha: 0.6 });
-    const ratio = grip / 100;
-    const filled = Math.ceil(ratio * segs - 0.001);
+    // The grip meter: a rounded glass tube with a lit top and a shaded belly,
+    // quarter ticks, and a bright cap on the liquid.
+    const x = GAME_WIDTH - 93, y = 17, w = 84, h = 6;
+    const ratio = Math.max(0, Math.min(1, grip / gripMax));
     const color = ratio > 0.55 ? 0x8fd16a : ratio > 0.3 ? 0xf2c14e : 0xf0644b;
     const flash = gripLow && Math.floor(this.blink / (gripCritical ? 140 : 260)) % 2 === 0;
-    for (let i = 0; i < segs; i++) {
-      g.fillStyle(i < filled ? (flash ? 0xffffff : color) : 0x2e2a3c, 1);
-      g.fillRect(x + i * sw, y, sw - 1, 5);
+    g.fillStyle(0x07060c, 1).fillRect(x, y - 1, w, h + 2).fillRect(x - 1, y, w + 2, h);
+    g.fillStyle(0x221d30, 1).fillRect(x, y, w, h);
+    const fw = Math.round(w * ratio);
+    if (fw > 0) {
+      const c = flash ? 0xffffff : color;
+      g.fillStyle(darken(c, 0.62), 1).fillRect(x, y, fw, h);
+      g.fillStyle(c, 1).fillRect(x, y, fw, h - 2);
+      g.fillStyle(lerpColor(c, 0xffffff, 0.45), 1).fillRect(x + 1, y + 1, Math.max(0, fw - 2), 1);
+      g.fillStyle(lerpColor(c, 0xffffff, 0.7), 1).fillRect(x + fw - 1, y, 1, h - 1);
     }
-    this.gripValue.setText(`${Math.ceil(grip)}`).setColor(gripLow ? COLORS.red : COLORS.dim);
+    g.fillStyle(0x07060c, 0.55);
+    for (const q of [0.25, 0.5, 0.75]) g.fillRect(x + Math.round(w * q), y + h - 2, 1, 2);
+    g.fillStyle(0xffffff, 0.12).fillRect(x, y, w, 1);
+    this.gripValue.setText(`${Math.ceil(grip)}`).setColor(gripLow ? COLORS.red : COLORS.text);
     const vTarget = !this.visible ? 0 : gripCritical ? 0.55 + 0.25 * Math.sin(this.blink / 120) : gripLow ? 0.25 + 0.15 * Math.sin(this.blink / 250) : 0;
     this.vignette.setAlpha(this.vignette.alpha + (vTarget - this.vignette.alpha) * Math.min(1, dt / 200));
     if (this.streakValue >= 20) {
@@ -78,6 +92,43 @@ export class HUD {
       this.streak.setColor(FIRE[Math.floor(this.fireT / 110) % FIRE.length]);
     }
     this.updateToasts(dt);
+  }
+
+  // Dark glass plates behind the readouts, each with a thin rim in a colour
+  // that means something: the biome's accent on the left, the grip's own on the right.
+  drawPlates(accent, slip) {
+    const g = this.plates;
+    g.clear();
+    if (!this.visible) return;
+    const plate = (x, y, w, h, c) => {
+      g.fillStyle(0x000000, 0.28).fillRect(x + 2, y + h, w - 3, 1).fillRect(x + w, y + 2, 1, h - 3);
+      g.fillStyle(0x0b0912, 0.74).fillRect(x + 1, y, w - 2, h).fillRect(x, y + 1, w, h - 2);
+      g.fillStyle(0xffffff, 0.045).fillRect(x + 1, y + 1, w - 2, Math.floor(h / 2));
+      g.fillStyle(c, 0.95).fillRect(x + 3, y, w - 6, 1);
+      g.fillStyle(c, 0.4).fillRect(x + 1, y + 1, 1, 1).fillRect(x + w - 2, y + 1, 1, 1).fillRect(x, y + 3, 1, h - 6);
+    };
+    const pipW = slip === null ? 0 : 10;
+    const top = 20 + this.height.width * 2 + 6 + this.best.width;
+    const lw = Math.max(top, 8 + this.biome.width + pipW, this.next.text ? 8 + this.next.width : 0) + 7;
+    const lh = this.next.text ? 42 : 33;
+    plate(3, 3, lw, lh, accent);
+    // A thin rule between the height and the biome lines.
+    g.fillStyle(accent, 0.25).fillRect(8, 20, lw - 10, 1);
+    // One slip per biome: a gold rope coil while you still have it, a frayed red end when not.
+    if (slip !== null) {
+      const px = 8 + this.biome.width + 4, py = 24;
+      if (slip) {
+        g.fillStyle(0x7a4a1a, 1).fillRect(px, py, 6, 5);
+        g.fillStyle(0xf2c14e, 1).fillRect(px + 1, py, 4, 1).fillRect(px, py + 1, 1, 3).fillRect(px + 5, py + 1, 1, 3).fillRect(px + 1, py + 4, 4, 1).fillRect(px + 2, py + 2, 2, 1);
+      } else {
+        g.fillStyle(0xf0644b, 1).fillRect(px, py, 1, 1).fillRect(px + 1, py + 1, 1, 1).fillRect(px + 2, py + 2, 1, 1).fillRect(px + 3, py + 3, 1, 1).fillRect(px + 4, py + 4, 1, 1);
+        g.fillRect(px + 4, py, 1, 1).fillRect(px + 3, py + 1, 1, 1).fillRect(px + 1, py + 3, 1, 1).fillRect(px, py + 4, 1, 1);
+      }
+    }
+    // Gems: a small pill under the plate.
+    plate(3, 45, 20 + this.gemText.width, 12, 0x9fe8ff);
+    // Grip, top right.
+    plate(GAME_WIDTH - 98, 3, 95, 23, 0x8fd16a);
   }
 
   // ---------- storm meter ----------
@@ -228,7 +279,21 @@ export class HUD {
     const drawLines = () => {
       lines.clear();
       const w = Math.round(prog.w), cx = GAME_WIDTH / 2;
-      for (const y of [CARD_Y, CARD_Y + 18]) {
+      // A ribbon: a dark band under the name and its subtitle, notched tails
+      // folding behind at both ends, and gold rules along its edges.
+      const y0 = CARD_Y - 2, y1 = CARD_Y + 31;
+      if (w > 10) {
+        const tail = Math.min(14, w / 4);
+        for (const sx of [-1, 1]) {
+          const ex = cx + sx * (w + 2);
+          const x0 = sx < 0 ? ex - tail : ex;
+          lines.fillStyle(0x07060c, 0.85).fillRect(x0, y0 + 5, tail, y1 - y0 - 2);
+          lines.fillStyle(0x3a2a10, 1).fillRect(sx < 0 ? x0 : x0 + tail - 1, y0 + 5, 1, y1 - y0 - 2);
+        }
+        lines.fillStyle(0x0b0912, 0.82).fillRect(cx - w - 2, y0, w * 2 + 4, y1 - y0);
+        lines.fillStyle(0xffffff, 0.05).fillRect(cx - w - 2, y0 + 1, w * 2 + 4, Math.floor((y1 - y0) / 2));
+      }
+      for (const y of [y0, y1]) {
         lines.fillStyle(0x16141f, 0.6); lines.fillRect(cx - w, y + 1, w * 2, 1);
         lines.fillStyle(0xf2c14e, 1); lines.fillRect(cx - w, y, w * 2, 1);
         if (w > 6) { lines.fillRect(cx - w - 3, y, 2, 1); lines.fillRect(cx + w + 1, y, 2, 1); }

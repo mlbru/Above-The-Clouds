@@ -175,6 +175,8 @@ export class ClimbScene extends Phaser.Scene {
 
     const start = this.mountain.getLevel(0).nodes[0];
     this.climber = new Climber(this, start.x, start.y);
+    // The climber's shadow on the rock, cast away from the sun (see updateLight()).
+    this.climberShadow = this.add.sprite(start.x, start.y, 'climber', 'stand').setDepth(DEPTH.climber - 1).setTintFill(0x07040e).setAlpha(0);
     this.outfit = new OutfitFx(this, this.climber);
     this.coat = new WeatherCoat(this, this.climber);
     this.lastBeat = null;
@@ -2949,6 +2951,7 @@ export class ClimbScene extends Phaser.Scene {
     this.lightOverlay.fillColor = light;
     this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7));
     this.wall.night = Math.max(day.night, dark, storm * 0.5);
+    this.updateLight(day, dark, storm);
     this.atmos.update(dt, { day, biome, dim: Math.max(whiteout, dark, storm, biome.overcast || 0) });
     const eye = this.mechanics ? this.mechanics.get('dragonEye') : null;
     this.updateDragon(dt, eye, day);
@@ -2995,7 +2998,11 @@ export class ClimbScene extends Phaser.Scene {
       heightM: climberAlt,
       best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.recordBest,
       modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
-      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : `${biome.name}  ${this.run.biomeFalls[biomeStretchAt(climberAlt)] ? 'NO SLIPS LEFT' : '1 SLIP LEFT'}`,
+      biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : biome.name,
+      // The biome's one slip, shown as a little rope coil (gone: a frayed end).
+      slip: this.director || this.expedition ? null : !this.run.biomeFalls[biomeStretchAt(climberAlt)],
+      accent: biome.accentC,
+      gripMax: this.grip.max,
       ...this.nextBiomeLine(climberAlt),
       grip: this.grip.value,
       gripLow: this.grip.isLow && this.state !== STATE.RESTING,
@@ -3026,7 +3033,8 @@ export class ClimbScene extends Phaser.Scene {
     if (this.inPanorama) look = -GAME_HEIGHT * 0.55;
     else if (this.state === STATE.VIEWING) look = -150;
     else if (this.state === STATE.RESTING && this.clock < this.revealUntil) look = -60;
-    else if (this.state === STATE.RESTING) look = this.atCamp ? 0 : 34;
+    // Resting: lift the view so the climber stands clear above the ledge sign.
+    else if (this.state === STATE.RESTING) look = this.atCamp ? 0 : 44;
     else if (this.state === STATE.ROUTE_SELECT || this.state === STATE.CLIMBING_COMBO) look = -10;
     this.lookOffset += (look - this.lookOffset) * (1 - Math.exp((-dt / 1000) * 1.8));
     const target = focusY - GAME_HEIGHT * CAMERA_ANCHOR + this.lookOffset;
@@ -3035,6 +3043,35 @@ export class ClimbScene extends Phaser.Scene {
     // In portrait the screen is narrower than the mountain: follow sideways too.
     this.camX += (camXFor(this.climber.x) - this.camX) * (1 - Math.exp((-dt / 1000) * k));
     this.cam.setScroll(Math.round(this.camX), Math.round(this.camY));
+  }
+
+  // Light of the hour on the scene: the wall's rim catches the sun on its
+  // sunward edge (warm at dawn and dusk, cool moonlight at night) and the
+  // climber casts a soft shadow on the rock away from the light.
+  updateLight(day, dark, storm) {
+    const dim = (1 - dark * 0.8) * (1 - storm * 0.6);
+    let side = 'l', strength = 0, color = 0xffffff;
+    if (day.sun) {
+      strength = Math.max(0, Math.min(1, (150 - day.sun.y) / 120));
+      side = day.sun.x < 240 ? 'l' : 'r';
+      // Low sun: deep gold; high sun: almost white.
+      color = lerpColor(lerpColor(day.light, 0xffb060, 0.55), 0xfff4e0, strength);
+      strength = 0.25 + strength * 0.5;
+    } else if (day.moon) {
+      side = day.moon.x < 240 ? 'l' : 'r';
+      strength = 0.32 * day.night;
+      color = 0x9fb8ff;
+    }
+    strength *= dim;
+    const other = side === 'l' ? 'r' : 'l';
+    this.wall.setRim({ [side]: [color, strength], [other]: [lerpColor(color, 0x6a7ab8, 0.6), strength * 0.18] });
+    // The shadow: a dark copy of the climber, a few pixels off on the far side.
+    const sh = this.climberShadow, sp = this.climber.sprite;
+    if (!sh) return;
+    const dir = side === 'l' ? 1 : -1;
+    sh.setTexture(sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY);
+    sh.setPosition(sp.x + dir * 4, sp.y + 3).setScale(sp.scaleX, sp.scaleY).setFlipX(sp.flipX).setAngle(sp.angle);
+    sh.setVisible(sp.visible).setAlpha(sp.alpha * (0.22 + 0.3 * strength));
   }
 
   chalkTint() {

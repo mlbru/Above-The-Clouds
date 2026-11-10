@@ -168,21 +168,55 @@ function hutGrid(biome) {
   return g;
 }
 
-// A pine bough hanging into the bottom corner of the view (foreground depth).
+// A pine bough reaching into the bottom corner of the view (foreground depth):
+// a crooked brown branch with side twigs, dense fans of needles that are dark
+// underneath and catch the light at their tips, and a couple of cones.
 function branchGrid() {
-  const g = new PixelGrid(80, 40);
-  const D = 0x0c1a14, M = 0x13281c, L = 0x1f3e2a;
-  // Thick fans of needles above and below the bough, densest near the trunk.
-  for (let i = 0; i < 64; i++) {
-    const t = i / 64, bx = t * 76, by = 34 - t * 24;
-    const len = 15 - t * 9;
+  const W = 96, H = 48;
+  const g = new PixelGrid(W, H);
+  const DK = 0x0e2416, MD = 0x18391f, LT = 0x275a2c, TIP = 0x4a8a3c, SUN = 0x7ab850;
+  const at = (t) => [t * 92, 44 - t * 30 - Math.sin(t * 3.2) * 3];
+  // Needles: fan out from the branch and from each side twig.
+  const fan = (bx, by, len, dirUp, k0) => {
     for (let k = 1; k < len; k++) {
-      const up = [bx + k * 0.45, by - k * 0.95], dn = [bx + k * 0.55, by + k * 0.6];
-      g.set(up[0], up[1], k > len - 3 ? L : M); g.set(up[0] + 1, up[1], D);
-      g.set(dn[0], dn[1], k > len - 3 ? M : D); g.set(dn[0] + 1, dn[1], D);
+      const f = k / len;
+      const x = bx + k * (dirUp ? 0.35 : 0.5), y = by + (dirUp ? -k * 0.95 : k * 0.62);
+      const c = f > 0.78 ? (dirUp ? TIP : LT) : f > 0.45 ? (dirUp ? LT : MD) : MD;
+      g.set(x, y, c);
+      g.set(x + 1, y, dirUp ? MD : DK);
+      if (dirUp && f > 0.86 && (k + k0) % 3 === 0) g.set(x, y - 1, SUN);
+    }
+  };
+  for (let i = 0; i < 90; i++) {
+    const t = i / 90;
+    const [bx, by] = at(t);
+    const len = 17 - t * 10 + ((i * 7) % 4);
+    fan(bx, by, len, true, i);
+    fan(bx, by, len * 0.8, false, i);
+  }
+  // Side twigs with their own needle tufts.
+  for (const [t0, dx, dy] of [[0.28, 10, -12], [0.5, 9, 9], [0.7, 8, -9]]) {
+    const [x0, y0] = at(t0);
+    g.line(x0, y0, x0 + dx, y0 + dy, 0x3a2616);
+    for (let i = 0; i < 10; i++) {
+      const u = i / 10;
+      fan(x0 + dx * u, y0 + dy * u, 7 - u * 4, dy < 0, i);
     }
   }
-  g.line(0, 34, 78, 10, 0x2a1e16, 2);
+  // The branch itself on top, lit along its upper side.
+  for (let i = 0; i <= 92; i++) {
+    const [x, y] = at(i / 92);
+    const thick = i < 30 ? 3 : i < 65 ? 2 : 1;
+    for (let k = 0; k < thick; k++) g.set(x, y + k, k === 0 ? 0x6a4a2a : 0x3a2616);
+  }
+  // Two hanging cones.
+  for (const [t, len] of [[0.36, 7], [0.58, 6]]) {
+    const [x, y] = at(t);
+    for (let k = 0; k < len; k++) {
+      const w = k < 2 ? 1 : k < len - 2 ? 2 : 1;
+      for (let j = -w + 1; j < w; j++) g.set(x + j, y + 2 + k, (k + j) % 2 ? 0x5a3a20 : 0x8a5a30);
+    }
+  }
   return g;
 }
 

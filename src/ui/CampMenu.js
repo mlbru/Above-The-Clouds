@@ -85,6 +85,9 @@ export class CampMenu {
       a.shop && sp.trader && { id: 'shop', label: 'SHOP', x: sp.trader.x, y: sp.trader.y - 40, badge: `◆${prog.gems}`, go: a.shop },
       a.wardrobe && sp.tent && { id: 'wardrobe', label: 'WARDROBE', x: sp.tent.x, y: sp.tent.y - 22, badge: fresh ? `${fresh} NEW` : null, badgeNew: !!fresh, go: a.wardrobe },
     ].filter(Boolean).sort((p, q) => p.x - q.x);
+    // Each place's name sits on a small dark tag so it reads over rock and sky.
+    this.tagG = world(sc.add.graphics());
+    this.tagG.setDepth(DEPTH.hud - 1);
     this.spotObjs = this.spots.map((s, i) => {
       const label = world(new PixelText(sc, s.x, s.y, s.label, { color: '#ffffff', shadow: '#16141f' }).setOrigin(0.5, 1));
       const badge = s.badge ? world(new PixelText(sc, s.x, s.y + 1, s.badge, { color: s.badgeNew ? '#ff7ab8' : '#9fe8ff', shadow: '#16141f' }).setOrigin(0.5, 0)) : null;
@@ -123,8 +126,34 @@ export class CampMenu {
       o.label.setScale(sel ? 2 : 1).setColor(sel ? COLORS.gold : '#ffffff').setAlpha(sel ? 1 : 0.85).setDepth(DEPTH.hud + (sel ? 2 : 0));
       if (o.badge) o.badge.setDepth(DEPTH.hud + (sel ? 2 : 0));
     });
+    this.drawTags();
     const mode = this.spotId === 'climb' && this.opts.mode ? this.opts.mode() : null;
     this.modeText.setText(mode ? mode.text : '').setColor(mode ? mode.color : '#ffffff');
+  }
+
+  // The tags: glassy dark plates, the chosen one with a gold rim and a little
+  // pointer under it towards the place itself.
+  drawTags() {
+    const g = this.tagG;
+    if (!g) return;
+    g.clear();
+    this.spotObjs.forEach((o, k) => {
+      const sel = k === this.spot;
+      const l = o.label, b = o.badge;
+      const w = Math.max(l.displayWidth, b ? b.displayWidth : 0) + (sel ? 10 : 7);
+      const top = l.y - l.displayHeight - (sel ? 4 : 3);
+      const bottom = (b ? b.y + b.displayHeight : l.y) + (sel ? 3 : 2);
+      const x = Math.round(l.x - w / 2), y = Math.round(top), h = Math.round(bottom - top);
+      g.fillStyle(0x000000, 0.25).fillRect(x + 1, y + h, w - 1, 1);
+      g.fillStyle(0x0b0912, sel ? 0.78 : 0.55).fillRect(x + 1, y, w - 2, h).fillRect(x, y + 1, w, h - 2);
+      g.fillStyle(0xffffff, 0.05).fillRect(x + 1, y + 1, w - 2, Math.floor(h / 2));
+      if (sel) {
+        g.fillStyle(0xf2c14e, 1).fillRect(x + 2, y, w - 4, 1).fillRect(x + 2, y + h - 1, w - 4, 1);
+        g.fillStyle(0xf2c14e, 0.5).fillRect(x, y + 2, 1, h - 4).fillRect(x + w - 1, y + 2, 1, h - 4);
+        const cx = Math.round(l.x);
+        g.fillStyle(0x0b0912, 0.78).fillRect(cx - 2, y + h, 5, 1).fillRect(cx - 1, y + h + 1, 3, 1).fillRect(cx, y + h + 2, 1, 1);
+      }
+    });
   }
 
   activate() {

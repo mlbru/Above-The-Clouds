@@ -694,22 +694,55 @@ function paintWaterfallEnds(scene) {
 // Big dark outcrop for the foreground parallax layer, with a lit rim in the
 // biome's accent colour (grass, snow or crystal).
 function foregroundRock(biome, seed) {
+  // A crag right in front of the camera: dark because it is in its own
+  // shadow, but still rock. Layered strata, a rim of sky light along the
+  // edge that faces the wall, cracks, and moss or snow on every outward step.
   const w = 110, h = 220;
   const g = new PixelGrid(w, h);
   const noise = makeNoise2D(seed);
-  const body = darken(biome.rock[0], 0.5), rim = darken(biome.rock[1], 0.75);
+  const cool = 0x1c2238;
+  const shade = [0, 1, 2].map((i) => lerpColor(darken(biome.rock[i], 0.42), cool, 0.25));
+  const rimC = lerpColor(darken(biome.rock[3], 0.72), 0xbfd4ff, 0.12);
+  const rim2 = lerpColor(darken(biome.rock[2], 0.62), 0xbfd4ff, 0.08);
+  const edges = [];
   for (let y = 0; y < h; y++) {
     const t = y / h;
-    const edge = Math.round(30 + Math.sin(t * Math.PI) * 40 + (noise(y * 0.03, 1) - 0.5) * 40 + (noise(y * 0.15, 4) - 0.5) * 6);
-    for (let x = 0; x < edge; x++) g.set(x, y, body);
-    g.set(edge - 1, y, rim);
-    if (noise(y * 0.08, 7) > 0.55) g.set(edge - 2, y, rim);
+    edges[y] = Math.round(30 + Math.sin(t * Math.PI) * 40 + (noise(y * 0.03, 1) - 0.5) * 40 + (noise(y * 0.15, 4) - 0.5) * 6);
   }
-  // Sparse tufts / snow caps where the silhouette steps outward.
+  for (let y = 0; y < h; y++) {
+    const edge = edges[y];
+    for (let x = 0; x < edge; x++) {
+      // Strata: wavy bands, broken up by a coarse noise and dithered softly.
+      const band = noise(x * 0.04, y * 0.11 + noise(x * 0.02, y * 0.02) * 2);
+      const v = band * 0.7 + noise(x * 0.12, y * 0.12) * 0.3 + (x / edge) * 0.25;
+      const idx = Math.max(0, Math.min(2, Math.floor(v * 2.4 + (bayer(x, y) - 0.5) * 0.5)));
+      g.set(x, y, shade[idx]);
+    }
+    // Sky light on the edge facing the wall, two pixels deep where the face turns up.
+    const up = y > 0 && edges[y - 1] < edge;
+    g.set(edge - 1, y, rimC);
+    if (up || noise(y * 0.08, 7) > 0.5) g.set(edge - 2, y, rim2);
+    if (up) g.set(edge - 3, y, rim2);
+  }
+  // Cracks running down into the shadow.
+  for (let k = 0; k < 5; k++) {
+    let x = 6 + ((seed * 13 + k * 29) % 50), y = (k * 41 + seed) % (h - 40);
+    for (let s = 0; s < 26; s++) {
+      if (x < edges[y] - 4) { g.set(x, y, darken(shade[0], 0.6)); if (x + 1 < edges[y] - 4) g.set(x + 1, y, shade[2]); }
+      y++; x += Math.round((noise(s * 0.3, k + 3) - 0.5) * 2);
+      if (y >= h) break;
+    }
+  }
+  // Moss, grass or snow on every step where the outline juts out.
+  const cap = biome.weather && biome.weather.snow > 0.3 ? [0xeef4ff, 0xc8d4ea] : [biome.accentC, biome.accentB];
   for (let y = 2; y < h; y++) {
-    let ex = 0; while (ex < w && g.get(ex, y) !== null) ex++;
-    let exUp = 0; while (exUp < w && g.get(exUp, y - 2) !== null) exUp++;
-    if (ex - exUp >= 2 && noise(y * 0.2, 9) > 0.4) { g.set(ex - 1, y - 1, biome.accentB); g.set(ex - 2, y - 1, biome.accentA); g.set(ex, y - 1, biome.accentA); }
+    const ex = edges[y], exUp = edges[y - 2];
+    if (ex - exUp >= 2 && noise(y * 0.2, 9) > 0.3) {
+      for (let x = exUp - 2; x < ex; x++) {
+        g.set(x, y - 1, darken(cap[1], 0.55));
+        if ((x + y) % 3) g.set(x, y - 2, darken(cap[0], 0.6));
+      }
+    }
   }
   return g;
 }
