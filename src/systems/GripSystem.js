@@ -8,6 +8,11 @@ export class GripSystem {
     this.max = balance.grip.max;
     this.value = balance.grip.start;
     this.hangTime = 0;
+    // Trail Boons can change these for the rest of a run (null: the balance value).
+    this.graceSec = null;
+    this.looseMul = null;
+    this.goodFactor = 1;
+    this.noFlawless = false;
   }
   get ratio() { return this.value / this.max; }
   get isLow() { return this.value <= this.b.grip.lowThreshold; }
@@ -23,8 +28,8 @@ export class GripSystem {
     const base = (route.gripCost / route.inputs) * this.mode.costScale;
     const n = this.b.notes;
     if (result === RESULT.PERFECT) return base * this.mode.perfectCostFactor;
-    if (result === RESULT.GOOD) return base * n.goodCostFactor;
-    const mult = route.hazard === 'loose' ? this.b.hazards.loose.missMultiplier : 1;
+    if (result === RESULT.GOOD) return base * n.goodCostFactor * this.goodFactor;
+    const mult = route.hazard === 'loose' ? (this.looseMul ?? this.b.hazards.loose.missMultiplier) : 1;
     return base + n.missExtraCost * mult * this.mode.costScale;
   }
 
@@ -35,7 +40,7 @@ export class GripSystem {
   // Applied once the combo finishes. Returns the delta applied.
   applyComboEnd(summary, succeeded) {
     let delta = 0;
-    if (summary.allPerfect) delta += this.mode.perfectComboBonus;
+    if (summary.allPerfect && !this.noFlawless) delta += this.mode.perfectComboBonus;
     if (!succeeded) delta -= this.b.combo.failExtraCost;
     this.change(delta);
     return delta;
@@ -50,7 +55,7 @@ export class GripSystem {
       if (this.value < g.jugRecoverCap) this.set(Math.min(g.jugRecoverCap, this.value + g.jugRecoverPerSec * dtSec));
       return this.value;
     }
-    if (noGrace || this.hangTime > g.hangGraceSec) this.change(-g.hangDrainPerSec * drainMultiplier * this.mode.drainScale * dtSec);
+    if (noGrace || this.hangTime > (this.graceSec ?? g.hangGraceSec)) this.change(-g.hangDrainPerSec * drainMultiplier * this.mode.drainScale * dtSec);
     return this.value;
   }
 

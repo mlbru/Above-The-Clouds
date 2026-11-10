@@ -1,3 +1,5 @@
+import { hashInts } from '../utils/seededRandom.js';
+
 // The secret level. Very rarely a biome you climb into turns out to be the
 // Golden City: everything is made of gold except the diamonds, which sit on
 // almost every hold. It has its own song and lasts until you leave that biome.
@@ -6,7 +8,18 @@ export const GOLDEN_CITY = {
   // Chance per new biome you climb into (Green Rise never: you start there).
   chance: 1 / 150,
   diamondChance: 0.8,
+  // Salt for the seeded roll, so the city never lines up with other seeded rolls.
+  salt: 0x601dc17,
 };
+
+// Is the biome stretch starting at `fromMeters` the Golden City on this seed?
+// Pure and seeded: the same mountain always hides it in the same place, so
+// Bram can forecast it and everyone on a Daily Climb meets it together.
+export function goldenCityAt(seed, fromMeters, chance = GOLDEN_CITY.chance) {
+  if (fromMeters <= 0) return false;
+  const h = hashInts(seed | 0, Math.round(fromMeters * 10), GOLDEN_CITY.salt);
+  return h / 4294967296 < chance;
+}
 
 // Semitones above D4. A slow, mysterious tune in D Hijaz (D Eb F# G A Bb C):
 // eight bars of melody over a drone, a chord per bar and a frame drum.

@@ -144,4 +144,6 @@ export const ROUTE_COLORS = {
   normal: 0xf2c14e,
   risky: 0xf0644b,
   ledge: 0x9fd8ff,
+  // WILD ROUTE (a Trail Boon): the fourth route.
+  wild: 0xc88aff,
 };

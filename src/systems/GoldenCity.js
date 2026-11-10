@@ -1,7 +1,7 @@
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH } from '../config/gameConfig.js';
 import { COLORS } from '../ui/PixelText.js';
 import { GEMS } from '../data/gems.js';
-import { GOLDEN_CITY, GOLDEN_CITY_MUSIC, cityGem } from '../data/goldenCity.js';
+import { GOLDEN_CITY, GOLDEN_CITY_MUSIC, cityGem, goldenCityAt } from '../data/goldenCity.js';
 import { Audio } from './AudioSystem.js';
 
 const GOLDS = [0xfff1a0, 0xffd24a, 0xf2a62a, 0xffe27a, 0xd88a1a, 0xffffff];
@@ -19,8 +19,11 @@ export class GoldenCity {
     this.sparkT = 0;
   }
 
-  // Rolled once for each biome you enter. `forced` is the GOLDENCITY test code.
-  roll(forced = false) { return forced || Math.random() < GOLDEN_CITY.chance; }
+  // Decided by the seed for each biome stretch you enter (see goldenCityAt).
+  // `forced` is the GOLDENCITY test code.
+  roll(seed, stretchKey, forced = false) {
+    return forced || goldenCityAt(seed, Number(String(stretchKey).split('@')[1]) || 0);
+  }
 
   routeGem(route, taken) { return cityGem(route, taken, Math.random); }
 

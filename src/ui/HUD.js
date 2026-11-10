@@ -136,6 +136,31 @@ export class HUD {
     });
   }
 
+  // Trail Boons: your gifts as small framed emblems on the left, under the gear.
+  setBoons(list) {
+    (this.boonIcons || []).forEach((o) => o.destroy());
+    this.root = this.root.filter((o) => !(this.boonIcons || []).includes(o));
+    this.boonIcons = [];
+    const g = this.scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud).setVisible(this.visible);
+    this.boonIcons.push(g);
+    list.forEach((b, i) => {
+      // Left column, under the gems and the gear row.
+      const x = 15 + i * 17, y = 80;
+      g.fillStyle(0x0c0a12, 0.85).fillRect(x - 8, y - 8, 16, 16);
+      g.fillStyle(b.color, 0.9).fillRect(x - 8, y - 8, 16, 1).fillRect(x - 8, y + 7, 16, 1);
+      g.fillStyle(b.color, 0.45).fillRect(x - 8, y - 7, 1, 14).fillRect(x + 7, y - 7, 1, 14);
+      const img = this.scene.add.image(x, y, b.icon).setScrollFactor(0).setDepth(DEPTH.hud).setVisible(this.visible);
+      this.boonIcons.push(img);
+      // A new gift pops in.
+      if (i === list.length - 1 && this.lastBoonCount !== undefined && list.length > this.lastBoonCount) {
+        img.setScale(2.4);
+        this.scene.tweens.add({ targets: img, scale: 1, duration: 360, ease: 'Back.easeOut' });
+      }
+    });
+    this.lastBoonCount = list.length;
+    this.root.push(...this.boonIcons);
+  }
+
   setVisible(v) {
     this.visible = v;
     this.root.forEach((o) => o.setVisible(v));

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ProgressionSystem } from '../systems/ProgressionSystem.js';
 import { buildAllTextures } from '../render/textures.js';
+import { buildBoonTextures } from '../render/boonArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { AUDIO_MANIFEST } from '../data/audioManifest.js';
 import { PixelText, COLORS } from '../ui/PixelText.js';
@@ -16,6 +17,7 @@ export class BootScene extends Phaser.Scene {
     // Let the loading text render before the (synchronous) texture generation.
     this.time.delayedCall(30, () => {
       buildAllTextures(this, prog.data.look);
+      buildBoonTextures(this);
       Audio.setSampleSource(this.sound, this.cache.audio);
       // Recorded sounds; missing or broken files keep the synth sound.
       Audio.loadSamples(AUDIO_MANIFEST);

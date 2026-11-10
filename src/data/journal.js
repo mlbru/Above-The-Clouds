@@ -12,6 +12,7 @@ import { holdKey } from '../render/textures.js';
 import { LOGBOOK_PAGES, STAMPS, stampProgress } from './logbook.js';
 import { MASTERY_BIOMES, STARS, starText, starLabel } from './mastery.js';
 import { COSMETICS } from './cosmetics.js';
+import { BOONS, SYNERGIES, SOUVENIR_MECHANICS, GROUPS, boonCard } from './boons.js';
 
 const seenTip = (id) => (p) => p.data.tipsSeen.includes(id);
 const found = (id) => (p) => p.data.discoveries.includes(id);
@@ -161,6 +162,38 @@ const mastery = MASTERY_BIOMES.map((id) => {
   };
 });
 
+// Trail Boons: every gift a cairn can offer, its synergies and its souvenirs.
+const seenBoon = (id) => (p) => Array.isArray(p.data.boonsSeen) && p.data.boonsSeen.includes(id);
+const boons = [
+  ...BOONS.map((b) => ({
+    id: `boon-${b.id}`, name: b.name,
+    text: `GIFT: ${b.gift} PRICE: ${b.price}`,
+    hint: b.group === 'legendary' ? 'A RARE GOLD STONE AT A CAIRN.' : 'TAKE IT FROM A CAIRN ON A SHRINE LEDGE.',
+    pic: { key: `boon_${b.id}`, scale: 3 },
+    color: GROUPS[b.group].color,
+    known: seenBoon(b.id),
+    stat: () => GROUPS[b.group].label,
+  })),
+  ...SYNERGIES.map((s) => ({
+    id: `synergy-${s.id}`, name: s.name,
+    text: `${boonCard(s.pair[0]).name} + ${boonCard(s.pair[1]).name}: ${s.text}`,
+    hint: 'HOLD TWO GIFTS THAT BELONG TOGETHER.',
+    pic: { key: `boon_${s.pair[0]}`, scale: 3 },
+    color: 0x7cf0d8,
+    known: seenBoon(`syn:${s.id}`),
+    stat: () => 'SYNERGY',
+  })),
+  ...Object.entries(SOUVENIR_MECHANICS).map(([biome, s]) => ({
+    id: `souvenir-${biome}`, name: s.name,
+    text: `A SOUVENIR OF ${BIOMES[biome].name}. ${s.gift} EVERY GEM IS WORTH 50% MORE.`,
+    hint: `FROM A CAIRN IN ${BIOMES[biome].name}.`,
+    pic: { key: `boon_souvenir:${biome}`, scale: 3 },
+    color: GROUPS.souvenir.color,
+    known: seenBoon(`souvenir:${biome}`),
+    stat: () => 'SOUVENIR',
+  })),
+];
+
 // The OPENBOOK code (data.journalAll) turns every card face up. It gives
 // nothing else: no gear, perks, gems or stamps paid out.
 const openable = (e) => ({ ...e, found: e.known, known: (p) => !!p.data.journalAll || e.known(p) });
@@ -174,6 +207,7 @@ export const JOURNAL_CHAPTERS = [
   { id: 'wonders', title: 'WONDERS', color: 0xb48ae0, entries: wonders, note: 'THIS IS WHY WE CLIMB. WRITE DOWN EVERYTHING YOU SEE.' },
   { id: 'stamps', title: 'STAMPS', color: 0xf2c14e, entries: stamps, note: 'DO THESE AND I WILL PAY YOU IN GEMS.' },
   { id: 'mastery', title: 'MASTERY', color: 0xffb43c, entries: mastery, note: 'KNOW A PART OF THE MOUNTAIN SO WELL IT CANNOT SURPRISE YOU.' },
+  { id: 'boons', title: 'GIFTS', color: 0x9fd8ff, entries: boons, note: 'THE OLD CAIRNS STILL GIVE. BUT NOTHING ON THIS MOUNTAIN IS FREE.' },
 ].map((c) => ({ ...c, entries: c.entries.map(openable) }));
 
 // The entries a chapter shows for this save (hidden ones only once found).

@@ -106,6 +106,13 @@ export class ComboPrompt {
     this.glow = this.add.image(0, TRACK_Y, 'glow_small').setScrollFactor(0).setDepth(DEPTH.hud + 1).setBlendMode('ADD').setTint(0xf2c14e).setScale(1.3).setVisible(false);
     // Biome mechanics (whiteout) can make notes appear only shortly before the line.
     this.revealMs = (route.mods && route.mods.revealMs) || 0;
+    // Trail Boons: SONGBIRD lets notes in later, CAT'S EYES keeps faded notes faintly lit.
+    const boon = (this.scene.boonView && this.scene.boonView()) || {};
+    this.minAlpha = boon.minAlpha || 0;
+    if (boon.lateReveal && boon.lateReveal < 1) {
+      const late = Math.round(((TRACK_X + TRACK_W - HIT_X) / PX_PER_MS) * boon.lateReveal);
+      if (!this.revealMs || late < this.revealMs) this.revealMs = late;
+    }
     const n = combo.notes.length;
     const seqX = Math.round(GAME_WIDTH / 2 - (n * 10) / 2);
     combo.notes.forEach((note, i) => {
@@ -276,6 +283,7 @@ export class ComboPrompt {
         if (this.revealMs) alpha *= Math.max(0, Math.min(1, (this.revealMs - (note.time - now)) / 160));
         // Darkness: every note is a faint shape that flashes up on the beat.
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
+        if (this.minAlpha && (note.hidden || this.revealMs || this.dark)) alpha = Math.max(alpha, this.minAlpha * (isCur ? 1 : 0.8));
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
         const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? 0xffa8ec : MIRROR_TINT) : note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : isCur ? 0xf2c14e : 0xf4efe4;
         it.big.setTint(tint);

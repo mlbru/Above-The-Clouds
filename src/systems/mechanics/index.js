@@ -20,13 +20,16 @@ export class BiomeMechanics {
     this.list = Object.values(BIOMES)
       .filter((b) => b.mechanic)
       .map((b) => ({ biome: b.id, id: b.mechanic, impl: new MECHANICS[b.mechanic](rng) }));
+    // Trail Boons: souvenirs carry a biome's rule up the mountain (biome ids).
+    this.carried = new Set();
   }
 
   // mix: biomeMixAt() at the climber. Returns [{ id, event }] for phase changes.
   update(dt, mix) {
     const events = [];
     for (const m of this.list) {
-      const w = (mix.a.id === m.biome ? 1 - mix.t : 0) + (mix.b.id === m.biome ? mix.t : 0);
+      const here = (mix.a.id === m.biome ? 1 - mix.t : 0) + (mix.b.id === m.biome ? mix.t : 0);
+      const w = this.carried.has(m.biome) ? 1 : here;
       m.w = w;
       const event = m.impl.update(dt, w);
       if (event) events.push({ id: m.id, event });

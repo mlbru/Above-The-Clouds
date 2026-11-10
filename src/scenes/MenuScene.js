@@ -45,8 +45,11 @@ export class MenuScene extends Phaser.Scene {
     buildClimberTexture(this, this.prog.data.look);
     // The title camp is the start of the next run: same seed, same mountain,
     // so picking CLIMB carries straight on from what you see here.
-    this.seed = this.registry.get('nextSeed') ?? urlSeed() ?? randomSeed();
+    // The next mountain is saved, so reloading at camp shows the same one; it
+    // only moves on once a run has really left base camp (ClimbScene).
+    this.seed = this.registry.get('nextSeed') ?? urlSeed() ?? this.prog.data.nextSeed ?? randomSeed();
     this.registry.set('nextSeed', this.seed);
+    if (this.prog.data.nextSeed !== this.seed && urlSeed() === null) { this.prog.data.nextSeed = this.seed; this.prog.save(); }
     this.starting = false;
     this.season = currentSeason();
     this.campMenu = null;

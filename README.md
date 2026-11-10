@@ -4,7 +4,7 @@
 wall, then climb it by pressing a short run of directions on the beat. Grip is your only
 resource, the mountain never ends, and every part of it plays by its own rules.
 
-**[▶ Play in your browser](https://mlbru.github.io/Above-The-Clouds/)** · keyboard, mouse or touch · no install
+**[▶ Play in your browser](https://mlbru.github.io/Above-The-Clouds/)** · keyboard, mouse, touch or controller · no install
 
 ![Title screen: the climber at base camp below the wall](docs/screenshots/title.png)
 
@@ -52,7 +52,7 @@ npm run build      # production build in dist/
 node tests/balanceSim.mjs   # Monte-Carlo balance check
 ```
 
-URL flags: `?seed=123` (reproducible mountain), `?play` (skip title),
+URL flags: `?seed=123` (reproducible mountain), `?boons=echo,magpie` (dev server: start holding these Trail Boons), `?play` (skip title),
 `?timer` (setTimeout game loop for background tabs), `?harness` (loads the in-browser
 integration tests; run `await __runHarness()` in the console), `?at=1450` (dev server only:
 a test run starting at that height, nothing saved), `?touch` (swipe controls on a computer),
@@ -270,6 +270,32 @@ wax seal slams onto the card; he has a line for every dare (`src/scenes/DaresSce
 Each dare multiplies the gems you earn by 1.25. A dared run keeps its own record per set of
 dares and mode, never touches the mode records and is not sent to the leaderboard. Every dare
 has a stamp for reaching 500 m with it on (`src/data/dares.js`).
+
+## Trail Boons
+
+Every Normal endless run has **three shrine ledges**, one in each band of biomes (the 2nd-3rd,
+4th-6th and 7th-9th biome from where the run starts). A cairn with a glowing rune marks each one
+on the wall. Arrive (or land back on it) and **THE CAIRN** opens: three standing stones rise
+from the mist, each a gift and its price. Take one and the others crumble; the emblem flies into
+its socket. One reroll per shrine for 60 gems ("CAST"), or walk on with nothing (asked twice).
+
+- 17 gifts in four groups (grip, rhythm, route, carry-over) plus three gold **legendaries**
+  (about one offer in ten): PHOENIX, SECOND ROPE, WILD ROUTE. Every gift has a price.
+- **Souvenirs**: one stone at every cairn is the biome's own twist to take along (rockfall,
+  whiteouts, the swarm...). It follows you up the mountain; every gem is worth 50% more.
+- **Synergies**: five pairs complete a bonus (HOARD SONG, HIGH ROLLER, TAILWIND, MOON SONG,
+  SECOND WIND). Holding one half makes the other twice as likely to be offered.
+- Shrines and offers come from the run's seed (`src/data/boons.js`), so the same mountain
+  always offers the same stones. Gifts never apply in Hard, Summit, dared runs or expeditions.
+- Your gifts show as small emblems on the left of the HUD and in the run summary; the
+  Collection has a GIFTS chapter, and the logbook five new stamps.
+- Code: rules `src/data/boons.js`, the climb `src/scenes/climbBoons.js`, the cairn screen
+  `src/scenes/ShrineScene.js`, art `src/render/boonArt.js`. Balance:
+  `node tests/balanceSim.mjs --boons` (every gift must stay under +15% for every player type).
+- Dev server only: `?boons=echo,magpie` starts a run holding those gifts.
+
+The Golden City is also seeded now: the same mountain always hides it in the same biome. The
+next mountain is saved, so reloading at base camp shows the same one until a run sets off.
 
 ## Look and feel settings
 

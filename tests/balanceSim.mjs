@@ -68,7 +68,7 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
   };
   enterPass(0);
   const mrng = new SeededRandom(seed * 7 + 1);
-  // One free fall per biome; a second fall in the same biome ends the run.
+  // One slip per biome; a second slip in the same biome ends the run.
   const biomeFalls = {};
   const RULE = !process.argv.includes('--old-falls');
   while (moves++ < maxMoves) {
@@ -154,7 +154,10 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
       pass.slipped = true;
       const rec = Math.abs(gauss() * sd) <= BALANCE.slip.goodMs * modeCfg.catchScale && Math.random() > wrong;
       if (modeCfg.permadeath && !rec) { falls++; break; }
-      if (RULE && !rec) {
+      // The game's rule: one slip per biome. A second slip in the same biome
+      // ends the run, whether the first one was caught or not (--old-falls:
+      // only uncaught falls counted, as this sim did before).
+      if (RULE || !rec) {
         const k = biomeStretchAt(node.level * 1.5);
         biomeFalls[k] = (biomeFalls[k] || 0) + 1;
         if (biomeFalls[k] >= 2) { falls++; break; }
@@ -172,6 +175,11 @@ function simulate({ sd, wrong, decide = 2 }, seed, mode = 'normal', maxMoves = M
   return { best, slips, falls, gems, stars, passes, moves };
 }
 
+if (process.argv.includes('--boons')) {
+  const { runBoonSim } = await import('./boonSim.mjs');
+  runBoonSim(Number((process.argv.find((x) => x.startsWith('--runs=')) || '--runs=200').slice(7)));
+  process.exit(0);
+}
 const ECONOMY = process.argv.includes('--economy');
 const players = { expert: { sd: 45, wrong: 0.01 }, good: { sd: 75, wrong: 0.03 }, average: { sd: 110, wrong: 0.05 }, novice: { sd: 150, wrong: 0.08 } };
 if (ECONOMY) {

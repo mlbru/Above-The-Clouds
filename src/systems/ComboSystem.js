@@ -31,6 +31,8 @@ export class ComboSystem {
         index: i,
         dir: spec.dir,
         time: t,
+        // Beats since the previous note (off-beats are 0.5 or 1.5).
+        gap: spec.gap ?? 1,
         holdMs: spec.hold ? Math.max(300, Math.round(spec.hold * beatMs)) : 0,
         rollMs: spec.roll ? Math.max(450, Math.round(rollBeats * beatMs)) : 0,
         taps: spec.roll || 0,

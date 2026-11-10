@@ -239,6 +239,44 @@ class AudioSystemImpl {
         if (o.snow) this.noiseHit({ t: 0.03, dur: 0.08, type: 'highpass', freq: 3000, peak: 0.05 });
       },
       cloth() { this.noiseHit({ dur: 0.14, freq: 2800, q: 0.6, peak: 0.06, attack: 0.04 }); },
+      // Trail Boons. The cairn opens: a low hum swelling under two glassy bells.
+      shrineopen() {
+        this.tone({ freq: 55, toFreq: 58, dur: 2.2, type: 'sine', peak: 0.09, attack: 0.6, reverb: 0.6 });
+        this.tone({ freq: 82.4, dur: 2, type: 'triangle', peak: 0.04, attack: 0.8, reverb: 0.6 });
+        [0.3, 0.75].forEach((t, i) => this.tone({ t, freq: midiToHz(i ? 86 : 81), dur: 1.4, type: 'sine', peak: 0.035, reverb: 0.8 }));
+      },
+      // Standing stones grinding up out of the ground.
+      stonerise() {
+        this.noiseHit({ dur: 0.7, type: 'lowpass', freq: 380, sweepTo: 900, q: 0.7, peak: 0.16, attack: 0.08 });
+        this.tone({ freq: 48, toFreq: 70, dur: 0.6, type: 'sawtooth', peak: 0.04, attack: 0.05 });
+      },
+      // A stone breaking up into gravel.
+      stonecrumble() {
+        this.noiseHit({ dur: 0.25, type: 'lowpass', freq: 900, peak: 0.14 });
+        for (let i = 0; i < 7; i++) this.noiseHit({ t: 0.05 + i * 0.05 + Math.random() * 0.04, dur: 0.03, type: 'highpass', freq: 1800 + Math.random() * 2500, peak: 0.07, reverb: 0.3 });
+      },
+      // The pact: a bright chord that blooms, with a whoosh under it.
+      pact() {
+        this.noiseHit({ dur: 0.5, freq: 1400, sweepTo: 4200, q: 0.8, peak: 0.08, attack: 0.12 });
+        [72, 76, 79, 84].forEach((m, i) => this.tone({ t: 0.05 + i * 0.04, freq: midiToHz(m), dur: 1.3, type: 'triangle', peak: 0.04, reverb: 0.7 }));
+        this.tone({ freq: midiToHz(48), dur: 1.2, type: 'sine', peak: 0.08, reverb: 0.5 });
+      },
+      // SONGBIRD: a two-note call, high for →, middle for ↑, low for ←.
+      songbird(o) {
+        const base = o.dir === 'R' ? 3400 : o.dir === 'U' ? 2500 : 1750;
+        this.tone({ freq: base, toFreq: base * 1.25, dur: 0.05, type: 'sine', peak: 0.05, bus: this.sfxBus, reverb: 0.25 });
+        this.tone({ t: 0.06, freq: base * 1.12, toFreq: base * 0.95, dur: 0.07, type: 'sine', peak: 0.04, bus: this.sfxBus, reverb: 0.25 });
+      },
+      // BRAM'S FLASK: two gulps and a satisfied breath.
+      flask() {
+        [0, 0.22].forEach((t) => this.tone({ t, freq: 220, toFreq: 120, dur: 0.12, type: 'sine', peak: 0.1 }));
+        this.noiseHit({ t: 0.5, dur: 0.4, freq: 900, q: 1.5, peak: 0.05, attack: 0.1 });
+      },
+      // PHOENIX: a roaring flame that rises into a high chord.
+      phoenix() {
+        this.noiseHit({ dur: 1.1, type: 'bandpass', freq: 500, sweepTo: 3000, q: 0.6, peak: 0.18, attack: 0.15 });
+        [67, 71, 74, 79, 83].forEach((m, i) => this.tone({ t: 0.3 + i * 0.07, freq: midiToHz(m), dur: 1.4, type: 'sawtooth', peak: 0.02, reverb: 0.7 }));
+      },
       // A bird taking off: quick wing beats and a startled chirp.
       flutter() {
         for (let i = 0; i < 5; i++) this.noiseHit({ t: i * 0.07, dur: 0.05, freq: 900 + i * 120, q: 0.8, peak: 0.07 * (1 - i / 6) });

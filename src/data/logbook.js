@@ -67,6 +67,12 @@ export const STAMPS = [
     id: `dare-${id}`, page: 'daring', name, text: `REACH ${DARE.stampAt} M WITH THE ${DARE_BY_ID[id].name} DARE.`, gems: 30, goal: DARE.stampAt, unit: 'M',
     ...height((r) => (r.dares || []).includes(id)),
   })),
+  // Trail Boons: the cairns on the shrine ledges.
+  { id: 'first-pact', page: 'daring', name: 'FIRST PACT', text: 'TAKE A GIFT FROM A CAIRN.', gems: 10, goal: 1, ...counter('gifts') },
+  { id: 'synergy', page: 'daring', name: 'TWO OF A KIND', text: 'HOLD TWO GIFTS THAT MAKE A SYNERGY.', gems: 20, goal: 1, ...counter('synergies') },
+  { id: 'phoenix', page: 'daring', name: 'FROM THE ASHES', text: 'LET THE PHOENIX LIFT YOU BACK FROM A FALL.', gems: 25, goal: 1, ...counter('phoenixRises') },
+  { id: 'souvenirs', page: 'daring', name: 'PACKED BAGS', text: 'CARRY THREE SOUVENIRS IN ONE RUN.', gems: 40, goal: 3, ...perRun((r) => r.souvenirs || 0) },
+  { id: 'high-stakes', page: 'daring', name: 'HIGH STAKES', text: 'REACH 1000 M HOLDING THE GAMBLER.', gems: 50, goal: 1000, unit: 'M', ...height((r) => (r.gifts || []).includes('gambler')) },
   { id: 'bare-hands', page: 'daring', name: 'BARE HANDS', text: 'REACH 300 M IN NORMAL WITH NO GEAR OR PERK.', gems: 15, goal: 300, unit: 'M', secret: true, ...height((r) => r.mode === 'normal' && r.bare) },
 ];
 

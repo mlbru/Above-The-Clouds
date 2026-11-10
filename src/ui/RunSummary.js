@@ -108,6 +108,24 @@ export class RunSummary {
       }
       y += 13;
     }
+    // Trail Boons: the gifts this run took from the cairns, in order, popping in one by one.
+    if (s.boons && s.boons.log.length) {
+      const ids = s.boons.log;
+      const label = text(W, y + 4, 'GIFTS', COLORS.faint, 1, 1);
+      let x = W + 6;
+      label.setX(W - (ids.length * 17) / 2 - 4);
+      x = W - (ids.length * 17) / 2 + 4;
+      ids.forEach((id, i) => {
+        const kept = s.boons.held.includes(id);
+        g.fillStyle(0x16141f, 1).fillRect(x + i * 17 - 1, y - 1 + oy, 16, 16);
+        g.fillStyle(kept ? 0x6a5aa8 : 0x3a3456, 1).fillRect(x + i * 17 - 1, y - 1 + oy, 16, 1);
+        const img = add(scene.add.image(x + i * 17 + 7, y + 7 + oy, `boon_${id}`)).setAlpha(kept ? 1 : 0.35).setScale(0);
+        scene.tweens.add({ targets: img, scale: 1, delay: 900 + i * 140, duration: 260, ease: 'Back.easeOut', onStart: () => Audio.play('tick') });
+      });
+      const extra = [...(s.boons.synergies || []), ...(s.boons.phoenix ? ['RISEN FROM THE ASHES'] : [])];
+      y += 17;
+      if (extra.length) { text(W, y, fitList(extra, GAME_WIDTH - 60), '#7cf0d8'); y += 10; }
+    }
     if (s.finds.length) { text(W, y, `FOUND: ${fitList(s.finds, GAME_WIDTH - 60)}`, COLORS.blue); y += 10; }
     if (s.stamps.length) { text(W, y, `LOGBOOK: ${fitList(s.stamps.map((st) => st.name), GAME_WIDTH - 60)}`, COLORS.gold); y += 10; }
     // Mastery: how close this run came in its highest biomes.

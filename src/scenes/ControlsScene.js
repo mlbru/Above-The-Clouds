@@ -3,6 +3,7 @@ import { GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameCo
 import { PixelText, COLORS, drawFrame } from '../ui/PixelText.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { Audio } from '../systems/AudioSystem.js';
+import { gamepadConnected } from '../ui/GamepadControls.js';
 
 // Each line: what it does, then groups of keys ('|' separates the
 // alternatives; a group is drawn as caps side by side), and a note.
@@ -22,6 +23,14 @@ const TOUCH = [
   { what: 'DOUBLES', text: 'SWIPE WITH TWO FINGERS' },
   { what: 'ROUTES, MENUS', text: 'TAP THEM' },
 ];
+// Shown instead of the keys while a controller is plugged in.
+const PAD = [
+  { what: 'CHOOSE A ROUTE', text: 'D-PAD OR STICK ← →' },
+  { what: 'START THE CLIMB', text: '↑ OR A' },
+  { what: 'CLIMB ON THE BEAT', text: '← ↑ →, HOLD FOR HOLD NOTES' },
+  { what: 'AT A LEDGE', text: 'X REST  LB VIEW  RB PHOTO  Y TRADER' },
+  { what: 'BACK, PAUSE', text: 'B  /  START' },
+];
 
 // The controls, as a card of keycaps. Launched over the title camp or the
 // pause menu (data: { returnTo }), which waits paused underneath.
@@ -36,15 +45,16 @@ export class ControlsScene extends Phaser.Scene {
     const text = (x, y, s, color = COLORS.text, opts = {}) => new PixelText(this, x, y, s, { color, ...opts });
     const rowH = 15;
     const keyRows = this.registry.get('progression').debugUnlocked ? [...ROWS, DEBUG_ROW] : ROWS;
-    const rows = IS_TOUCH ? TOUCH.length : keyRows.length;
+    const textRows = IS_TOUCH ? TOUCH : gamepadConnected() ? PAD : null;
+    const rows = textRows ? textRows.length : keyRows.length;
     const w = Math.min(GAME_WIDTH - 16, 330), h = 30 + rows * rowH + 16;
     const x = Math.round((GAME_WIDTH - w) / 2), y = Math.max(IS_PORTRAIT ? 70 : 34, Math.round((GAME_HEIGHT - h) / 2));
     text(x, y - 20, 'CONTROLS', COLORS.gold).setScale(2);
     drawFrame(g, x, y, w, h, { accent: 0x9fd8ff, alpha: 0.95 });
     const labelW = IS_PORTRAIT ? 80 : 100;
     let ry = y + 10;
-    if (IS_TOUCH) {
-      for (const r of TOUCH) {
+    if (textRows) {
+      for (const r of textRows) {
         text(x + 10, ry + 3, r.what, COLORS.dim);
         text(x + 10 + labelW, ry + 3, r.text, COLORS.text);
         ry += rowH;
@@ -64,7 +74,7 @@ export class ControlsScene extends Phaser.Scene {
     }
     g.fillStyle(0x9fd8ff, 0.3).fillRect(x + 8, ry + 4, w - 16, 1);
     text(x + w / 2, ry + 10, 'PRESS WHEN THE ARROW REACHES THE LINE. THE BEAT IS EVERYTHING.', COLORS.gold).setOrigin(0.5, 0);
-    text(GAME_WIDTH / 2, y + h + 8, IS_TOUCH ? 'TAP TO GO BACK' : 'ANY KEY TO GO BACK', COLORS.faint).setOrigin(0.5, 0);
+    text(GAME_WIDTH / 2, y + h + 8, IS_TOUCH ? 'TAP TO GO BACK' : textRows ? 'ANY BUTTON TO GO BACK' : 'ANY KEY TO GO BACK', COLORS.faint).setOrigin(0.5, 0);
     this.input.keyboard.on('keydown', this.close, this);
     this.events.once('shutdown', () => this.input.keyboard.off('keydown', this.close, this));
   }

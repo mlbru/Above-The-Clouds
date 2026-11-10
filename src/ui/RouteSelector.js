@@ -21,6 +21,7 @@ export class RouteSelector {
     this.objects = [];
     this.routes = [];
     this.selected = 0;
+    this.cw = CARD_W;
     this.time = 0;
     this.path = scene.add.graphics().setDepth(DEPTH.routeMarks);
     this.cards = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
@@ -29,7 +30,7 @@ export class RouteSelector {
     this.lit = -1;
   }
 
-  colorOf(route) { return route.toLedge ? ROUTE_COLORS.ledge : ROUTE_COLORS[route.type]; }
+  colorOf(route) { return route.toLedge ? ROUTE_COLORS.ledge : ROUTE_COLORS[route.type] ?? ROUTE_COLORS.risky; }
 
   show(routes, selected, from) {
     this.hide();
@@ -37,14 +38,16 @@ export class RouteSelector {
     this.selected = selected;
     this.from = from;
     const n = routes.length;
-    const totalW = n * CARD_W + (n - 1) * 6;
+    // A fourth route (WILD ROUTE) squeezes the cards on narrow screens.
+    this.cw = Math.min(CARD_W, Math.floor((GAME_WIDTH - 8 - (n - 1) * 6) / n));
+    const totalW = n * this.cw + (n - 1) * 6;
     const x0 = Math.round(GAME_WIDTH / 2 - totalW / 2);
     routes.forEach((r, i) => {
       const color = this.colorOf(r);
       const ring = this.scene.add.image(r.target.x, r.target.y + 3, 'ring').setDepth(DEPTH.routeMarks).setTint(color);
       const num = new PixelText(this.scene, r.target.x, r.target.y - 18, `${i + 1}`, { color: toCss(color) }).setOrigin(0.5, 0).setDepth(DEPTH.routeMarks);
       ring.setInteractive({ useHandCursor: true }).on('pointerup', tapped(() => this.onPick(i, true)));
-      const cx = x0 + i * (CARD_W + 6);
+      const cx = x0 + i * (this.cw + 6);
       const cy = GAME_HEIGHT - CARD_H - 8;
       const head = new PixelText(this.scene, cx + 6, cy + 5, `${i + 1} ${r.label}`, { color: toCss(color) });
       const gain = new PixelText(this.scene, cx + 6, cy + 15, `↑${r.heightGain.toFixed(1)}M  GRIP -${Math.round(r.gripCost)}`, { color: COLORS.text });
@@ -64,18 +67,18 @@ export class RouteSelector {
       const sub = new PixelText(this.scene, cx + 6, cy + 24, tag, { color: tagColor });
       sub.subText = tag; sub.subColor = tagColor;
       [head, gain, sub].forEach((t) => t.setScrollFactor(0).setDepth(DEPTH.hud + 1));
-      const zone = this.scene.add.zone(cx, cy, CARD_W, CARD_H).setOrigin(0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
+      const zone = this.scene.add.zone(cx, cy, this.cw, CARD_H).setOrigin(0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
       zone.on('pointerup', tapped(() => this.onPick(i, true)));
       zone.on('pointermove', () => { if (this.selected !== i) this.onPick(i, false); });
-      const gem = r.gem ? this.scene.add.image(cx + CARD_W - 30, cy + 7, `gem_${r.gem.type}`).setScrollFactor(0).setDepth(DEPTH.hud + 1) : null;
+      const gem = r.gem ? this.scene.add.image(cx + this.cw - 30, cy + 7, `gem_${r.gem.type}`).setScrollFactor(0).setDepth(DEPTH.hud + 1) : null;
       // Thermal routes: a warm up-arrow on the card and next to the target hold.
       const thermal = r.thermal ? [
-        this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(THERMAL_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+        this.scene.add.image(cx + this.cw - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(THERMAL_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 1),
         this.scene.add.image(r.target.x + 9, r.target.y - 14, 'arrow_s_U').setTint(THERMAL_TINT).setDepth(DEPTH.routeMarks),
       ] : [];
       // Still beats ahead: a red pause sign on the card and by the hold.
       if ((r.tags || []).includes('STILL')) {
-        thermal.push(this.scene.add.image(cx + CARD_W - (r.gem ? 40 : 30), cy + 7, 'icon_still_s').setTint(0xf0644b).setScrollFactor(0).setDepth(DEPTH.hud + 1));
+        thermal.push(this.scene.add.image(cx + this.cw - (r.gem ? 40 : 30), cy + 7, 'icon_still_s').setTint(0xf0644b).setScrollFactor(0).setDepth(DEPTH.hud + 1));
         thermal.push(this.scene.add.image(r.target.x + 10, r.target.y - 14, 'icon_still_s').setTint(0xf0644b).setDepth(DEPTH.routeMarks));
       }
       this.objects.push({ ring, num, head, gain, sub, zone, cx, cy, route: r, gem, thermal });
@@ -113,11 +116,11 @@ export class RouteSelector {
       const sel = i === this.selected;
       const color = this.colorOf(o.route);
       const dy = sel ? -3 : 0;
-      drawFrame(g, o.cx, o.cy + dy, CARD_W, CARD_H, { accent: color, alpha: sel ? 0.94 : 0.75, glow: sel });
+      drawFrame(g, o.cx, o.cy + dy, this.cw, CARD_H, { accent: color, alpha: sel ? 0.94 : 0.75, glow: sel });
       // Difficulty pips
       for (let p = 0; p < 3; p++) {
         g.fillStyle(p < o.route.difficulty ? color : 0x3a3550, 1);
-        g.fillRect(o.cx + CARD_W - 20 + p * 5, o.cy + 6 + dy, 3, 3);
+        g.fillRect(o.cx + this.cw - 20 + p * 5, o.cy + 6 + dy, 3, 3);
       }
       [o.head, o.gain, o.sub].forEach((t, k) => t.setY(o.cy + [5, 15, 24][k] + dy).setAlpha(sel || i === this.lit ? 1 : 0.75));
       if (o.gem) o.gem.setY(o.cy + 7 + dy);
@@ -179,16 +182,16 @@ export class RouteSelector {
     world.lineStyle(1, 0xffffff, 1).strokeCircle(t.x, t.y + 3, pulse);
     world.lineStyle(2, PRISM[shift % PRISM.length], 1).strokeCircle(t.x, t.y + 3, pulse + 3);
     const dy = this.lit === this.selected ? -3 : 0;
-    const perim = 2 * (CARD_W + CARD_H);
+    const perim = 2 * (this.cw + CARD_H);
     for (let s = 0; s < perim; s += 4) {
       const d = (s + shift * 2) % perim;
       let x, y;
-      if (d < CARD_W) { x = o.cx + d; y = o.cy + dy; }
-      else if (d < CARD_W + CARD_H) { x = o.cx + CARD_W - 1; y = o.cy + dy + d - CARD_W; }
-      else if (d < 2 * CARD_W + CARD_H) { x = o.cx + CARD_W - (d - CARD_W - CARD_H); y = o.cy + dy + CARD_H - 1; }
-      else { x = o.cx; y = o.cy + dy + CARD_H - (d - 2 * CARD_W - CARD_H); }
+      if (d < this.cw) { x = o.cx + d; y = o.cy + dy; }
+      else if (d < this.cw + CARD_H) { x = o.cx + this.cw - 1; y = o.cy + dy + d - this.cw; }
+      else if (d < 2 * this.cw + CARD_H) { x = o.cx + this.cw - (d - this.cw - CARD_H); y = o.cy + dy + CARD_H - 1; }
+      else { x = o.cx; y = o.cy + dy + CARD_H - (d - 2 * this.cw - CARD_H); }
       g.fillStyle(PRISM[Math.floor(s / 4) % PRISM.length], 1);
-      g.fillRect(Math.round(x) - (d >= CARD_W && d < CARD_W + CARD_H ? 1 : 0), Math.round(y) - (d >= CARD_W + CARD_H && d < 2 * CARD_W + CARD_H ? 1 : 0), 2, 2);
+      g.fillRect(Math.round(x) - (d >= this.cw && d < this.cw + CARD_H ? 1 : 0), Math.round(y) - (d >= this.cw + CARD_H && d < 2 * this.cw + CARD_H ? 1 : 0), 2, 2);
     }
   }
 
