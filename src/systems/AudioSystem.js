@@ -405,6 +405,15 @@ class AudioSystemImpl {
           this.tone({ t: d, freq: 120, toFreq: 70, dur: 0.08, peak: 0.12 });
         });
       },
+      // A shooting star over camp: a tiny falling sparkle, like a wish.
+      wish() {
+        [24, 19, 16, 12].forEach((st, i) => this.tone({ t: i * 0.07, freq: 523 * 2 ** (st / 12), dur: 0.6, peak: 0.018, attack: 0.01, reverb: 0.9 }));
+      },
+      // The camp fire crackling: a dry pop or two.
+      crackle() {
+        const n = 1 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < n; i++) this.noiseHit({ t: i * (0.03 + Math.random() * 0.08), dur: 0.015 + Math.random() * 0.02, type: 'highpass', freq: 1800 + Math.random() * 2500, peak: 0.05 + Math.random() * 0.05, bus: this.ambBus });
+      },
       // A rainbow: a soft rising shimmer of bells.
       rainbow() {
         [0, 4, 7, 11, 14, 19, 24].forEach((st, i) => this.tone({ t: i * 0.11, freq: 523 * 2 ** (st / 12), dur: 1.4, peak: 0.025, attack: 0.02, reverb: 0.8 }));

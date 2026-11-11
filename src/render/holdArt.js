@@ -77,13 +77,18 @@ export function holdShapeGrid(biome, shape) {
       break;
     }
     case 'pocket': {
-      // An uneven lump with a deep hole near its top and a lit lower lip.
-      poly(g, [[3, 8], [5, 4], [10, 3], [15, 4], [17, 8], [14, 11], [6, 11]], body);
+      // An uneven lump with a slot worn into it: a dark gap under the lit
+      // top edge, wider than tall, with a rounded lip below it.
+      poly(g, [[3, 9], [4, 5], [8, 3], [14, 3], [17, 6], [16, 10], [11, 11], [6, 11]], body);
       shade(g, body, light, dark);
-      poly(g, [[6, 6], [8, 5], [13, 5], [14, 7], [10, 8], [7, 8]], darken(base, 0.3));
-      poly(g, [[7, 6], [9, 5.5], [12, 5.5], [13, 7], [9, 7.5]], OUT);
-      for (let x = 7; x <= 13; x++) g.set(x, 8, light);
-      chalk([[8, 9], [9, 9], [12, 9]]);
+      for (let x = 7; x <= 14; x++) {
+        const deep = x > 8 && x < 13;
+        g.set(x, 6, OUT);
+        if (deep) g.set(x, 7, darken(base, 0.25));
+        g.set(x, deep ? 8 : 7, lerpColor(light, body, 0.35));
+      }
+      g.set(6, 6, darken(base, 0.4)); g.set(15, 6, darken(base, 0.4));
+      chalk([[9, 9], [10, 9], [12, 10]]);
       break;
     }
     case 'sloper': {
@@ -176,12 +181,18 @@ export function holdShapeGrid(biome, shape) {
       break;
     }
     case 'bucket': {
-      // A deep jug: a thick lip and a dark inside.
-      g.ellipse(10, 7, 8, 5, body);
+      // A deep jug: a thick rounded lip with the dark hollow tucked under its
+      // top edge, so it reads as a handle you can wrap your fingers into.
+      g.ellipse(10, 7.5, 8, 4.8, body);
       shade(g, body, light, dark);
-      g.ellipse(10, 6.5, 5, 1.8, darken(base, 0.35));
-      g.ellipse(10, 6.2, 3.5, 1, OUT);
-      chalk([[7, 4], [10, 3], [13, 4]]);
+      for (let x = 5; x <= 15; x++) {
+        const edge = x === 5 || x === 15;
+        g.set(x, 5, OUT);
+        if (!edge) g.set(x, 6, darken(base, 0.3));
+        if (x > 6 && x < 14) g.set(x, 7, darken(base, 0.55));
+      }
+      for (let x = 6; x <= 14; x++) g.set(x, 8, light);
+      chalk([[8, 10], [10, 10], [12, 9]]);
       break;
     }
     default: { // round

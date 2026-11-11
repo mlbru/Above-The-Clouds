@@ -116,19 +116,39 @@ export class Effects {
   n(count) { return Math.max(1, Math.round(count * (this.reduced ? 0.4 : 1))); }
   // Chalk puffs take the colour of the equipped chalk (see cosmetics 'chalk').
   setChalk(item) { this.chalkItem = item || null; }
+  // The colour of the light right now, at full brightness (gold at sunset,
+  // blue by moonlight). Breath, chalk and sweat take it on.
+  setLight(color) {
+    const r = (color >> 16) & 255, g = (color >> 8) & 255, b = color & 255;
+    const m = Math.max(1, r, g, b);
+    const f = (v) => Math.round(255 - (255 - (v * 255) / m) * 0.8);
+    this.lightTint = (f(r) << 16) | (f(g) << 8) | f(b);
+  }
+
+  lit(c) {
+    const t = this.lightTint ?? 0xffffff;
+    return ((((c >> 16) & 255) * ((t >> 16) & 255) / 255) << 16) | ((((c >> 8) & 255) * ((t >> 8) & 255) / 255) << 8) | (((c & 255) * (t & 255)) / 255);
+  }
+
   chalk(x, y) {
     const c = this.chalkItem;
     let tint = 0xffffff;
     if (c && c.rainbow) tint = RAINBOW[Math.floor(Math.random() * RAINBOW.length)];
     else if (c && c.id !== 'chalk-white') tint = c.color;
-    this.dust.setParticleTint(tint);
+    this.dust.setParticleTint(this.lit(tint));
     this.dust.explode(this.n(5), x, y);
   }
   sparkle(x, y, count = 6) { this.sparks.explode(this.n(count), x, y); }
   pebbleFall(x, y, count = 4, tint = 0x8a8478) { this.pebbles.setParticleTint(tint); this.pebbles.explode(this.n(count), x, y); }
   snowBurst(x, y) { this.snowPuff.explode(this.n(8), x, y); }
   flameBurst(x, y, count = 10) { this.flames.explode(this.n(count), x, y); }
-  breathPuff(x, y) { this.breath.explode(1, x, y); }
+  breathPuff(x, y) { this.breath.setParticleTint(this.lit(0xffffff)); this.breath.explode(1, x, y); }
+
+  // A drop of sweat running off the climber's face when the grip is going.
+  sweat(x, y) {
+    const d = this.scene.add.rectangle(x, y, 1, 2, this.lit(0xcfe8ff)).setDepth(DEPTH.fx);
+    this.scene.tweens.add({ targets: d, y: y + 14, alpha: 0, duration: 650, ease: 'Quad.easeIn', onComplete: () => d.destroy() });
+  }
   // A puff of dust under the boots when the climber lands on a ledge.
   landDust(x, y, tint = 0xd8d0c0) {
     this.dust.setParticleTint(tint);

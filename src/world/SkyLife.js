@@ -17,6 +17,8 @@ export class SkyLife {
     this.stars = [];
     this.wait = { flock: rnd(3000, 9000), ship: rnd(2000, 8000), star: rnd(2000, 6000) };
     this.t = 0;
+    // Called when a shooting star appears (the title screen makes a wish).
+    this.onStar = null;
   }
 
   update(dt, alt, day, skyBottom) {
@@ -82,6 +84,7 @@ export class SkyLife {
     if (day.night > 0.6 && (this.wait.star -= dt) < 0) {
       this.wait.star = rnd(4000, 12000);
       this.stars.push({ x: rnd(40, W - 40), y: rnd(10, 60), vx: rnd(-160, -90) * (Math.random() < 0.5 ? 1 : -1), vy: rnd(40, 70), life: 700 });
+      if (this.onStar) this.onStar();
     }
     this.stars = this.stars.filter((s) => (s.life -= dt) > 0);
     for (const s of this.stars) {

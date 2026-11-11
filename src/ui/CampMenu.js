@@ -194,8 +194,11 @@ export class CampMenu {
       const sel = k === i;
       // Words on the rock are chiselled into it (dark letters with a lit lower
       // lip); the chosen one lights up in gold and lifts off the stone.
-      const carved = this.spots[k].carved && !sel;
-      o.label.setScale(sel ? 2 : 1).setColor(sel ? COLORS.gold : carved ? '#23222c' : '#ffffff').setShadow(carved ? '#aeb2bf' : '#16141f')
+      // After dark the chiselled letters would vanish into the rock: they
+      // catch the moonlight instead (pale stone with a dark shadow).
+      const carved = this.spots[k].carved && !sel && !this.nightLabels;
+      const moonlit = this.spots[k].carved && !sel && this.nightLabels;
+      o.label.setScale(sel ? 2 : 1).setColor(sel ? COLORS.gold : carved ? '#23222c' : moonlit ? '#d4dcf2' : '#ffffff').setShadow(carved ? '#aeb2bf' : '#16141f')
         .setAlpha(sel ? 1 : carved ? 0.92 : 0.85).setDepth(DEPTH.hud + (sel ? 2 : 0));
       if (o.badge) o.badge.setDepth(DEPTH.hud + (sel ? 2 : 0));
     });
@@ -238,6 +241,9 @@ export class CampMenu {
       }
     }
     this.updateForecast(dt);
+    const dn = this.scene.dayNight;
+    const night = !!dn && dn.state().night > 0.4;
+    if (night !== !!this.nightLabels) { this.nightLabels = night; this.select(this.spot, true); }
     const bob = Math.round(Math.abs(Math.sin(this.t / 240)) * 3);
     this.arrow.setPosition(s.x, s.y - 26 - bob).setVisible(show);
     this.glow.setPosition(s.x, s.y + 22).setAlpha(show ? 0.35 + 0.1 * Math.sin(this.t / 300) : 0);

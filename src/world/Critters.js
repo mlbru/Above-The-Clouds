@@ -9,6 +9,8 @@ import { Audio } from '../systems/AudioSystem.js';
 const BIRD_BIOMES = { green: 0.06, stone: 0.05, clouds: 0.04 };
 const BIRD_TINT = { green: 0xffffff, stone: 0xd8d0c8, clouds: 0xe8eeff };
 const GOAT_BIOMES = { green: 0.5, stone: 0.6, frozen: 0.45 };
+// Little flocks perched along rest ledges (they scatter when you pull up).
+const LEDGE_BIRDS = { green: 0.45, stone: 0.4, clouds: 0.3, frozen: 0.2 };
 const SCAN_EVERY = 250;
 const SCAN_LEVELS = 16;
 
@@ -34,6 +36,10 @@ export class Critters {
         const biome = biomeAt(levelToMeters(node.level)).id;
         if (node.kind === 'ledge') {
           if (this.roll(node, 1) < (GOAT_BIOMES[biome] || 0)) this.addGoat(node);
+          else if (this.roll(node, 6) < (LEDGE_BIRDS[biome] || 0)) {
+            const n = 2 + Math.floor(this.roll(node, 7) * 2);
+            for (let i = 0; i < n; i++) this.addLedgeBird(node, biome, (i % 2 ? 1 : -1) * (22 + i * 13 + this.roll(node, 8 + i) * 10));
+          }
         } else if (node.hazard !== 'crumbling' && this.roll(node, 2) < (BIRD_BIOMES[biome] || 0)) this.addBird(node, biome);
       }
     }
@@ -46,13 +52,50 @@ export class Critters {
     this.list.push({ kind: 'bird', img, node, t: this.roll(node, 4) * 3000, gone: false });
   }
 
+  addLedgeBird(node, biome, dx) {
+    const img = this.scene.add.sprite(node.x + dx, node.y + 1, 'critter_bird', 0).setOrigin(0.5, 1)
+      .setDepth(DEPTH.decor + 2).setFlipX(dx > 0).setTint(BIRD_TINT[biome] || 0xffffff);
+    const c = { kind: 'ledgebird', img, node, t: Math.abs(dx) * 97, gone: false, hop: 0 };
+    this.list.push(c);
+    return c;
+  }
+
+  // While you rest on a ledge by day, a bird or two flies in and lands near you.
+  landNear(node, biome) {
+    if (this.landed === node.id) return;
+    this.landed = node.id;
+    const n = 1 + (Math.random() < 0.5 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const tx = node.x + side * (26 + Math.random() * 30), ty = node.y + 1;
+      const img = this.scene.add.sprite(tx + side * 200, ty - 120, 'bird', 0).setDepth(DEPTH.decor + 2).setTint(BIRD_TINT[biome] || 0xffffff);
+      let up = false;
+      const flap = this.scene.time.addEvent({ delay: 90, loop: true, callback: () => { up = !up; if (img.active) img.setFrame(up ? 1 : 0); } });
+      this.scene.tweens.add({
+        targets: img, x: tx, y: ty - 4, delay: i * 500, duration: 1500, ease: 'Sine.easeOut',
+        onComplete: () => {
+          flap.remove();
+          if (!img.active) return;
+          img.setTexture('critter_bird', 0).setOrigin(0.5, 1).setY(ty).setFlipX(side > 0);
+          Audio.play('flutter');
+          this.list.push({ kind: 'ledgebird', img, node, t: 0, gone: false, hop: 0, landed: true });
+        },
+      });
+    }
+  }
+
   addGoat(node) {
     const side = this.roll(node, 5) < 0.5 ? -1 : 1;
     const img = this.scene.add.sprite(node.x + side * 26, node.y + 1, 'critter_goat', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 2);
     this.list.push({ kind: 'goat', img, node, side, t: 0, gone: false, bleated: false });
   }
 
-  update(dt, climber, camY) {
+  // rest: { node, biome, day } while the climber is resting on a ledge, else null.
+  update(dt, climber, camY, rest = null) {
+    if (rest) {
+      this.restT = (this.restT || 0) + dt;
+      if (this.restT > 4500 && rest.day && LEDGE_BIRDS[rest.biome] && rest.node.id !== this.landed) this.landNear(rest.node, rest.biome);
+    } else this.restT = 0;
     this.scanT += dt;
     if (this.scanT >= SCAN_EVERY) {
       this.scanT = 0;
@@ -62,6 +105,16 @@ export class Critters {
       if (c.gone) continue;
       c.t += dt;
       const dx = climber.x - c.img.x, dy = climber.y - c.img.y;
+      if (c.kind === 'ledgebird') {
+        // Pecks and hops about; flies when you pull up onto the ledge, or
+        // (for one that landed beside you) as soon as you climb on.
+        const p = c.t % 3000;
+        c.img.setFrame(p < 260 || (p > 520 && p < 700) ? 1 : 0);
+        if (p < dt && Math.random() < 0.4) this.scene.tweens.add({ targets: c.img, y: c.img.y - 3, x: c.img.x + (Math.random() - 0.5) * 8, duration: 120, yoyo: true });
+        const onLedge = Math.abs(climber.y - c.node.y) < 10 && Math.abs(dx) < 80;
+        if ((!c.landed && onLedge) || (c.landed && !rest)) this.flyOff(c, dx);
+        continue;
+      }
       if (c.kind === 'bird') {
         // Pecks now and then; flies when you come within reach.
         c.img.setFrame(c.t % 2600 < 260 || (c.t % 2600 > 520 && c.t % 2600 < 700) ? 1 : 0);

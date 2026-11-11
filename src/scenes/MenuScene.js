@@ -485,6 +485,51 @@ export class MenuScene extends Phaser.Scene {
     if (event.code === 'Escape' && this.campMenu && this.campMenu.visible) this.showOptions();
   }
 
+  // Camp after dark: the tent glows from inside, moths circle Bram's lantern,
+  // Bram nods off (a few Zs drifting up), the fire throws more sparks and
+  // crackles, and a shooting star now and then makes a little wish sound.
+  campNight(dt, day, spots, reduced) {
+    const life = this.campLife;
+    const n = Math.max(0, Math.min(1, (day.night - 0.35) / 0.4));
+    if (!life.night) {
+      life.night = {
+        tent: spots.tent ? this.add.image(spots.tent.x, spots.tent.y - 7, 'glow').setBlendMode('ADD').setTint(0xffb860).setScale(0.7, 0.45).setDepth(DEPTH.light + 1).setAlpha(0) : null,
+        tentLit: spots.tent ? this.add.image(spots.tent.x, spots.tent.y - 5, 'glow_small').setBlendMode('ADD').setTint(0xffd890).setScale(1.6, 1).setDepth(DEPTH.decor + 1).setAlpha(0) : null,
+        moths: this.add.graphics().setDepth(DEPTH.light + 1),
+        zT: 0, crackT: 0,
+      };
+      this.background.skyLife.onStar = () => { if (!this.demo.climbing) Audio.play('wish'); };
+    }
+    const L = life.night;
+    const flick = 0.85 + 0.15 * Math.sin(this.t / 90) * Math.sin(this.t / 37);
+    if (L.tent) { L.tent.setAlpha(n * 0.5 * flick); L.tentLit.setAlpha(n * 0.6 * flick); }
+    const g = L.moths.clear();
+    const lamp = spots.trader && spots.trader.lamp;
+    if (lamp && n > 0 && !reduced) {
+      for (let i = 0; i < 3; i++) {
+        const a = this.t / (260 + i * 70) + i * 2.1, r = 5 + i * 2 + Math.sin(this.t / 400 + i) * 2;
+        const x = Math.round(lamp.x + Math.cos(a) * r), y = Math.round(lamp.y + Math.sin(a * 1.3) * r * 0.7);
+        g.fillStyle(0xfff0d0, n * (Math.floor(this.t / 60 + i) % 2 ? 0.9 : 0.5)).fillRect(x, y, 1, 1);
+      }
+    }
+    // Bram nodding off.
+    if (spots.trader && n > 0.6 && !this.demo.climbing && (L.zT -= dt) < 0) {
+      L.zT = 1800 + Math.random() * 1600;
+      const z = new PixelText(this, spots.trader.x + 4, spots.trader.y - 30, 'z', { color: '#dfe8ff', shadow: '#16141f' }).setDepth(DEPTH.decor + 5).setAlpha(0);
+      this.tweens.add({ targets: z, y: z.y - 16, x: z.x + 8, alpha: { from: 0.9, to: 0 }, scale: { from: 0.8, to: 1.4 }, duration: 2200, ease: 'Sine.easeOut', onComplete: () => z.destroy() });
+    }
+    // The fire: extra sparks and a crackle now and then.
+    const fire = spots.fire;
+    if (fire && n > 0 && (L.crackT -= dt) < 0) {
+      L.crackT = 500 + Math.random() * 1800;
+      if (Math.random() < 0.5) Audio.play('crackle');
+      if (!reduced) for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
+        const e = this.add.rectangle(fire.x + Phaser.Math.Between(-3, 3), fire.y - 6, 1, 1, Math.random() < 0.5 ? 0xffd27a : 0xff8a3c).setDepth(DEPTH.light + 1).setBlendMode('ADD');
+        this.tweens.add({ targets: e, y: e.y - Phaser.Math.Between(20, 46), x: e.x + Phaser.Math.Between(-10, 10), alpha: 0, duration: Phaser.Math.Between(700, 1400), ease: 'Sine.easeOut', onComplete: () => e.destroy() });
+      }
+    }
+  }
+
   // Life at camp: smoke and sparks from the fire, fireflies over the meadow
   // at night, and the rim light of the hour on the wall.
   updateCampLife(dt, day) {
@@ -503,6 +548,7 @@ export class MenuScene extends Phaser.Scene {
         this.tweens.add({ targets: e, y: e.y - Phaser.Math.Between(14, 30), x: e.x + Phaser.Math.Between(-6, 6), alpha: 0, duration: Phaser.Math.Between(700, 1200), onComplete: () => e.destroy() });
       }
     }
+    this.campNight(dt, day, spots, reduced);
     // Fireflies come out after dusk and blink as they drift.
     const want = !reduced && day.night > 0.45 ? 16 : 0;
     while (life.flies.length < want) {

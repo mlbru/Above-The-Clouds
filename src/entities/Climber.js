@@ -298,24 +298,55 @@ export class Climber {
     }
   }
 
-  updateLamp(night) {
+  // The headlamp. aim: a world point the climber is looking at (the hold
+  // they are about to go for), or null. The beam follows the head on a
+  // spring: it swings over to a new target, overshoots a touch and settles,
+  // bobs with the breathing, jolts with each move, and its bright spot lands
+  // on what it points at. The light flickers very faintly.
+  updateLamp(night, aim = null) {
     const h = this.head;
-    // At night the headlamp throws a wide warm pool of light on the rock.
+    const dt = Math.min(0.05, (this.scene.game.loop.delta || 16) / 1000);
+    const now = this.scene.time.now;
     // A warm pool of lamplight on the rock around the hands and face.
     this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 14)).setScale(1.2 + Math.min(1, night) * 0.9).setTint(0xffd8a0).setAlpha(Math.max(0, night - 0.25) * 0.5);
-    // The beam: four nested wedges from the forehead up the wall, brightest
-    // in the middle, with a bright spot where it lands on the rock.
     const g = this.cone;
     g.clear();
-    const k = Math.max(0, night - 0.35) * (this.sprite.visible ? 1 : 0);
-    if (k <= 0 || this.pose === 'sit' || this.pose === 'sit_b') return;
-    const x = Math.round(h.x), y = Math.round(h.y - 6), len = 74;
-    const sway = Math.sin(this.scene.time.now / 900) * 3;
+    const k0 = Math.max(0, night - 0.35) * (this.sprite.visible ? 1 : 0);
+    const p = POSES[this.pose] || {};
+    if (k0 <= 0 || this.pose === 'sit' || this.pose === 'sit_b') { this.lampAng = null; this.lampSpot = null; return; }
+    const x = h.x, y = h.y - 6;
+    // Where the head wants to look.
+    let target = -Math.PI / 2, reach = 74;
+    if (aim) {
+      target = Math.atan2(aim.y - y, aim.x - x);
+      reach = Math.max(40, Math.min(110, Math.hypot(aim.x - x, aim.y - y) + 6));
+    } else if (p.head === 'right') target += 0.55;
+    else if (p.head === 'left') target -= 0.55;
+    else if (p.head === 'down') target += 0.35 * (this.sprite.flipX ? -1 : 1);
+    target = Math.max(-Math.PI + 0.35, Math.min(-0.35, target));
+    // Spring towards it (and a jolt when the head moves suddenly).
+    if (this.lampAng == null) { this.lampAng = target; this.lampVel = 0; this.lampLen = reach; this.lampHead = { x: h.x, y: h.y }; }
+    const jolt = (h.x - this.lampHead.x) * 0.02;
+    this.lampHead = { x: h.x, y: h.y };
+    this.lampVel += ((target - this.lampAng) * 70 - this.lampVel * 10) * dt - jolt;
+    this.lampAng += this.lampVel * dt;
+    this.lampLen += (reach - this.lampLen) * Math.min(1, dt * 6);
+    const ang = this.lampAng + Math.sin(now / 760) * 0.035 + Math.sin(now / 213) * 0.01;
+    const len = this.lampLen;
+    const k = k0 * (0.94 + 0.06 * Math.sin(now / 37) * Math.sin(now / 91));
+    const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len;
+    // Where the beam lands (wet rock mirrors it, see WetWall).
+    this.lampSpot = { x: ex, y: ey, k };
     for (const [w, a] of [[22, 0.05], [15, 0.06], [9, 0.07], [4, 0.08]]) {
-      g.fillStyle(0xffe8c0, a * k).fillTriangle(x, y, x - w + sway, y - len, x + w + sway, y - len);
+      const half = Math.atan(w / len);
+      g.fillStyle(0xffe8c0, a * k).fillTriangle(x, y,
+        x + Math.cos(ang - half) * len, y + Math.sin(ang - half) * len,
+        x + Math.cos(ang + half) * len, y + Math.sin(ang + half) * len);
     }
-    g.fillStyle(0xfff4dc, 0.12 * k).fillEllipse(x + sway, y - len + 4, 34, 14);
-    g.fillStyle(0xffffff, 0.1 * k).fillEllipse(x + sway, y - len + 4, 16, 7);
+    // The spot where it lands, stretched along the beam.
+    const sx = 24 + Math.abs(Math.cos(ang)) * 14, sy = 10 + Math.abs(Math.sin(ang)) * 6;
+    g.fillStyle(0xfff4dc, 0.13 * k).fillEllipse(ex, ey, sx, sy);
+    g.fillStyle(0xffffff, 0.11 * k).fillEllipse(ex, ey, sx * 0.45, sy * 0.5);
   }
 
   destroy() {

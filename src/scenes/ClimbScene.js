@@ -66,6 +66,8 @@ import { biomeMoments } from './biomeMoments.js';
 import { SunRays } from '../world/SunRays.js';
 import { WeatherScenery } from '../world/WeatherScenery.js';
 import { NightWall } from '../world/NightWall.js';
+import { Foreground } from '../world/Foreground.js';
+import { LensDrops } from '../world/LensDrops.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -178,6 +180,8 @@ export class ClimbScene extends Phaser.Scene {
     this.wetWall = new WetWall(this, this.mountain);
     this.scenery = new WeatherScenery(this, this.mountain);
     this.nightWall = new NightWall(this, this.mountain);
+    this.foreground = new Foreground(this);
+    this.lens = new LensDrops(this);
     // A lift ride cut short by leaving the run must not leave its hum playing.
     this.events.once('shutdown', () => Audio.stopHum());
     this.showerK = 0;
@@ -3034,13 +3038,27 @@ export class ClimbScene extends Phaser.Scene {
       light = lerpColor(light, 0xe8f0ff, Math.max(0, Math.min(1, strobe)) * 0.9);
     }
     this.lightOverlay.fillColor = light;
+    this.effects.setLight(lerpColor(light, day.night > 0.5 ? 0x8fa8ff : light, day.night * 0.6));
+    // Sweat when the grip is going.
+    if (this.state === STATE.ROUTE_SELECT && this.grip.isLow && this.node && this.node.kind !== 'ledge' && Math.random() < dt / 900) {
+      const h = this.climber.head;
+      this.effects.sweat(h.x + (Math.random() < 0.5 ? -3 : 3), h.y + 4);
+    }
+    if (!this.director) this.foreground.update(dt, climberAlt, this.camY, light, this.settings.reducedParticles);
+    this.lens.update(dt, {
+      rain: Math.max(shower, stormSky > 0.4 ? stormSky : 0), snow: Math.min(1, whiteout + mech.snow),
+      light, reduced: this.settings.reducedParticles,
+    });
     // The grade's second half: the hour's colour added into the shadows (rose
     // at dawn, teal in the morning, amber at golden hour, violet at dusk).
     const calm = (1 - dark) * (1 - storm * 0.7);
     const w1 = Math.min(1, warmth);
     this.goldenOverlay.fillColor = warmthOf(lerpColor(day.lift, 0xff9a40, lowSun(day) * 0.5 * w1), w1);
     this.goldenOverlay.setAlpha(day.liftA * 3.5 * calm);
-    this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7));
+    // The headlamp looks where you are going: the chosen hold, or the next move.
+    const lampAim = this.state === STATE.ROUTE_SELECT && this.routes[this.selected] ? this.routes[this.selected].target
+      : this.state === STATE.CLIMBING_COMBO && this.to ? this.to : null;
+    this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7), lampAim);
     this.wall.night = Math.max(day.night, dark, storm * 0.5);
     this.updateLight(day, dark, storm, dt, { whiteout, stormMech, mist: mech.mist });
     this.atmos.update(dt, { day, biome, dim: Math.max(whiteout, dark, storm, biome.overcast || 0) });
@@ -3048,9 +3066,15 @@ export class ClimbScene extends Phaser.Scene {
     this.updateDragon(dt, eye, day);
     const camLevelTop = -(this.camY / LEVEL_PX);
     this.wall.update(dt, Math.ceil(camLevelTop) + RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
-    this.wetWall.update(dt, Math.max(storm, shower * 0.85), this.camY);
+    const spot = this.climber.lampSpot;
+    this.wetWall.update(dt, Math.max(storm, shower * 0.85), this.camY, {
+      lights: spot ? [{ x: spot.x, y: spot.y, c: 0xffe0b0, k: spot.k }] : [],
+      flash: fl > 0 ? 1 - Math.abs(1 - fl / 110) : 0,
+      sky: day.skyBottom, day: 1 - day.night,
+    });
     this.nightWall.update(dt, Math.max(day.night * 0.9, dark, storm * 0.6) * (fl > 0 ? 0 : 1), this.camX, this.camY, this.settings.reducedParticles);
-    if (this.critters) this.critters.update(dt, this.climber, this.camY);
+    if (this.critters) this.critters.update(dt, this.climber, this.camY, this.state === STATE.RESTING && this.node && this.node.kind === 'ledge' && !this.atCamp
+      ? { node: this.node, biome: biomeAt(levelToMeters(this.node.level)).id, day: day.night < 0.4 } : null);
 
     const wallState = this.state === STATE.ROUTE_SELECT ? 'wall'
       : this.state === STATE.RESTING ? 'ledge'

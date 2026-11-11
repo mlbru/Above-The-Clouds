@@ -211,6 +211,7 @@ export class WallRenderer {
       this.trader = add(this.scene.add.sprite(tx, node.y + 1, 'npc_trader', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side > 0));
       add(this.scene.add.image(tx - side * 2, node.y + 2, 'decor_stall').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1));
       this.animated.push({ type: 'trader', obj: this.trader, seg: seg.index });
+      this.traderLamp = { x: tx + (side > 0 ? -10 : 10), y: node.y - 23 };
       const lamp = add(this.scene.add.image(tx + (side > 0 ? -10 : 10), node.y - 23, 'glow_small').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffc060).setScale(1.4).setAlpha(0.45));
       this.animated.push({ type: 'flicker', obj: lamp, base: 0.45, phase: 3, seg: seg.index });
     }
@@ -219,7 +220,7 @@ export class WallRenderer {
       add(this.scene.add.image(node.x - side * 40, node.y, 'decor_sign').setOrigin(0.5, 1).setDepth(DEPTH.decor));
       // Where things stand at camp (the title screen uses them as its menu).
       this.campSpots = { ...(this.campSpots || {}), tent: { x: spot(84), y: node.y }, sign: { x: node.x - side * 40, y: node.y }, fire: { x: node.x - side * 84, y: node.y } };
-      if (this.trader) this.campSpots.trader = { x: this.trader.x, y: node.y };
+      if (this.trader) this.campSpots.trader = { x: this.trader.x, y: node.y, lamp: this.traderLamp };
       add(this.scene.add.image(spot(114), node.y, 'decor_pine').setOrigin(0.5, 1).setDepth(DEPTH.decor));
       add(this.scene.add.image(spot(128), node.y, 'decor_pine').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(true));
       if (seg.index === 0) this.placeCampLife(node, side, rng, add);

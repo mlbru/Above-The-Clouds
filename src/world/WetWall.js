@@ -11,6 +11,8 @@ export class WetWall {
     this.scene = scene;
     this.mountain = mountain;
     this.g = scene.add.graphics().setDepth(DEPTH.wall + 0.5);
+    // Reflections on the wet rock (added light, above the light of the hour).
+    this.gl = scene.add.graphics().setDepth(DEPTH.light + 1).setBlendMode('ADD');
     this.wet = 0;
     this.t = 0;
     // Each stream sits at a fixed fraction of the wall's width, with its own
@@ -25,11 +27,14 @@ export class WetWall {
   }
 
   // storm: 0..1 storm intensity. Wetting is quick, drying slow.
-  update(dt, storm, camY) {
+  // lights: [{ x, y, c, k }] in world space (the headlamp's spot...).
+  // flash: 0..1 a lightning flash. sky: the sky colour by day (a cool sheen).
+  update(dt, storm, camY, { lights = [], flash = 0, sky = null, day = 0 } = {}) {
     const k = storm > this.wet ? dt / 1500 : dt / 9000;
     this.wet += (storm - this.wet) * Math.min(1, k);
     const g = this.g;
     g.clear();
+    const gl = this.gl.clear();
     if (this.wet < 0.02) return;
     this.t += dt;
     const w = this.wet;
@@ -48,6 +53,13 @@ export class WetWall {
         const x = Math.round(b.l + 8 + (b.r - b.l - 16) * s.f + Math.sin((y + s.phase) * 0.06) * s.wiggle);
         g.fillStyle(0xa8c0e0, 0.18 * w).fillRect(x, y, 1, BAND);
         g.fillStyle(0x05080e, 0.2 * w).fillRect(x + 1, y, 1, BAND);
+        // The wet line catches nearby light: a glint along it.
+        let shine = flash * 0.7 + (sky ? day * 0.08 : 0);
+        for (const L of lights) {
+          const d = Math.hypot(x - L.x, y - L.y);
+          if (d < 70) shine += (1 - d / 70) * 0.55 * L.k;
+        }
+        if (shine > 0.02) gl.fillStyle(flash > 0.3 ? 0xffffff : lights.length ? lights[0].c : 0xdfe8ff, Math.min(0.8, shine) * w).fillRect(x, y, 1, BAND);
       }
       // Two drops per stream, sliding down at their own speed.
       for (let d = 0; d < 2; d++) {
@@ -61,7 +73,19 @@ export class WetWall {
         g.fillStyle(0xa8c0e0, 0.35 * w).fillRect(x, Math.round(y) - 3, 1, 3);
       }
     }
+    // Each light mirrors in the wet rock as a glossy smear running down
+    // from it, broken and wavering like a reflection in running water.
+    for (const L of lights) {
+      for (let k = 0; k < 34; k += 2) {
+        const f = 1 - k / 34;
+        const wob = Math.sin(this.t / 140 + k * 0.5) * (1 + k * 0.06);
+        const a = 0.22 * L.k * w * f * f;
+        if ((k + Math.floor(this.t / 90)) % 7 === 0) continue;
+        gl.fillStyle(L.c, a).fillRect(Math.round(L.x + wob - 2), Math.round(L.y + 4 + k), 5, 2);
+        gl.fillStyle(0xffffff, a * 0.6).fillRect(Math.round(L.x + wob), Math.round(L.y + 4 + k), 1, 2);
+      }
+    }
   }
 
-  destroy() { this.g.destroy(); }
+  destroy() { this.g.destroy(); this.gl.destroy(); }
 }

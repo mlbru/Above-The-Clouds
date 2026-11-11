@@ -403,11 +403,12 @@ function glowTexture(scene, key, r) {
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const d = Math.hypot(x + 0.5 - r, y + 0.5 - r) / r;
     const a = Math.max(0, 1 - d);
-    const v = a * a;
-    const lvl = Math.floor(v * 4 + bayer(x, y)) / 4;
+    // Smooth falloff: glows get scaled up a lot (camp fire pools, lanterns,
+    // shrine light), and a dithered glow turns into a coarse checkerboard.
+    const v = a * a * (3 - 2 * a) * a;
     const i = (y * size + x) * 4;
     img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
-    img.data[i + 3] = Math.round(Math.min(1, lvl) * 255);
+    img.data[i + 3] = Math.round(Math.min(1, v) * 255);
   }
   ctx.putImageData(img, 0, 0);
   if (scene.textures.exists(key)) scene.textures.remove(key);
