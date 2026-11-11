@@ -98,7 +98,26 @@ export class WallPainter {
       ctx.globalAlpha = 1;
       return c;
     };
-    return { l: make(-1), r: make(1) };
+    // Shade: a wide soft band inside each edge, for the side turned away from
+    // the light (the wall's own shadow on itself).
+    const shade = (side) => {
+      const c = makeCanvas(W, job.h);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      const depth = 26;
+      for (let row = 0; row < job.h; row++) {
+        const e = job.edges[row];
+        if (!e) continue;
+        const [l, r] = e;
+        for (let k = 0; k < depth; k++) {
+          ctx.globalAlpha = Math.pow(1 - k / depth, 1.6);
+          ctx.fillRect(side < 0 ? l + k : r - k, row, 1, 1);
+        }
+      }
+      ctx.globalAlpha = 1;
+      return c;
+    };
+    return { l: make(-1), r: make(1), sl: shade(-1), sr: shade(1) };
   }
 
   heightRow(wy) {

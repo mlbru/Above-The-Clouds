@@ -71,7 +71,7 @@ export const climbBoons = {
     // light over it, the stones, and a rune that glows like ice in the dark.
     const pillar = this.add.image(x, y - 90, 'glow').setBlendMode('ADD').setTint(0xa8d8ff).setScale(1.1, 5.4).setAlpha(0.22).setDepth(DEPTH.holds);
     const cairn = this.add.image(x, y, 'shrine_cairn').setOrigin(0.5, 1).setScale(1.5).setDepth(DEPTH.holds + 1);
-    const runeGlow = this.add.image(x, y - 21, 'glow').setBlendMode('ADD').setTint(0xbfeaff).setScale(0.9).setAlpha(0.7).setDepth(DEPTH.holds + 2);
+    const runeGlow = this.add.image(x, y - 21, 'glow').setBlendMode('ADD').setTint(0xbfeaff).setScale(0.9).setAlpha(0.7).setDepth(DEPTH.light + 1);
     const rune = this.add.image(x - 1, y - 21, 'shrine_rune').setTint(0xe8fbff).setScale(1.5).setDepth(DEPTH.holds + 2);
     s.cairn = { pillar, cairn, rune, runeGlow, x, y };
   },

@@ -68,6 +68,8 @@ export class Background {
     this.floatersVisible = false;
     this.auroraVisible = false;
     this.skyLife = new SkyLife(scene);
+    // The sun's path glittering on the sea of clouds (see update).
+    this.seaGlitter = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.cloudSea + 1).setBlendMode('ADD');
   }
 
   // mix: biomeMixAt() at the camera height. whiteout: 0..1 storm strength.
@@ -166,8 +168,22 @@ export class Background {
     // Each high biome colours its sea of clouds: storm grey, dusk violet, ember red.
     let sea = 0xffffff;
     if (mix) for (const b of new Set([mix.a, mix.b])) if (b.sea) sea = lerpColor(sea, b.sea, weight(b.id));
-    const seaTint = multiply(lerpColor(light, 0xffffff, 0.15), sea);
-    this.cloudSea.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY).setTint(seaTint);
+    let seaTint = multiply(lerpColor(light, 0xffffff, 0.15), sea);
+    // At sunrise and sunset the sea of clouds catches the light: gold on top,
+    // rose underneath, and a glittering path under the sun.
+    const lowSun = day.sun ? Math.max(0, 1 - Math.max(0, (150 - day.sun.y) / 120) / 0.5) : 0;
+    if (lowSun > 0) seaTint = lerpColor(seaTint, 0xffc890, lowSun * 0.45);
+    this.cloudSea.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY).setTint(seaTint, seaTint, lerpColor(seaTint, 0xe890a8, lowSun * 0.4), lerpColor(seaTint, 0xe890a8, lowSun * 0.4));
+    const gl = this.seaGlitter;
+    gl.clear();
+    if (seaAlpha > 0 && day.sun) {
+      const k = seaAlpha * (0.35 + lowSun * 0.65);
+      for (let i = 0; i < 26; i++) {
+        const y = seaY + 4 + i * 2.2;
+        const w = 4 + i * 1.6, x = day.sun.x + Math.sin(this.time / 600 + i * 1.7) * (2 + i * 0.6);
+        if (Math.sin(this.time / 240 + i * 2.3) > 0.2) gl.fillStyle(lerpColor(0xfff4d8, 0xffb060, lowSun), 0.22 * k * (1 - i / 26)).fillRect(Math.round(x - w / 2), Math.round(y), Math.round(w), 1);
+      }
+    }
     this.cloudSea.tilePositionX += dt * 0.004;
     this.cloudSeaFill.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY + 88);
     this.cloudSeaFill.fillColor = multiply(multiply(0xbcc6de, light), sea);

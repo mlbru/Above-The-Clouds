@@ -179,7 +179,21 @@ export class ShrineScene extends Phaser.Scene {
     this.shaft.fillStyle(0x9fc8ff, 1).fillRect(Math.round(W / 2 - 40), 0, 80, ridgeY);
     this.motes = Array.from({ length: IS_PORTRAIT ? 26 : 36 }, (_, i) => ({ x: (i * 97.3) % W, y: (i * 53.1) % H, v: 4 + (i % 5) * 2, p: i * 1.7, c: i % 3 === 0 ? 0xffe08a : 0x9fd8ff }));
     this.moteG = this.add.graphics();
-    this.root.add([sky, this.shaft, this.moteG]);
+    // The night sky over the cairn: a big moon with a halo, an aurora that
+    // ripples across the top, and a turning rune circle on the ground.
+    const moon = this.add.graphics();
+    const mx = Math.round(W * 0.84), my = top + 24;
+    for (let r = 26; r > 12; r -= 3) moon.fillStyle(0x9fb8ff, 0.04).fillCircle(mx, my, r);
+    moon.fillStyle(0xe8ecff, 1).fillCircle(mx, my, 10);
+    moon.fillStyle(0xc8d0ec, 1).fillCircle(mx + 3, my - 2, 3).fillCircle(mx - 4, my + 3, 2).fillCircle(mx + 1, my + 5, 1.5);
+    moon.fillStyle(0xffffff, 1).fillCircle(mx - 3, my - 4, 2);
+    this.aurora = this.add.graphics().setBlendMode('ADD');
+    this.circleG = this.add.graphics().setBlendMode('ADD');
+    this.shardG = this.add.graphics();
+    this.root.add([sky, moon, this.aurora, this.shaft, this.moteG, this.circleG, this.shardG]);
+    // Drawn over the stones: the chosen one's glowing outline and its motes.
+    this.selG = this.add.graphics().setBlendMode('ADD').setDepth(10);
+    this.selMotes = [];
     this.add.zone(0, 0, W, H).setOrigin(0, 0).setInteractive();
 
     // Title: carved runes on both sides of THE CAIRN.
@@ -278,7 +292,7 @@ export class ShrineScene extends Phaser.Scene {
       t.c.setY(t.baseY + 70).setAlpha(0);
       this.tweens.add({
         targets: t.c, y: t.baseY, alpha: 1, delay: i * 140, duration: 520, ease: 'Back.easeOut',
-        onStart: () => this.dust(t.baseX, this.rowY + this.th / 2, 10),
+        onStart: () => { this.dust(t.baseX, this.rowY + this.th / 2, 10); this.pillar(t.baseX, t.group.color); },
         onComplete: () => { if (i === n - 1) { this.busy = false; this.select(Math.min(this.index, n - 1), true); } },
       });
     });
@@ -383,6 +397,7 @@ export class ShrineScene extends Phaser.Scene {
     this.tweens.add({ targets: this.shaft, alpha: { from: 0, to: 0.5 }, duration: 160, yoyo: true });
     this.tablets.forEach((o) => { if (o !== k) this.crumble(o); });
     this.cameras.main.shake(120, 0.004);
+    this.shockwave(k.c.x, k.c.y, k.group.color);
     this.time.delayedCall(420, () => this.fly(k));
   }
 
@@ -516,7 +531,95 @@ export class ShrineScene extends Phaser.Scene {
     }
   }
 
+  // A pillar of light shoots up as a stone rises.
+  pillar(x, color) {
+    const p = this.add.rectangle(x, 0, this.tw * 0.7, GAME_HEIGHT * 2, color, 0.5).setOrigin(0.5, 0).setBlendMode('ADD').setDepth(9);
+    const core = this.add.rectangle(x, 0, 6, GAME_HEIGHT * 2, 0xffffff, 0.7).setOrigin(0.5, 0).setBlendMode('ADD').setDepth(9);
+    this.tweens.add({ targets: [p, core], alpha: 0, scaleX: 0.2, duration: 700, ease: 'Quad.easeOut', onComplete: () => { p.destroy(); core.destroy(); } });
+  }
+
+  // The pact: a ring of light bursts out from the stone and the screen flashes.
+  shockwave(x, y, color) {
+    for (const [d, w, c] of [[0, 3, 0xffffff], [90, 2, color]]) {
+      const ring = this.add.circle(x, y, 6, 0, 0).setStrokeStyle(w, c, 1).setDepth(11).setBlendMode('ADD');
+      this.tweens.add({ targets: ring, radius: 140, alpha: 0, delay: d, duration: 650, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    }
+    const flash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.35).setOrigin(0, 0).setDepth(12).setBlendMode('ADD');
+    this.tweens.add({ targets: flash, alpha: 0, duration: 420, onComplete: () => flash.destroy() });
+    for (let i = 0; i < 40; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 90;
+      const p = this.add.rectangle(x, y, 2, 2, i % 3 ? color : 0xffffff).setDepth(11).setBlendMode('ADD');
+      this.tweens.add({ targets: p, x: x + Math.cos(a) * sp, y: y + Math.sin(a) * sp, alpha: 0, duration: 600 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => p.destroy() });
+    }
+  }
+
+  // The living parts of the scene: aurora, rune circle, orbiting shards and
+  // the chosen stone's glow.
+  updateMagic(delta) {
+    const W = GAME_WIDTH, t = this.t;
+    const a = this.aurora;
+    a.clear();
+    for (let x = 0; x < W; x += 3) {
+      const wave = Math.sin(x / 47 + t / 1300) * 10 + Math.sin(x / 17 + t / 700) * 3;
+      const y = this.top - 4 + wave;
+      const h = 44 + Math.sin(x / 31 + t / 900) * 16;
+      const c = lerpColor(0x40e0a0, 0x9a6aff, (Math.sin(x / 90 + t / 2400) + 1) / 2);
+      a.fillStyle(c, 0.1 + 0.07 * Math.sin(x / 11 + t / 500)).fillRect(x, Math.round(y), 3, Math.round(h));
+      a.fillStyle(c, 0.12).fillRect(x, Math.round(y + h * 0.4), 3, Math.round(h * 0.6));
+      a.fillStyle(c, 0.28).fillRect(x, Math.round(y + h - 3), 3, 2);
+    }
+    // The rune circle at the stones' feet: two rings of dots turning opposite ways.
+    const g = this.circleG;
+    g.clear();
+    const n = this.tablets.length || 3;
+    const rx = (n * this.tw + (n - 1) * this.gap) / 2 + 26, ry = 11, cx = W / 2, cy = this.rowY + this.maxTh / 2 - 4;
+    const pulse = 0.55 + 0.45 * Math.sin(t / 600);
+    for (const [k, dir, count, col] of [[1, 1, 64, 0x9fd8ff], [0.86, -1, 40, 0xd8a6ff]]) {
+      for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2 + dir * t / 4000;
+        const px = cx + Math.cos(ang) * rx * k, py = cy + Math.sin(ang) * ry * k;
+        const front = Math.sin(ang) > 0;
+        g.fillStyle(col, (front ? 1 : 0.45) * pulse).fillRect(Math.round(px), Math.round(py), i % 8 === 0 ? 3 : 2, i % 8 === 0 ? 2 : 1);
+      }
+    }
+    g.fillStyle(0x9fd8ff, 0.1 * pulse).fillEllipse(cx, cy, rx * 2, ry * 2);
+    g.fillStyle(0x9fd8ff, 0.08 * pulse).fillEllipse(cx, cy, rx * 1.4, ry * 1.2);
+    // Shards of stone orbiting the title.
+    const s = this.shardG;
+    s.clear();
+    for (let i = 0; i < 9; i++) {
+      const ang = (i / 9) * Math.PI * 2 + t / 5200;
+      const px = W / 2 + Math.cos(ang) * (this.title.width * 1.15 + 20), py = this.top + 14 + Math.sin(ang) * 9 + Math.sin(t / 700 + i) * 2;
+      const front = Math.sin(ang) > 0;
+      const sz = 3 + (i % 3);
+      s.fillStyle(front ? 0x8a84a0 : 0x4a4466, 1).fillRect(Math.round(px), Math.round(py), sz, sz - 1);
+      s.fillStyle(front ? 0xc8c2dc : 0x6a6488, 1).fillRect(Math.round(px), Math.round(py), sz, 1);
+      if (front && i % 3 === 0) s.fillStyle(0x9fd8ff, 0.9).fillRect(Math.round(px + 1), Math.round(py + 1), 1, 1);
+    }
+    // The chosen stone: a glowing outline, a spark running round its edge,
+    // and motes of its colour drifting up from it.
+    const sel = this.selG;
+    sel.clear();
+    sel.setAlpha(this.root.alpha);
+    const k = this.tablets[this.index];
+    if (!k || this.busy || !k.c.active) return;
+    const w = this.tw * k.c.scaleX, h = this.th * k.c.scaleY, x0 = k.c.x - w / 2, y0 = k.c.y - h / 2;
+    const glow = 0.35 + 0.25 * Math.sin(t / 260);
+    for (const [pad, al] of [[4, 0.12], [2, 0.25], [1, 0.5]]) {
+      sel.lineStyle(1, k.group.color, al * glow * 2).strokeRect(Math.round(x0 - pad), Math.round(y0 - pad), Math.round(w + pad * 2), Math.round(h + pad * 2));
+    }
+    const per = 2 * (w + h), d = (t / 4) % per;
+    let px, py;
+    if (d < w) { px = x0 + d; py = y0 - 1; } else if (d < w + h) { px = x0 + w; py = y0 + d - w; } else if (d < 2 * w + h) { px = x0 + w - (d - w - h); py = y0 + h; } else { px = x0 - 1; py = y0 + h - (d - 2 * w - h); }
+    sel.fillStyle(0xffffff, 1).fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
+    sel.fillStyle(k.group.color, 0.6).fillRect(Math.round(px) - 2, Math.round(py) - 2, 5, 5);
+    if (Math.random() < delta / 50) this.selMotes.push({ x: x0 + Math.random() * w, y: y0 + h - 4, v: 10 + Math.random() * 18, life: 1, c: k.group.color });
+    this.selMotes = this.selMotes.filter((m) => (m.life -= delta / 1400) > 0);
+    for (const m of this.selMotes) { m.y -= m.v * delta / 1000; sel.fillStyle(m.c, m.life).fillRect(Math.round(m.x), Math.round(m.y), 1, 1); }
+  }
+
   update(time, delta) {
+    this.updateMagic(delta);
     this.t += delta;
     const g = this.moteG;
     g.clear();

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SunRays } from '../world/SunRays.js';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, PX_PER_METER, LEVEL_PX, RENDER_AHEAD_LEVELS, levelToMeters, camXFor, IS_PORTRAIT } from '../config/gameConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
 import { randomSeed } from '../utils/seededRandom.js';
@@ -76,6 +77,7 @@ export class MenuScene extends Phaser.Scene {
     this.dayNight = new DayNightSystem({ dayLengthSec: 1800, startT: this.registry.get('dayT') ?? realClockT() });
     this.campLife = { smokeT: 0, flies: [] };
     if (typeof window !== 'undefined') window.__menu = this;
+    this.sunRays = null;
     this.background = new Background(this);
     this.buildWorld();
     this.weather = new WeatherSystem(this);
@@ -496,7 +498,12 @@ export class MenuScene extends Phaser.Scene {
       const str = sun ? 0.25 + Math.max(0, Math.min(1, (150 - sun.y) / 120)) * 0.5 : moon ? 0.32 * day.night : 0;
       const col = sun ? 0xffe0b0 : 0x9fb8ff;
       this.wall.setRim({ [side]: [col, str], [side === 'l' ? 'r' : 'l']: [col, str * 0.18] });
+      const height = sun ? Math.max(0, Math.min(1, (150 - sun.y) / 120)) : 0.6;
+      const away = side === 'l' ? 1 : -1;
+      this.wall.setSun({ dx: away * (1 + (1 - height) * 3), dy: 2 + (1 - height), shadow: sun ? 1 : 0.35 * day.night, shade: sun ? 0.55 - height * 0.2 : 0.3 * day.night, side });
     }
+    if (!this.sunRays) this.sunRays = new SunRays(this, DEPTH.light - 2);
+    this.sunRays.update(dt, day, { reduced });
   }
 
   update(time, delta) {

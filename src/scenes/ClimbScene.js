@@ -63,6 +63,7 @@ import { GEM_TARGET } from '../ui/HUD.js';
 import { toCss, lerpColor } from '../utils/color.js';
 import { climbBoons } from './climbBoons.js';
 import { biomeMoments } from './biomeMoments.js';
+import { SunRays } from '../world/SunRays.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -179,6 +180,10 @@ export class ClimbScene extends Phaser.Scene {
     // The Dragon's Spine: the dragon's eye, up in the sky beside the wall.
     this.dragon = new Dragon(this);
     this.lightOverlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    // Light rays from the sun or moon, in front of the wall, under the grade.
+    this.sunRays = new SunRays(this, DEPTH.light - 2);
+    // The mountain's long shadow over the hills and clouds while the sun is low.
+    this.longShadow = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.wall - 1);
     // Golden hour: a warm glow over everything while the sun is low.
     this.goldenOverlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a40).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.atmos = new Atmosphere(this);
@@ -641,6 +646,8 @@ export class ClimbScene extends Phaser.Scene {
     this.state = STATE.DODGING;
     this.routeUI.hide();
     this.floatText('IT DRAWS BREATH!', '#ff9a3c', 14);
+    // The fire lights up the whole scene for a moment (see updateLight).
+    this.fireGlowUntil = this.clock + DRAGON_EYE.breathLeadMs + 1600;
     this.tip('dragon');
     this.nextDodge(DRAGON_EYE.breathLeadMs);
   }
@@ -2977,7 +2984,7 @@ export class ClimbScene extends Phaser.Scene {
     this.goldenOverlay.setAlpha(low * 0.16 * (1 - dark) * (1 - storm));
     this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7));
     this.wall.night = Math.max(day.night, dark, storm * 0.5);
-    this.updateLight(day, dark, storm);
+    this.updateLight(day, dark, storm, dt, { whiteout, stormMech, mist: mech.mist });
     this.atmos.update(dt, { day, biome, dim: Math.max(whiteout, dark, storm, biome.overcast || 0) });
     const eye = this.mechanics ? this.mechanics.get('dragonEye') : null;
     this.updateDragon(dt, eye, day);
@@ -3074,7 +3081,7 @@ export class ClimbScene extends Phaser.Scene {
   // Light of the hour on the scene: the wall's rim catches the sun on its
   // sunward edge (warm at dawn and dusk, cool moonlight at night) and the
   // climber casts a soft shadow on the rock away from the light.
-  updateLight(day, dark, storm) {
+  updateLight(day, dark, storm, dt = 16, weather = {}) {
     const dim = (1 - dark * 0.8) * (1 - storm * 0.6);
     let side = 'l', strength = 0, color = 0xffffff;
     if (day.sun) {
@@ -3092,6 +3099,30 @@ export class ClimbScene extends Phaser.Scene {
     const other = side === 'l' ? 'r' : 'l';
     if (this.clock < (this.flashUntil || 0)) this.wall.setRim({ l: [0xe8f0ff, 0.95], r: [0xe8f0ff, 0.95] });
     else this.wall.setRim({ [side]: [color, strength], [other]: [lerpColor(color, 0x6a7ab8, 0.6), strength * 0.18] });
+    // Every shadow on the wall follows the light: long at dawn and dusk, short
+    // at noon, faint by moonlight, washed out in a whiteout or a storm.
+    const whiteout = weather.whiteout || 0;
+    const height = day.sun ? Math.max(0, Math.min(1, (150 - day.sun.y) / 120)) : 0.6;
+    const away = side === 'l' ? 1 : -1;
+    const soft = (1 - whiteout * 0.85) * (1 - storm * 0.6) * (1 - dark * 0.4);
+    const shadowK = (day.sun ? 1 : 0.35 * day.night) * soft;
+    this.wall.setSun({
+      dx: away * (1 + (1 - height) * 3), dy: 2 + (1 - height),
+      shadow: shadowK, shade: (day.sun ? 0.55 - height * 0.2 : 0.3 * day.night) * soft, side,
+    });
+    // Weather light: rays burst through as a storm clears, mist and snow catch them.
+    const sm = weather.stormMech;
+    const clearing = sm && sm.phase === 'clearing' && sm.inside >= sm.cfg.minWeight ? 1 : 0;
+    this.sunRays.update(dt, day, { air: Math.min(1, (weather.mist || 0) + whiteout * 0.6), dim: Math.min(1, storm + dark * 0.8 + whiteout * 0.4), boost: clearing, reduced: this.settings.reducedParticles });
+    this.drawLongShadow(day, height, soft, side);
+    this.iceGlints(dt, day);
+    // Dragon fire lights the whole scene orange while it breathes.
+    const fire = this.clock < (this.fireGlowUntil || 0) ? Math.sin(((this.fireGlowUntil - this.clock) / 1600) * Math.PI) : 0;
+    if (fire > 0) {
+      this.goldenOverlay.fillColor = 0xff5a1a;
+      this.goldenOverlay.setAlpha(Math.max(this.goldenOverlay.alpha, fire * 0.28));
+      this.wall.setRim({ l: [0xff7a2a, 0.8 * fire], r: [0xff7a2a, 0.8 * fire] });
+    } else this.goldenOverlay.fillColor = 0xff9a40;
     // The shadow: a dark copy of the climber, a few pixels off on the far side.
     const sh = this.climberShadow, sp = this.climber.sprite;
     if (!sh) return;
@@ -3099,6 +3130,55 @@ export class ClimbScene extends Phaser.Scene {
     sh.setTexture(sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY);
     sh.setPosition(sp.x + dir * 4, sp.y + 3).setScale(sp.scaleX, sp.scaleY).setFlipX(sp.flipX).setAngle(sp.angle);
     sh.setVisible(sp.visible).setAlpha(sp.alpha * (0.22 + 0.3 * strength));
+  }
+
+  // Ice catches the light: on the frozen and crystal walls, now and then a
+  // hold near you flashes a little four-pointed glint.
+  iceGlints(dt, day) {
+    const id = biomeAt(levelToMeters(this.node.level)).id;
+    if (!['frozen', 'aurora', 'crystal'].includes(id) || this.settings.reducedParticles) return;
+    this.glintT = (this.glintT || 0) + dt;
+    const every = day.sun ? 260 : 700;
+    if (this.glintT < every) return;
+    this.glintT = 0;
+    const holds = [];
+    for (const v of this.wall.visuals.values()) for (const img of v.holds.values()) {
+      const sy = img.y - this.cam.scrollY;
+      if (sy > 10 && sy < GAME_HEIGHT - 40) holds.push(img);
+    }
+    if (!holds.length) return;
+    const h = holds[Math.floor(Math.random() * holds.length)];
+    const x = Math.round(h.x - 2 + Math.random() * 4), y = Math.round(h.y - 4);
+    const g = this.add.graphics().setDepth(DEPTH.light + 1).setBlendMode('ADD');
+    const c = id === 'crystal' ? 0xffd8f8 : 0xe8f8ff;
+    g.setPosition(x, y).setScale(0.2);
+    g.fillStyle(c, 1).fillRect(0, -3, 1, 7).fillRect(-3, 0, 7, 1);
+    g.fillStyle(0xffffff, 1).fillRect(0, 0, 1, 1);
+    this.tweens.add({ targets: g, scale: 1, angle: 45, duration: 180, yoyo: true, onComplete: () => g.destroy() });
+  }
+
+  // While the sun is low the mountain throws a long shadow over the hills and
+  // the sea of clouds on the far side: a dark wedge from the wall's edge out to
+  // the screen edge, strongest low down, fading towards the horizon.
+  drawLongShadow(day, height, soft, side) {
+    const g = this.longShadow;
+    g.clear();
+    if (!day.sun) return;
+    const k = Math.max(0, 1 - height / 0.5) * soft;
+    if (k < 0.02) return;
+    const lv = this.mountain.getLevel(this.node.level);
+    if (!lv || !lv.bounds) return;
+    const edge = side === 'l' ? lv.bounds.r + 10 - this.cam.scrollX : lv.bounds.l - 10 - this.cam.scrollX;
+    const x0 = side === 'l' ? Math.round(edge) : 0, x1 = side === 'l' ? GAME_WIDTH : Math.round(edge);
+    if (x1 <= x0) return;
+    const top = 120;
+    for (let y = top; y < GAME_HEIGHT; y += 4) {
+      const f = (y - top) / (GAME_HEIGHT - top);
+      // The shadow narrows with distance (it is cast away from a low sun).
+      const reach = (x1 - x0) * (0.35 + f * 0.65);
+      const sx = side === 'l' ? x0 : x1 - reach;
+      g.fillStyle(0x140c28, 0.22 * k * (0.3 + f * 0.7)).fillRect(Math.round(sx), y, Math.round(reach), 4);
+    }
   }
 
   chalkTint() {

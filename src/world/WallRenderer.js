@@ -7,6 +7,12 @@ import { HUT_SIZE } from '../render/campArt.js';
 import { lerpColor } from '../utils/color.js';
 import { currentSeason } from '../data/seasons.js';
 
+// Decorations that give light at night: [texture key part, colour, size, strength].
+const LIGHT_OF = [
+  ['vent', 0xff7a2a, 1.6, 0.45], ['crystal', 0xd8a6ff, 1.3, 0.35], ['tent', 0xffb060, 1.2, 0.2],
+  ['hut', 0xffb060, 2.2, 0.35], ['pipe', 0xffa040, 1.0, 0.25], ['comb', 0xffc040, 1.0, 0.2],
+];
+
 const DECOR_TEX = {
   grass: 'decor_grass', flowers: 'decor_flowers', fern: 'decor_fern', rocks: 'decor_rocks',
   icicles: 'decor_icicles', snowdrift: 'decor_snowdrift', crystals: 'decor_crystals',
@@ -80,12 +86,15 @@ export class WallRenderer {
     const t = this.scene.time.now;
     for (const a of this.animated) {
       if (a.type === 'waterfall') a.obj.tilePositionY -= dt * 0.09;
+      if (a.type === 'shine') { a.obj.tilePositionY -= dt * 0.16; a.obj.setAlpha(0.14 + 0.1 * Math.sin(t / 300)); }
       if (a.type === 'foam') a.obj.setFrame(Math.floor(t / 150 + a.phase) % 2);
       if (a.type === 'flags') a.obj.setFrame(Math.floor(t / 350 + a.phase) % 2);
       if (a.type === 'trader') a.obj.setFrame(Math.floor(t / 140) % 26 === 0 ? 1 : Math.floor(t / 900) % 2 ? 2 : 0);
       if (a.type === 'fire') a.obj.setFrame(Math.floor(t / 110) % 3);
       // Fire and lamps glow brighter as night falls.
       if (a.type === 'flicker') a.obj.setAlpha((a.base + Math.sin(t / 90 + a.phase) * 0.06 + Math.sin(t / 37 + a.phase) * 0.04) * (0.6 + (this.night || 0) * 1.1));
+      // Pools of light from fires, lamps, vents and crystals: only at night.
+      if (a.type === 'nightlight') a.obj.setAlpha((a.base + Math.sin(t / 110 + a.phase) * 0.05 + Math.sin(t / 43 + a.phase) * 0.03) * Math.max(0, (this.night || 0) - 0.15) * 1.3);
       if (a.type === 'blink') a.obj.setAlpha(Math.floor(t / 520 + a.phase) % 2 ? 1 : 0.25);
       if (a.type === 'pumpkin') a.obj.setFrame(Math.floor(t / 140 + a.phase) % 5 === 0 ? 1 : 0);
       if (a.type === 'butterfly') {
@@ -117,6 +126,7 @@ export class WallRenderer {
         const look = HOLD_SHADOW[biome.id] || HOLD_SHADOW.default;
         const shadow = this.scene.add.image(node.x + look.dx, node.y + 3 + look.dy, key).setDepth(DEPTH.holds - 1).setTintFill(look.tint).setAlpha(look.alpha);
         if (look.glow) shadow.setBlendMode('ADD').setScale(1.3);
+        else (v.shadows || (v.shadows = [])).push({ img: shadow, x: node.x, y: node.y + 3, alpha: look.alpha, len: 1 });
         const s = this.scene.add.image(node.x, node.y + 3, key).setDepth(DEPTH.holds);
         if (boneHold && (hsh >> 4) % 2) { s.setFlipX(true); shadow.setFlipX(true); }
         v.holds.set(node.id, s);
@@ -136,6 +146,7 @@ export class WallRenderer {
       v.objects.push(img);
     }
     if (seg.rest) this.placeRestDecor(seg, v, rng);
+    this.addShadowsAndLights(v, seg);
     if (seg.waterfall) {
       const top = levelToY(seg.endLevel) - LEVEL_PX / 2;
       const bottom = levelToY(seg.startLevel) + LEVEL_PX / 2;
@@ -151,7 +162,14 @@ export class WallRenderer {
         frequency: reduced ? 220 : 90, lifespan: 600, speedX: { min: -22, max: 22 }, speedY: { min: -38, max: -12 }, gravityY: 110,
         alpha: { start: 0.85, end: 0 }, tint: [0xffffff, 0xd8eeff, 0x8ec5f0],
       }).setDepth(DEPTH.wall + 3);
-      v.objects.push(wf, head, foot, spray);
+      // Light running down the water, and mist rolling off the plunge pool.
+      const shine = this.scene.add.tileSprite(x, top, 10, bottom - top, 'waterfall').setOrigin(0.5, 0).setDepth(DEPTH.wall + 1).setBlendMode('ADD').setAlpha(0.22).setFlipX(true);
+      const mist = this.scene.add.particles(x, bottom - 4, 'puff', {
+        frequency: reduced ? 600 : 260, lifespan: 2600, speedX: { min: -10, max: 10 }, speedY: { min: -10, max: -3 },
+        alpha: { start: 0.32, end: 0 }, scale: { start: 0.6, end: 2.2 }, tint: [0xffffff, 0xe0f0ff],
+      }).setDepth(DEPTH.wall + 3);
+      v.objects.push(wf, head, foot, spray, shine, mist);
+      this.animated.push({ type: 'shine', obj: shine, seg: seg.index });
       v.waterfallX = x;
       this.animated.push({ type: 'waterfall', obj: wf, seg: seg.index });
       this.animated.push({ type: 'foam', obj: head, seg: seg.index, phase: 0 });
@@ -271,6 +289,9 @@ export class WallRenderer {
     this.animated.push({ type: 'flicker', obj: glow, base: 0.35, phase: 0, seg: 0 });
     const fire = add(sc.add.sprite(fx, y + 1, 'camp_fire', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1));
     this.animated.push({ type: 'fire', obj: fire, seg: 0 });
+    // At night the fire lights a big warm pool on the meadow and the rock.
+    const pool = add(sc.add.image(fx, y - 14, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xff8a3c).setScale(4.2, 3).setAlpha(0));
+    this.animated.push({ type: 'nightlight', obj: pool, base: 0.42, phase: 1, seg: 0 });
     const reduced = sc.effects && sc.effects.reduced;
     add(sc.add.particles(fx, y - 12, 'puff', {
       frequency: reduced ? 700 : 320, lifespan: 2600, speedX: { min: -4, max: 6 }, speedY: { min: -16, max: -9 },
@@ -343,6 +364,61 @@ export class WallRenderer {
         return this.scene.add.image(0, job.top, key).setOrigin(0, 0).setDepth(DEPTH.wall + 1).setBlendMode('ADD').setAlpha(0);
       });
       this.applyRim(v);
+      v.shades = ['sl', 'sr'].map((side) => {
+        const key = `${v.texKey}_${side}`;
+        if (tm.exists(key)) tm.remove(key);
+        tm.addCanvas(key, job.rim[side]);
+        return this.scene.add.image(0, job.top, key).setOrigin(0, 0).setDepth(DEPTH.wall + 1).setTint(0x0a0814).setAlpha(0);
+      });
+      if (this.sun) this.applySun(v);
+    }
+  }
+
+  // Every flat decoration (trees, huts, cairns, tents, rocks...) gets a dark
+  // copy of itself as a cast shadow, moved by the sun (see setSun). Things that
+  // give light (fires, lamps, vents, crystals) get a pool of light at night.
+  addShadowsAndLights(v, seg) {
+    const sc = this.scene;
+    const list = v.shadows || (v.shadows = []);
+    for (const o of v.objects.slice()) {
+      if (!o.active || o.type !== 'Image' || o.blendMode !== 0 || o.depth !== DEPTH.decor) continue;
+      const key = o.texture.key;
+      if (!key || key.startsWith('glow')) continue;
+      if (o.originY < 0.5) continue; // hanging things (icicles, chains)
+      const sh = sc.add.image(o.x, o.y, key, o.frame.name).setOrigin(o.originX, o.originY).setFlipX(o.flipX)
+        .setScale(o.scaleX, o.scaleY * 0.55).setTintFill(0x0a0814).setAlpha(0).setDepth(DEPTH.decor - 2);
+      v.objects.push(sh);
+      list.push({ img: sh, x: o.x, y: o.y, alpha: 0.32, len: 3, skew: true });
+      const glow = LIGHT_OF.find(([k]) => key.includes(k));
+      if (glow) {
+        const g = sc.add.image(o.x, o.y - o.displayHeight * 0.4, 'glow').setBlendMode('ADD').setTint(glow[1]).setScale(glow[2]).setAlpha(0).setDepth(DEPTH.light + 1);
+        v.objects.push(g);
+        this.animated.push({ type: 'nightlight', obj: g, base: glow[3], phase: o.x, seg: seg.index });
+      }
+    }
+    if (this.sun) this.applySun(v);
+  }
+
+  // The sun's (or moon's) direction and strength: { dx, dy, shadow, shade, side }.
+  setSun(sun) {
+    const key = `${sun.dx.toFixed(1)}|${sun.dy.toFixed(1)}|${sun.shadow.toFixed(2)}`;
+    this.sun = sun;
+    if (key === this.sunKey) return;
+    this.sunKey = key;
+    for (const v of this.visuals.values()) this.applySun(v);
+  }
+
+  applySun(v) {
+    const sun = this.sun;
+    for (const s of v.shadows || []) {
+      const len = s.len;
+      s.img.setPosition(Math.round(s.x + sun.dx * len), Math.round(s.y + sun.dy * (s.skew ? 0.6 : len)));
+      if (s.skew) s.img.setAngle(-sun.dx * 6);
+      s.img.setAlpha(s.alpha * sun.shadow);
+    }
+    if (v.shades) {
+      v.shades[0].setAlpha(sun.side === 'r' ? sun.shade : sun.shade * 0.25);
+      v.shades[1].setAlpha(sun.side === 'l' ? sun.shade : sun.shade * 0.25);
     }
   }
 
@@ -427,7 +503,7 @@ export class WallRenderer {
     if (!v) return;
     v.objects.forEach((o) => o.destroy());
     if (v.image) v.image.destroy();
-    (v.rims || []).forEach((img) => { const key = img.texture.key; img.destroy(); if (this.scene.textures.exists(key)) this.scene.textures.remove(key); });
+    [...(v.rims || []), ...(v.shades || [])].forEach((img) => { const key = img.texture.key; img.destroy(); if (this.scene.textures.exists(key)) this.scene.textures.remove(key); });
     if (this.trader && !this.trader.active) this.trader = null;
     if (this.scene.textures.exists(v.texKey)) this.scene.textures.remove(v.texKey);
     this.animated = this.animated.filter((a) => a.seg !== index);

@@ -37,6 +37,8 @@ export class Climber {
     this.scene = scene;
     this.sprite = scene.add.sprite(x, y, 'climber', 'stand').setDepth(DEPTH.climber);
     this.lamp = scene.add.image(x, y, 'glow').setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+    // The headlamp's beam: a soft cone up the rock ahead (see updateLamp).
+    this.cone = scene.add.graphics().setDepth(DEPTH.light + 1).setBlendMode('ADD');
     // Props held during ledge idles; the map sits behind the body.
     this.propFront = scene.add.graphics().setDepth(DEPTH.climber + 0.6);
     this.propBack = scene.add.graphics().setDepth(DEPTH.climber - 0.6);
@@ -282,11 +284,25 @@ export class Climber {
     const h = this.head;
     // At night the headlamp throws a wide warm pool of light on the rock.
     this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 14)).setScale(night > 0.5 ? 2 : 1).setTint(0xffe8c0).setAlpha(Math.max(0, night - 0.3) * 0.42);
+    // The beam: four nested wedges from the forehead up the wall, brightest
+    // in the middle, with a bright spot where it lands on the rock.
+    const g = this.cone;
+    g.clear();
+    const k = Math.max(0, night - 0.35) * (this.sprite.visible ? 1 : 0);
+    if (k <= 0 || this.pose === 'sit' || this.pose === 'sit_b') return;
+    const x = Math.round(h.x), y = Math.round(h.y - 6), len = 74;
+    const sway = Math.sin(this.scene.time.now / 900) * 3;
+    for (const [w, a] of [[22, 0.05], [15, 0.06], [9, 0.07], [4, 0.08]]) {
+      g.fillStyle(0xffe8c0, a * k).fillTriangle(x, y, x - w + sway, y - len, x + w + sway, y - len);
+    }
+    g.fillStyle(0xfff4dc, 0.12 * k).fillEllipse(x + sway, y - len + 4, 34, 14);
+    g.fillStyle(0xffffff, 0.1 * k).fillEllipse(x + sway, y - len + 4, 16, 7);
   }
 
   destroy() {
     this.sprite.destroy();
     this.lamp.destroy();
+    this.cone.destroy();
     this.propFront.destroy();
     this.propBack.destroy();
   }
