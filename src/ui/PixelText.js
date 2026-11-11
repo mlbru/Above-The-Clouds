@@ -33,6 +33,13 @@ export class PixelText extends Phaser.GameObjects.Image {
     return this;
   }
 
+  setShadow(shadow) {
+    if (shadow === this.opts.shadow) return this;
+    this.opts.shadow = shadow;
+    this.redraw();
+    return this;
+  }
+
   redraw() {
     const textures = this.scene.textures;
     const { width, height } = measure(this._text);

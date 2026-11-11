@@ -152,7 +152,12 @@ export class WallPainter {
     const levelF = -wy / LEVEL_PX;
     const meters = yToMeters(wy);
     const mix = biomeMixAt(meters);
-    const useB = (x) => mix.t > 0 && bayer(x, row) < mix.t;
+    // Where one biome meets the next, the new rock creeps in as organic
+    // tongues (frost, moss, lava cracks...) rather than a flat dither: a noise
+    // field decides which pixels have turned, with a lit rim along the front.
+    const blending = mix.t > 0 && mix.a !== mix.b;
+    const creep = (x) => 0.62 * this.ice(x * 0.045 + 7, wy * 0.03) + 0.2 * this.detail(x * 0.2 + 3, wy * 0.2) + 0.18 * bayer(x, row);
+    const useB = (x) => blending && creep(x) < mix.t;
     const b = mountain.boundsAt(levelF);
     const { el, er } = this.edgeOffsets(wy, mix.a.wall.edge);
     const l = Math.round(b.l - 10 + el);
@@ -222,6 +227,11 @@ export class WallPainter {
       p.ov = this.overlay(x * 0.05, wy * 0.05);
       for (const fn of pal === mix.a ? overlaysA : overlaysB) fn(p);
       c = p.c;
+      if (blending && dEdge > 1) {
+        const f = creep(x) - mix.t;
+        if (f < 0 && f > -0.035) c = mix.b.rock[4];
+        else if (f >= 0 && f < 0.025) c = lerpColor(c, mix.a.outline, 0.4);
+      }
       if (job.waterfallX !== null && Math.abs(x - job.waterfallX) < 9) c = lerpColor(c, 0x2a4a6a, 0.45);
       if (gap) {
         // The Crevasse: a deep blue gap between the two ice walls.

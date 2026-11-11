@@ -1,7 +1,9 @@
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
-import { lerpColor } from '../utils/color.js';
-import { BIOMES, biomeLocalAlt } from '../data/biomes.js';
+import { lerpColor, warmthOf } from '../utils/color.js';
+import { BIOMES, biomeLocalAlt, mixWarmth } from '../data/biomes.js';
 import { SkyLife } from './SkyLife.js';
+import { buildMilkyWay, buildMoon } from '../render/skyArt.js';
+import { SeededRandom } from '../utils/seededRandom.js';
 
 const HORIZON = 160;
 // Parallax ranges: E = the altitude (m) at which the range sits on the horizon,
@@ -18,10 +20,25 @@ export class Background {
     this.scene = scene;
     this.sky = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.sky);
     this.skyKey = '';
-    this.stars = scene.add.image(0, 0, 'stars').setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.sky + 1);
+    // The night sky: the Milky Way, then stars that come out one by one.
+    this.milky = scene.add.image(0, 0, buildMilkyWay(scene, GAME_WIDTH, 200)).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.sky + 1).setAlpha(0);
+    this.starG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.sky + 1);
+    const rng = new SeededRandom(99);
+    this.starList = Array.from({ length: Math.round(GAME_WIDTH * 0.42) }, () => ({
+      x: rng.int(0, GAME_WIDTH - 1), y: rng.int(0, 175), thr: rng.range(0, 0.92) ** 1.3,
+      b: rng.range(0.35, 1), sp: rng.range(0.6, 2.4), ph: rng.range(0, 7),
+      c: rng.pick([0xffffff, 0xffffff, 0xdfe6ff, 0xc8d4ff, 0xfff0d8]),
+    }));
+    this.starList.slice(0, 16).forEach((s) => { s.b = 1; s.big = true; s.thr *= 0.4; });
     this.aurora = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.sky + 2);
+    // Halos around the sun and the moon (behind the hills, like the bodies).
+    this.halo = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.sky + 2).setBlendMode('ADD');
     this.sun = scene.add.image(0, 0, 'sun').setScrollFactor(0).setDepth(DEPTH.sky + 3);
     this.moon = scene.add.image(0, 0, 'moon').setScrollFactor(0).setDepth(DEPTH.sky + 3);
+    // Where the sun and moon are drawn this frame (the light rays start here).
+    this.sunScreen = null;
+    this.moonScreen = null;
+    this.overcast = 0;
     this.ranges = RANGES.map((r) => ({
       ...r,
       img: scene.add.tileSprite(0, 0, GAME_WIDTH, scene.textures.get(r.key).getSourceImage().height, r.key).setOrigin(0, 0).setScrollFactor(0).setDepth(r.depth),
@@ -75,7 +92,8 @@ export class Background {
   // mix: biomeMixAt() at the camera height. whiteout: 0..1 storm strength.
   update(dt, alt, day, ambience, { mix = null, whiteout = 0, storm = 0 } = {}) {
     this.time += dt;
-    const light = day.light;
+    // Scenery takes the light of the hour, with the biome's warmth (the Green Rise stays cool).
+    const light = mix ? warmthOf(day.light, Math.min(1, mixWarmth(mix))) : day.light;
     const weight = (id) => (mix ? (mix.a.id === id ? 1 - mix.t : 0) + (mix.b.id === id ? mix.t : 0) : 0);
     // Sky gradient in stepped bands (pixel-art friendly), tinted by the biome.
     let skyTop = day.skyTop, skyBottom = day.skyBottom;
@@ -96,28 +114,12 @@ export class Background {
       skyTop = lerpColor(skyTop, 0x141824, storm * 0.8);
       skyBottom = lerpColor(skyBottom, 0x3a4058, storm * 0.7);
     }
-    const key = `${skyTop}-${skyBottom}`;
-    if (key !== this.skyKey) {
-      this.skyKey = key;
-      const g = this.sky;
-      g.clear();
-      const bands = 16;
-      for (let i = 0; i < bands; i++) {
-        const t = Math.pow(i / (bands - 1), 1.4);
-        g.fillStyle(lerpColor(skyTop, skyBottom, t), 1);
-        g.fillRect(0, Math.floor((i * 200) / bands), GAME_WIDTH, Math.ceil(200 / bands) + 1);
-      }
-      g.fillStyle(skyBottom, 1);
-      g.fillRect(0, 200, GAME_WIDTH, GAME_HEIGHT - 200);
-    }
+    const overcast = mix ? Math.min(1, [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.overcast || 0) * weight(b.id), 0) + storm) : Math.min(1, storm);
+    this.overcast = Math.min(1, overcast + whiteout * 0.8);
+    this.updateBodies(day, skyBottom);
+    this.drawSky(skyTop, skyBottom, day);
     this.skyLife.update(dt, alt, day, skyBottom);
-    this.stars.setAlpha(Math.max(0, day.night - 0.2) * 1.2).setY(Math.round(-10 + (alt * 0.01) % 10));
-    const overcast = mix ? Math.min(1, [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.overcast || 0) * weight(b.id), 0) + storm) : 0;
-    this.sun.setAlpha(1 - overcast * 0.9);
-    if (day.sun) this.sun.setVisible(true).setPosition(Math.round(day.sun.x), Math.round(day.sun.y + Math.min(40, alt * 0.01))).setTint(lerpColor(0xffffff, 0xffa060, Math.max(0, 1 - day.sun.y / 150)));
-    else this.sun.setVisible(false);
-    if (day.moon) this.moon.setVisible(true).setPosition(Math.round(day.moon.x), Math.round(day.moon.y));
-    else this.moon.setVisible(false);
+    this.updateStars(day);
 
     const placeRange = (r, alpha, at = alt) => {
       const y = Math.round(HORIZON - r.E * r.f + at * r.f);
@@ -171,7 +173,7 @@ export class Background {
     let seaTint = multiply(lerpColor(light, 0xffffff, 0.15), sea);
     // At sunrise and sunset the sea of clouds catches the light: gold on top,
     // rose underneath, and a glittering path under the sun.
-    const lowSun = day.sun ? Math.max(0, 1 - Math.max(0, (150 - day.sun.y) / 120) / 0.5) : 0;
+    const lowSun = day.sun ? Math.max(0, 1 - day.sun.h / 0.5) : 0;
     if (lowSun > 0) seaTint = lerpColor(seaTint, 0xffc890, lowSun * 0.45);
     this.cloudSea.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY).setTint(seaTint, seaTint, lerpColor(seaTint, 0xe890a8, lowSun * 0.4), lerpColor(seaTint, 0xe890a8, lowSun * 0.4));
     const gl = this.seaGlitter;
@@ -203,6 +205,110 @@ export class Background {
     this.updateAurora(day, alt, auroraBiome);
     this.updateBirds(dt, ambience, day, light);
     this.updateSkyLife(dt, weight, light);
+  }
+
+  // The sun and the moon on their arcs. Both rise out of the hills and sink
+  // back behind them (the ranges are drawn over them), fading as they go.
+  updateBodies(day, skyBottom) {
+    const clear = 1 - this.overcast * 0.9;
+    const halo = this.halo.clear();
+    const sun = day.sunSky;
+    if (sun) {
+      const vis = Math.max(0, Math.min(1, (sun.h + 0.04) / 0.1));
+      const low = Math.max(0, 1 - Math.max(0, sun.h) / 0.4);
+      const x = Math.round(sun.x), y = Math.round(sun.y);
+      this.sunScreen = { x, y, h: sun.h, vis: vis * clear, low };
+      this.sun.setVisible(vis > 0).setPosition(x, y).setAlpha(vis * clear).setScale(1 + low * 0.22)
+        .setTint(lerpColor(0xffffff, 0xff9a50, low * 0.85));
+      const hc = lerpColor(0xfff2c8, 0xff8a40, low);
+      [[13, 0.2], [20, 0.11], [30, 0.06], [44, 0.035]].forEach(([r, a]) => halo.fillStyle(hc, a * vis * clear * (0.7 + low * 0.6)).fillCircle(x, y, r * (1 + low * 0.3)));
+    } else {
+      this.sunScreen = null;
+      this.sun.setVisible(false);
+    }
+    const moon = day.moonSky;
+    if (moon) {
+      const vis = Math.max(0, Math.min(1, (moon.h + 0.04) / 0.1)) * Math.min(1, day.night * 1.6);
+      const low = Math.max(0, 1 - Math.max(0, moon.h) / 0.3);
+      const x = Math.round(moon.x), y = Math.round(moon.y);
+      this.moonScreen = { x, y, h: moon.h, vis: vis * clear, low };
+      const key = buildMoon(this.scene, day.moonPhase);
+      if (this.moon.texture.key !== key) this.moon.setTexture(key);
+      // A rising moon is big and amber; high up it is small and silver.
+      this.moon.setVisible(vis > 0).setPosition(x, y).setAlpha(vis * clear).setScale(1 + low * 0.25)
+        .setTint(lerpColor(0xffffff, 0xffc890, low * 0.8));
+      const lit = 0.25 + day.moonLit * 0.75;
+      [[11, 0.16], [18, 0.08], [28, 0.04]].forEach(([r, a]) => halo.fillStyle(lerpColor(0x9fb4ff, 0xffd8a0, low), a * vis * clear * lit).fillCircle(x, y, r));
+    } else {
+      this.moonScreen = null;
+      this.moon.setVisible(false);
+    }
+  }
+
+  // The sky: a gradient in soft pixel bands, with a glow on the horizon where
+  // the sun is rising or setting (it lingers after the sun is gone) and a
+  // faint pale one around a low moon.
+  drawSky(skyTop, skyBottom, day) {
+    let glow = null;
+    const sun = day.sunSky;
+    if (sun && sun.h < 0.5) {
+      const k = Math.max(0, Math.min(1, (0.5 - sun.h) / 0.4)) * Math.max(0, Math.min(1, (sun.h + 0.22) / 0.16));
+      const deep = Math.max(0, Math.min(1, -sun.h / 0.18));
+      if (k > 0.02) glow = { x: sun.x, y: Math.max(sun.y, 120), r: 150, k: k * 0.75 * (1 - this.overcast * 0.8), c: lerpColor(lerpColor(0xffe0a0, 0xff8a58, Math.min(1, (0.5 - sun.h) * 2)), 0xd8607a, deep), c2: lerpColor(0xfff4d0, 0xffb070, deep) };
+    } else if (day.moonSky && day.moonSky.h > -0.05) {
+      glow = { x: day.moonSky.x, y: day.moonSky.y, r: 60, k: 0.2 * day.night * (0.3 + day.moonLit * 0.7) * (1 - this.overcast), c: 0x6a7ab8, c2: 0x9aa8d8 };
+    }
+    const q = (v, n) => Math.round(v / n);
+    const key = glow ? `${skyTop}-${skyBottom}-${q(glow.x, 4)}-${q(glow.y, 4)}-${q(glow.k, 0.03)}-${glow.c}` : `${skyTop}-${skyBottom}`;
+    if (key === this.skyKey) return;
+    // A glowing sky is a few thousand rects: redraw it at most ~8 times a second.
+    if (glow && this.skyKey && this.time - (this.skyAt || 0) < 120) return;
+    this.skyKey = key;
+    this.skyAt = this.time;
+    const g = this.sky.clear();
+    const ROW = 6, COL = 6, SKY_H = 204;
+    for (let y = 0; y < GAME_HEIGHT; y += ROW) {
+      const base = y < SKY_H ? lerpColor(skyTop, skyBottom, Math.pow(y / SKY_H, 1.35)) : skyBottom;
+      if (!glow || glow.k < 0.02) { g.fillStyle(base, 1).fillRect(0, y, GAME_WIDTH, ROW); continue; }
+      let runX = 0, runC = -1;
+      for (let x = 0; x <= GAME_WIDTH; x += COL) {
+        let c = base;
+        if (x < GAME_WIDTH) {
+          const d = Math.hypot((x + COL / 2 - glow.x) / 1.9, (y + ROW / 2 - glow.y) * 1.15) / glow.r;
+          const k = Math.max(0, 1 - d);
+          if (k > 0) {
+            // Two steps of glow: a broad warm wash and a bright core near the body.
+            c = lerpColor(base, glow.c, Math.min(1, k * k * glow.k * 1.4));
+            if (k > 0.72) c = lerpColor(c, glow.c2, (k - 0.72) / 0.28 * glow.k * 0.8);
+          }
+        } else c = -2;
+        if (c !== runC) {
+          if (runC >= 0) g.fillStyle(runC, 1).fillRect(runX, y, x - runX, ROW);
+          runX = x; runC = c;
+        }
+      }
+    }
+  }
+
+  // Stars come out one by one as it gets dark (the brightest first), twinkle,
+  // and the Milky Way shows once the night is deep. Clouds hide them.
+  updateStars(day) {
+    const g = this.starG.clear();
+    const dark = Math.max(0, Math.min(1, (day.night - 0.22) / 0.55)) * (1 - this.overcast);
+    this.milky.setAlpha(Math.max(0, Math.min(1, (day.night - 0.75) / 0.2)) * 0.9 * (1 - this.overcast));
+    if (dark <= 0) return;
+    const t = this.time / 1000;
+    for (const s of this.starList) {
+      const on = Math.min(1, (dark - s.thr) * 5);
+      if (on <= 0) continue;
+      const tw = 0.6 + 0.4 * Math.sin(t * s.sp + s.ph);
+      const a = on * s.b * tw;
+      g.fillStyle(s.c, a).fillRect(s.x, s.y, 1, 1);
+      if (s.big) {
+        g.fillStyle(s.c, a * 0.4).fillRect(s.x - 1, s.y, 1, 1).fillRect(s.x + 1, s.y, 1, 1).fillRect(s.x, s.y - 1, 1, 1).fillRect(s.x, s.y + 1, 1, 1);
+        if (tw > 0.9) g.fillStyle(s.c, a * 0.25).fillRect(s.x - 2, s.y, 1, 1).fillRect(s.x + 2, s.y, 1, 1);
+      }
+    }
   }
 
   // Something alive in every high sky: bats in the Obsidian Spires, shooting

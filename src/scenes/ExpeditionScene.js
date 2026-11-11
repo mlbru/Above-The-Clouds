@@ -52,7 +52,7 @@ export class ExpeditionScene extends Phaser.Scene {
     this.index = 0;
     this.t = 0;
     // Scenery, exactly as in a climb.
-    this.dayNight = new DayNightSystem({ dayLengthSec: 9999, startT: this.list[0].look.dayT });
+    this.dayNight = new DayNightSystem({ width: GAME_WIDTH, dayLengthSec: 9999, startT: this.list[0].look.dayT });
     this.background = new Background(this);
     this.atmos = new Atmosphere(this);
     this.blend = { from: this.list[0].look, to: this.list[0].look, k: 1 };

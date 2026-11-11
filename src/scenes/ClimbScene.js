@@ -7,7 +7,7 @@ import { BALANCE } from '../config/balanceConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
 import { ComboSystem, timingWindows } from '../systems/ComboSystem.js';
 import { GripSystem } from '../systems/GripSystem.js';
-import { DayNightSystem } from '../systems/DayNightSystem.js';
+import { DayNightSystem, sunHeight, lowSun } from '../systems/DayNightSystem.js';
 import { WeatherSystem } from '../systems/WeatherSystem.js';
 import { Effects } from '../systems/Effects.js';
 import { Audio } from '../systems/AudioSystem.js';
@@ -27,7 +27,7 @@ import { ComboPrompt } from '../ui/ComboPrompt.js';
 import { RestMenu } from '../ui/RestMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
 import { PixelText, COLORS } from '../ui/PixelText.js';
-import { BIOMES, biomeAt, biomeMixAt, biomeStretchAt, nextBiomeAbove, setBiomeTheme, biomeTheme } from '../data/biomes.js';
+import { BIOMES, biomeAt, biomeMixAt, biomeStretchAt, nextBiomeAbove, setBiomeTheme, biomeTheme, mixWarmth } from '../data/biomes.js';
 import { MASTERY_BIOMES, STARS, masteryGoals, starLabel } from '../data/mastery.js';
 import { LIFTS, LIFT_BY_ID, liftHeight, liftName } from '../data/lifts.js';
 import { LiftRide } from '../ui/LiftRide.js';
@@ -60,10 +60,11 @@ import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
 import { findCosmetic } from '../data/cosmetics.js';
 import { GEM_TARGET } from '../ui/HUD.js';
-import { toCss, lerpColor } from '../utils/color.js';
+import { toCss, lerpColor, warmthOf } from '../utils/color.js';
 import { climbBoons } from './climbBoons.js';
 import { biomeMoments } from './biomeMoments.js';
 import { SunRays } from '../world/SunRays.js';
+import { WeatherScenery } from '../world/WeatherScenery.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -97,7 +98,7 @@ const REST_IDLE_FIRST = 6000;
 // codes on European keyboards, so the debug toggle accepts all of these.
 // Each biome's colour grade, multiplied into the light of the hour.
 const GRADE = {
-  green: 0xfffff4, stone: 0xfaf6ee, frozen: 0xeef4ff, clouds: 0xfff8f0, hive: 0xffeac0,
+  green: 0xeef8f2, stone: 0xf6f4ee, frozen: 0xeef4ff, clouds: 0xfff8f0, hive: 0xffeac0,
   obsidian: 0xe8dcff, crystal: 0xf8ecff, clockwork: 0xfff0d8, storm: 0xdde4f4,
   aurora: 0xe4fff4, bones: 0xf4ece0, dragon: 0xffe4d0,
 };
@@ -156,6 +157,8 @@ export class ClimbScene extends Phaser.Scene {
     this.targetMark = null;
     this.crumbleAt = 0;
     this.crumbleUI = null;
+    // Camera feel and scenery state (the scene object is reused between runs).
+    this.lean = 0; this.camKick = 0; this.lbK = 0; this.letterbox = null; this.chalkMarks = []; this.rainbow = null; this.snowCaps = null;
     this.gustAnnounced = null;
     this.runOverUI = null;
 
@@ -168,10 +171,12 @@ export class ClimbScene extends Phaser.Scene {
     this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : this.expedition ? new ExpeditionMountain(this.expedition, BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
     this.mountain.ensureLevel(GENERATE_AHEAD_LEVELS);
     this.grip = new GripSystem(BALANCE, this.modeCfg);
-    this.dayNight = new DayNightSystem({ dayLengthSec: 600, startT: this.dares.includes('night') ? 0.8 : this.dayT ?? 0.09 });
+    this.dayNight = new DayNightSystem({ width: GAME_WIDTH, dayLengthSec: 600, startT: this.dares.includes('night') ? 0.8 : this.dayT ?? 0.09 });
     this.background = new Background(this);
     this.wall = new WallRenderer(this, this.mountain, this.seed);
     this.wetWall = new WetWall(this, this.mountain);
+    this.scenery = new WeatherScenery(this, this.mountain);
+    this.showerK = 0;
     this.critters = this.tutorial ? null : new Critters(this, this.mountain, this.seed);
     this.weather = new WeatherSystem(this);
     this.mechanics = this.tutorial ? null : new BiomeMechanics(new SeededRandom(hashInts(this.seed, 4242)));
@@ -355,6 +360,7 @@ export class ClimbScene extends Phaser.Scene {
     this.liftRide = new LiftRide(this, {
       biome: b, ticket: liftName(this.liftTo), icon: LIFT_BY_ID[this.liftTo].icon, meters,
       jacket: findCosmetic('jacket', this.prog.data.look.jacket).color,
+      day: this.dayNight.state(),
       onDone: () => {
         this.liftRide = null;
         this.lastFramePerf = performance.now();
@@ -412,7 +418,7 @@ export class ClimbScene extends Phaser.Scene {
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
     if (isDebugKey(event) && this.prog.debugUnlocked) { this.setDebug(!this.debugVisible); return; }
-    if (code === 'KeyB' && this.debugVisible && this.prog.debugUnlocked) {
+    if (code === 'KeyB' && ((this.debugVisible && this.prog.debugUnlocked) || this.prog.autopilotUnlocked)) {
       const modes = [null, 'perfect', 'sloppy'];
       const next = modes[(modes.indexOf(this.bot ? this.bot.mode : null) + 1) % modes.length];
       this.bot = next ? { mode: next, wait: 0, plans: null } : null;
@@ -1044,6 +1050,13 @@ export class ClimbScene extends Phaser.Scene {
       } else {
         Audio.play('grab');
         this.climber.squash(0.95, 1.06, 140);
+        // Caught it, just: a few grains of the hold break off under the fingers.
+        if (!this.settings.reducedParticles) this.effects.pebbleFall(hx, hy + 3, 2, biome.rock[3]);
+      }
+      // In the cold every other move puffs a breath of fog.
+      if ((biome.weather.snow > 0.3 || this.dayNight.state().night > 0.6) && this.successes % 2 === 0) {
+        const h = this.climber.head;
+        this.time.delayedCall(90, () => this.effects.breathPuff(h.x + 2, h.y + 2));
       }
       if (note.dir === 'U') Audio.play('boot', { snow: biome.weather.snow > 0.3 });
       this.effects.chalk(hx, hy);
@@ -1489,7 +1502,10 @@ export class ClimbScene extends Phaser.Scene {
       Audio.play('grab', { icy: t.hazard === 'icy' });
       this.climber.squash(1.1, 0.9, 160);
       this.effects.chalk(t.x, t.y + 2);
+      this.chalkMark(t);
       if (t.hazard === 'icy') this.effects.snowBurst(t.x, t.y + 3);
+      // A big move lands with a little jolt of the camera.
+      if (route.type === 'risky' || s.allPerfect) this.camKick = route.type === 'risky' ? 3 : 2;
       this.flashHold(t.id);
       await this.climber.hold('grab', 120);
     }
@@ -2958,7 +2974,12 @@ export class ClimbScene extends Phaser.Scene {
     const stormMech = this.mechanics ? this.mechanics.get('storm') : null;
     const stormSky = stormMech ? stormMech.intensity : 0;
     this.hud.setStorm(stormMech && !this.director && stormMech.inside >= stormMech.cfg.minWeight ? { phase: stormMech.phase, progress: stormMech.progress } : null);
-    this.background.update(dt, alt, day, { birds: ambience.birds }, { mix: biomeMixAt(alt), whiteout, storm: stormSky });
+    const shower = this.showerK || 0;
+    this.background.update(dt, alt, day, { birds: ambience.birds }, { mix: biomeMixAt(alt), whiteout, storm: Math.max(stormSky, shower * 0.5) });
+    this.showerK = this.scenery.update(dt, {
+      biome, day, sky: this.background, storm: stormSky, camY: this.camY, reduced: this.settings.reducedParticles,
+      snow: Math.min(1, biome.weather.snow * 0.6 + mech.snow + whiteout), allowShowers: !this.director && !this.expedition,
+    });
     this.weather.update(dt, {
       biome, alt, light: day.light, reduced: this.settings.reducedParticles,
       mistBoost: (alt > 440 && alt < 500 ? 0.3 : 0) + mech.mist,
@@ -2972,16 +2993,23 @@ export class ClimbScene extends Phaser.Scene {
     const storm = this.mechanics ? this.mechanics.get('storm').intensity : 0;
     let light = dark > 0.01 ? lerpColor(day.light, DARKNESS.shade, dark * DARKNESS.shadeAmount) : day.light;
     if (storm > 0.01) light = lerpColor(light, 0x3a4058, storm * 0.45);
+    // A passing shower greys the light.
+    if (shower > 0.01) light = lerpColor(light, 0x8a94a8, shower * 0.3);
     // The dragon's sky: everything turns ember red while it watches.
     if (this.pressure > 0.01) light = lerpColor(light, 0xff6a4a, this.pressure * 0.3);
     // Colour grade: every biome tints the light its own way (amber in the hive,
     // violet in the black glass...), and a low sun lays a warm wash over it all.
     const gradeMix = biomeMixAt(climberAlt);
     const grade = lerpColor(GRADE[gradeMix.a.id] || 0xffffff, GRADE[gradeMix.b.id] || 0xffffff, gradeMix.t);
-    light = multiplyColor(light, lerpColor(0xffffff, grade, 1 - day.night * 0.5));
+    const warmth = mixWarmth(gradeMix);
+    light = multiplyColor(warmthOf(light, warmth), lerpColor(0xffffff, grade, 1 - day.night * 0.5));
     this.lightOverlay.fillColor = light;
-    const low = day.sun ? Math.max(0, 1 - Math.max(0, (150 - day.sun.y) / 120) / 0.45) : 0;
-    this.goldenOverlay.setAlpha(low * 0.16 * (1 - dark) * (1 - storm));
+    // The grade's second half: the hour's colour added into the shadows (rose
+    // at dawn, teal in the morning, amber at golden hour, violet at dusk).
+    const calm = (1 - dark) * (1 - storm * 0.7);
+    const w1 = Math.min(1, warmth);
+    this.goldenOverlay.fillColor = warmthOf(lerpColor(day.lift, 0xff9a40, lowSun(day) * 0.5 * w1), w1);
+    this.goldenOverlay.setAlpha(day.liftA * 3.5 * calm);
     this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7));
     this.wall.night = Math.max(day.night, dark, storm * 0.5);
     this.updateLight(day, dark, storm, dt, { whiteout, stormMech, mist: mech.mist });
@@ -2990,7 +3018,7 @@ export class ClimbScene extends Phaser.Scene {
     this.updateDragon(dt, eye, day);
     const camLevelTop = -(this.camY / LEVEL_PX);
     this.wall.update(dt, Math.ceil(camLevelTop) + RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
-    this.wetWall.update(dt, storm, this.camY);
+    this.wetWall.update(dt, Math.max(storm, shower * 0.85), this.camY);
     if (this.critters) this.critters.update(dt, this.climber, this.camY);
 
     const wallState = this.state === STATE.ROUTE_SELECT ? 'wall'
@@ -3020,7 +3048,7 @@ export class ClimbScene extends Phaser.Scene {
     this.coat.enabled = this.settings.weatherCoat !== false;
     this.coat.update(dt, {
       snow: this.coat.enabled ? Math.min(1, biome.weather.snow + mech.snow + whiteout) * (onWall || wallState === 'ledge' ? 1 : 0) : 0,
-      wet: this.coat.enabled ? Math.max(storm > 0.5 ? storm : 0, this.wall.waterfallNear(this.climber.y) && onWall ? 0.7 : 0) : 0,
+      wet: this.coat.enabled ? Math.max(storm > 0.5 ? storm : 0, shower > 0.5 ? shower * 0.8 : 0, this.wall.waterfallNear(this.climber.y) && onWall ? 0.7 : 0) : 0,
       soot: this.coat.enabled ? Math.max(eye && eye.inside >= 0.5 ? eye.openness * 0.6 : 0, biomeMixWeight(climberMix, 'volcano') * 0.5) : 0,
       glitter: this.coat.enabled ? biomeMixWeight(climberMix, 'crystal') * (onWall ? 0.8 : 0.3) : 0,
       resting: wallState === 'ledge' && !this.atCamp,
@@ -3046,7 +3074,7 @@ export class ClimbScene extends Phaser.Scene {
 
     Audio.setAmbience({
       wind: Math.min(1, ambience.wind * 0.8 + Math.min(1, alt / 1000) * 0.4 + whiteout * 0.5),
-      stream: this.wall.waterfallNear(this.climber.y) ? 0.9 : ambience.stream * 0.35,
+      stream: Math.max(this.wall.waterfallNear(this.climber.y) ? 0.9 : ambience.stream * 0.35, (this.showerK || 0) * 0.7),
       birds: day.night < 0.4 ? ambience.birds : 0,
     });
     Audio.update();
@@ -3073,9 +3101,32 @@ export class ClimbScene extends Phaser.Scene {
     const target = focusY - GAME_HEIGHT * CAMERA_ANCHOR + this.lookOffset;
     const k = this.state === STATE.FALLING ? 3 : 5;
     this.camY += (target - this.camY) * (1 - Math.exp((-dt / 1000) * k));
+    // The camera leans a little towards where you are about to go.
+    let lean = 0;
+    const aim = this.state === STATE.ROUTE_SELECT && this.routes[this.selected] ? this.routes[this.selected].target
+      : this.state === STATE.CLIMBING_COMBO && this.to ? this.to : null;
+    if (aim && !this.inPanorama) lean = Math.max(-9, Math.min(9, (aim.x - this.climber.x) * 0.16));
+    this.lean = (this.lean || 0) + (lean - (this.lean || 0)) * (1 - Math.exp((-dt / 1000) * 2.2));
     // In portrait the screen is narrower than the mountain: follow sideways too.
     this.camX += (camXFor(this.climber.x) - this.camX) * (1 - Math.exp((-dt / 1000) * k));
-    this.cam.setScroll(Math.round(this.camX), Math.round(this.camY));
+    // A big move lands with a jolt that settles in a springy bounce.
+    this.camKick = (this.camKick || 0) * Math.exp(-dt / 110);
+    const kick = this.settings.shake && this.camKick > 0.2 ? Math.round(this.camKick * Math.cos(this.clock / 28)) : 0;
+    this.cam.setScroll(Math.round(this.camX + this.lean), Math.round(this.camY) - kick);
+    this.updateLetterbox(dt);
+  }
+
+  // On a ledge the scene goes cinematic: thin bars slide in at the top and
+  // bottom while the camera settles back, and slide away when you climb on.
+  updateLetterbox(dt) {
+    const on = this.state === STATE.RESTING && !this.atCamp && !this.inPanorama && this.clock >= (this.revealUntil || 0) && !this.liftRide;
+    this.lbK = (this.lbK || 0) + ((on ? 1 : 0) - (this.lbK || 0)) * Math.min(1, dt / 380);
+    if (!this.letterbox) this.letterbox = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud - 2);
+    const g = this.letterbox.clear();
+    if (this.lbK < 0.01) return;
+    const h = Math.round(11 * (1 - (1 - this.lbK) ** 3));
+    g.fillStyle(0x07060c, 1).fillRect(0, 0, GAME_WIDTH, h).fillRect(0, GAME_HEIGHT - h, GAME_WIDTH, h);
+    g.fillStyle(0x07060c, 0.45).fillRect(0, h, GAME_WIDTH, 1).fillRect(0, GAME_HEIGHT - h - 1, GAME_WIDTH, 1);
   }
 
   // Light of the hour on the scene: the wall's rim catches the sun on its
@@ -3085,15 +3136,16 @@ export class ClimbScene extends Phaser.Scene {
     const dim = (1 - dark * 0.8) * (1 - storm * 0.6);
     let side = 'l', strength = 0, color = 0xffffff;
     if (day.sun) {
-      strength = Math.max(0, Math.min(1, (150 - day.sun.y) / 120));
-      side = day.sun.x < 240 ? 'l' : 'r';
-      // Low sun: deep gold; high sun: almost white.
-      color = lerpColor(lerpColor(day.light, 0xffb060, 0.55), 0xfff4e0, strength);
-      strength = 0.25 + strength * 0.5;
-    } else if (day.moon) {
-      side = day.moon.x < 240 ? 'l' : 'r';
-      strength = 0.32 * day.night;
-      color = 0x9fb8ff;
+      const h = sunHeight(day);
+      side = day.sun.x < GAME_WIDTH / 2 ? 'l' : 'r';
+      // Low sun: deep gold; high sun: almost white. It fades in as it rises
+      // and out as it sets, so the hand-over to the moon is seamless.
+      color = lerpColor(lerpColor(day.light, 0xffb060, 0.55), 0xfff4e0, h);
+      strength = (0.25 + h * 0.5) * Math.min(1, h / 0.08);
+    }
+    if (day.moon && strength < 0.2) {
+      const m = 0.34 * day.night * (0.45 + day.moonLit * 0.55) * Math.min(1, day.moon.h / 0.08);
+      if (m > strength) { side = day.moon.x < GAME_WIDTH / 2 ? 'l' : 'r'; strength = m; color = 0x9fb8ff; }
     }
     strength *= dim;
     const other = side === 'l' ? 'r' : 'l';
@@ -3102,7 +3154,7 @@ export class ClimbScene extends Phaser.Scene {
     // Every shadow on the wall follows the light: long at dawn and dusk, short
     // at noon, faint by moonlight, washed out in a whiteout or a storm.
     const whiteout = weather.whiteout || 0;
-    const height = day.sun ? Math.max(0, Math.min(1, (150 - day.sun.y) / 120)) : 0.6;
+    const height = day.sun ? sunHeight(day) : 0.6;
     const away = side === 'l' ? 1 : -1;
     const soft = (1 - whiteout * 0.85) * (1 - storm * 0.6) * (1 - dark * 0.4);
     const shadowK = (day.sun ? 1 : 0.35 * day.night) * soft;
@@ -3113,7 +3165,11 @@ export class ClimbScene extends Phaser.Scene {
     // Weather light: rays burst through as a storm clears, mist and snow catch them.
     const sm = weather.stormMech;
     const clearing = sm && sm.phase === 'clearing' && sm.inside >= sm.cfg.minWeight ? 1 : 0;
-    this.sunRays.update(dt, day, { air: Math.min(1, (weather.mist || 0) + whiteout * 0.6), dim: Math.min(1, storm + dark * 0.8 + whiteout * 0.4), boost: clearing, reduced: this.settings.reducedParticles });
+    this.sunRays.update(dt, day, {
+      sky: this.background, clouds: this.background.clouds, camY: this.camY,
+      air: Math.min(1, (weather.mist || 0) + whiteout * 0.6), dim: Math.min(1, storm + dark * 0.8 + whiteout * 0.4 + (this.showerK || 0)),
+      boost: clearing, reduced: this.settings.reducedParticles, shadows: dark < 0.2,
+    });
     this.drawLongShadow(day, height, soft, side);
     this.iceGlints(dt, day);
     // Dragon fire lights the whole scene orange while it breathes.
@@ -3122,7 +3178,7 @@ export class ClimbScene extends Phaser.Scene {
       this.goldenOverlay.fillColor = 0xff5a1a;
       this.goldenOverlay.setAlpha(Math.max(this.goldenOverlay.alpha, fire * 0.28));
       this.wall.setRim({ l: [0xff7a2a, 0.8 * fire], r: [0xff7a2a, 0.8 * fire] });
-    } else this.goldenOverlay.fillColor = 0xff9a40;
+    }
     // The shadow: a dark copy of the climber, a few pixels off on the far side.
     const sh = this.climberShadow, sp = this.climber.sprite;
     if (!sh) return;
@@ -3179,6 +3235,19 @@ export class ClimbScene extends Phaser.Scene {
       const sx = side === 'l' ? x0 : x1 - reach;
       g.fillStyle(0x140c28, 0.22 * k * (0.3 + f * 0.7)).fillRect(Math.round(sx), y, Math.round(reach), 4);
     }
+  }
+
+  // Chalk left behind: a few white fingerprints on the top of a hold you
+  // used, so the route you climbed stays marked below you.
+  chalkMark(t) {
+    if (!t || t.hazard === 'crumbling' || t.hazard === 'loose') return;
+    const marks = this.chalkMarks || (this.chalkMarks = []);
+    const g = this.add.graphics().setDepth(DEPTH.holds + 1);
+    const c = this.chalkTint();
+    for (let i = 0; i < 4; i++) g.fillStyle(c, 0.55 + Math.random() * 0.35).fillRect(Math.round(t.x - 3 + Math.random() * 6), Math.round(t.y - 3 + Math.random() * 2), 1, 1);
+    g.fillStyle(c, 0.4).fillRect(Math.round(t.x - 1), Math.round(t.y - 2), 3, 1);
+    marks.push(g);
+    if (marks.length > 40) marks.shift().destroy();
   }
 
   chalkTint() {
@@ -3260,24 +3329,40 @@ export class ClimbScene extends Phaser.Scene {
     }
     const combo = this.state === STATE.CLIMBING_COMBO ? this.combo : this.state === STATE.SLIPPING ? this.recovery : this.state === STATE.DODGING ? this.dodge : null;
     if (!combo || combo.done) return;
-    if (b.plans === null || b.plansFor !== combo) { b.plans = {}; b.plansFor = combo; }
+    if (b.plans === null || b.plansFor !== combo) { b.plans = {}; b.plansFor = combo; b.queue = []; }
+    // Plan each note once when it comes up (a still beat needs no press).
     const note = combo.current;
-    // Between notes (e.g. a hold note still running) there is nothing to press,
-    // and on a still beat the bot hangs still.
-    if (!note || note.still) return;
-    if (!b.plans[note.index]) {
-      const sloppy = b.mode === 'sloppy';
-      const off = sloppy ? (Math.random() * 2 - 1) * 260 : (Math.random() * 2 - 1) * 40;
-      const wrong = sloppy && Math.random() < 0.12;
-      const dirs = ['L', 'U', 'R'].filter((d) => d !== note.dir);
-      b.plans[note.index] = { t: note.time + off, dir: wrong ? dirs[Math.floor(Math.random() * 2)] : note.dir };
+    if (note && !note.still && !b.plans[note.index]) {
+      b.plans[note.index] = true;
+      b.queue.push(...this.botPlan(note, b.mode === 'sloppy'));
     }
-    const plan = b.plans[note.index];
-    if (now >= plan.t) {
-      if (this.state === STATE.CLIMBING_COMBO) this.comboInput(plan.dir, Math.max(plan.t, now - 16));
-      else if (this.state === STATE.DODGING) this.dodgeInput(plan.dir, Math.max(plan.t, now - 16));
-      else this.recoveryInput(plan.dir, Math.max(plan.t, now - 16));
+    // Then make every press that is due: one arrow, both arrows of a double
+    // note, or the taps of a roll (which go on after the note is judged).
+    b.queue = b.queue.filter((p) => {
+      if (now < p.t) return true;
+      const t = Math.max(p.t, now - 16);
+      if (this.state === STATE.CLIMBING_COMBO) this.comboInput(p.dir, t);
+      else if (this.state === STATE.DODGING) this.dodgeInput(p.dir, t);
+      else this.recoveryInput(p.dir, t);
+      return false;
+    });
+  }
+
+  // The presses the autopilot makes for one note.
+  botPlan(note, sloppy) {
+    const off = sloppy ? (Math.random() * 2 - 1) * 260 : (Math.random() * 2 - 1) * 30;
+    const wrong = sloppy && Math.random() < 0.12;
+    const dirs = ['L', 'U', 'R'].filter((d) => d !== note.dir);
+    const t = note.time + off;
+    const plan = [{ t, dir: wrong ? dirs[Math.floor(Math.random() * 2)] : note.dir }];
+    // Double note: the second arrow a moment after the first.
+    if (note.chord) plan.push({ t: t + (sloppy ? 20 + Math.random() * 60 : 12), dir: note.chord });
+    // Roll: the remaining taps spread over the first two thirds of its tail.
+    if (note.rollMs && note.taps > 1) {
+      const n = note.taps - 1 + (sloppy && Math.random() < 0.3 ? -1 : 0);
+      for (let k = 1; k <= n; k++) plan.push({ t: note.time + (note.rollMs * 0.66 * k) / note.taps, dir: note.dir });
     }
+    return plan;
   }
 
   // Debug helper: skip upward along the longest routes (used for testing biomes).

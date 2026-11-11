@@ -1,8 +1,6 @@
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
-import { lerpColor } from '../utils/color.js';
 
 // Screen-space atmosphere layered over the world:
-//   - sun rays fanning down from a low sun (strongest at sunrise and sunset)
 //   - cloud wisps drifting past in front of the climber (more of them higher up)
 //   - small particles that belong to each biome (pollen, dust, ice glitter,
 //     drifting fluff, embers, prism sparkles)
@@ -36,8 +34,6 @@ export class Atmosphere {
   constructor(scene) {
     this.scene = scene;
     this.t = 0;
-    // Behind the wall: the rays light the sky and the far landscape, not the rock.
-    this.rays = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.near + 5).setBlendMode('ADD');
     this.wisps = [];
     for (let i = 0; i < 6; i++) {
       const img = scene.add.image(0, 0, `cloud${i % 4}`).setScrollFactor(0).setDepth(DEPTH.foreground + 2).setScale(1.6 + (i % 3) * 0.4).setAlpha(0);
@@ -52,36 +48,8 @@ export class Atmosphere {
   // day: DayNightSystem state; biome: current biome; dim: 0-1 (whiteout/darkness)
   update(dt, { day, biome, dim = 0 }) {
     this.t += dt;
-    this.drawRays(day, dim);
     this.updateWisps(dt, biome);
     this.updateMotes(dt, biome, day);
-  }
-
-  drawRays(day, dim) {
-    const g = this.rays;
-    g.clear();
-    const sun = day.sun;
-    if (!sun) return;
-    // Low sun: long golden rays; high sun: a faint sheen.
-    const low = Math.max(0, Math.min(1, (sun.y - 60) / 90));
-    const strength = (0.3 + 0.7 * low) * (1 - dim) * (1 - day.night);
-    if (strength < 0.03) return;
-    const color = lerpColor(0xfff1c8, 0xffa860, low);
-    const sx = sun.x, sy = Math.min(sun.y, 120) - 30;
-    const dir = sx < GAME_WIDTH / 2 ? 1 : -1;
-    for (let i = 0; i < 5; i++) {
-      const sway = Math.sin(this.t / 3200 + i * 1.7) * 0.04;
-      const a = Math.PI / 2 - dir * (0.4 + i * 0.2 + sway);
-      const len = 560;
-      const w = 0.03 + (i % 3) * 0.015;
-      // Three nested beams per ray give it soft edges.
-      for (const [k, al] of [[2.2, 0.035], [1.4, 0.05], [0.7, 0.07]]) {
-        g.fillStyle(color, al * strength * (i % 2 ? 1 : 0.8));
-        g.fillTriangle(sx, sy,
-          sx + Math.cos(a - w * k) * len, sy + Math.sin(a - w * k) * len,
-          sx + Math.cos(a + w * k) * len, sy + Math.sin(a + w * k) * len);
-      }
-    }
   }
 
   updateWisps(dt, biome) {

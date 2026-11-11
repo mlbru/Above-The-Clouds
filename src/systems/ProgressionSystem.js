@@ -15,6 +15,8 @@ export function codeHash(code) {
   return h.toString(16).padStart(8, '0');
 }
 const DEBUG_CODE_HASH = 'e17bdefb';
+// The developer's own autopilot (B in a run, no debug overlay needed). Also only a hash.
+const AUTOPILOT_CODE_HASH = '3048c394';
 
 export const DEFAULT_SETTINGS = {
   music: 0.6,
@@ -233,12 +235,18 @@ export class ProgressionSystem {
   // the developer knows. Kept apart from the cheats on purpose: those runs
   // still count for records and the leaderboard (they are for testing).
   get debugUnlocked() { return !!this.data.debugUnlocked; }
+  get autopilotUnlocked() { return !!this.data.autopilotUnlocked; }
 
   // Cheat codes (settings > ENTER CODE). Entering a code again switches it off.
   redeemCode(raw) {
     const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const cheats = this.data.cheats || (this.data.cheats = {});
     // Stored as a hash, so the code cannot be read from the published source.
+    if (codeHash(code) === AUTOPILOT_CODE_HASH) {
+      this.data.autopilotUnlocked = !this.data.autopilotUnlocked;
+      this.save();
+      return { ok: true, message: this.data.autopilotUnlocked ? 'AUTOPILOT: ON (PRESS B IN A RUN)' : 'AUTOPILOT: OFF' };
+    }
     if (codeHash(code) === DEBUG_CODE_HASH) {
       this.data.debugUnlocked = !this.data.debugUnlocked;
       if (!this.data.debugUnlocked) this.data.settings.debugOverlay = false;

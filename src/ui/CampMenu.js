@@ -81,11 +81,11 @@ export class CampMenu {
     this.spots = [
       a.collection && sp.fire && { id: 'collection', label: 'COLLECTION', x: sp.fire.x, y: sp.fire.y - 20, badge: unseen ? `${unseen} NEW` : `${j.seen}/${j.total}`, badgeNew: !!unseen, go: a.collection },
       a.expeditions && sp.sign && { id: 'expeditions', label: 'EXPEDITIONS', x: sp.sign.x, y: sp.sign.y - 34, go: a.expeditions },
-      a.climb && { id: 'climb', label: 'CLIMB', x: camp.x, y: camp.y - 62, go: a.climb },
+      a.climb && { id: 'climb', label: 'CLIMB', x: camp.x, y: camp.y - 62, go: a.climb, carved: true },
       // The mountain map (lift tickets and mastery): on the rock left of the climb.
-      a.map && { id: 'map', label: 'MAP', x: camp.x - 62, y: camp.y - 96, badge: mapBadge(prog), badgeNew: false, go: a.map },
+      a.map && { id: 'map', label: 'MAP', x: camp.x - 62, y: camp.y - 96, badge: mapBadge(prog), badgeNew: false, go: a.map, carved: true },
       // Bram's dares: chalked on the rock beside the start of the climb.
-      a.dares && { id: 'dares', label: 'DARES', x: camp.x + 62, y: camp.y - 96, badge: o.dares ? o.dares() : null, badgeNew: false, go: a.dares },
+      a.dares && { id: 'dares', label: 'DARES', x: camp.x + 62, y: camp.y - 96, badge: o.dares ? o.dares() : null, badgeNew: false, go: a.dares, carved: true },
       a.shop && sp.trader && { id: 'shop', label: 'SHOP', x: sp.trader.x, y: sp.trader.y - 40, badge: `◆${prog.gems}`, go: a.shop },
       a.wardrobe && sp.tent && { id: 'wardrobe', label: 'WARDROBE', x: sp.tent.x, y: sp.tent.y - 22, badge: fresh ? `${fresh} NEW` : null, badgeNew: !!fresh, go: a.wardrobe },
     ].filter(Boolean).sort((p, q) => p.x - q.x);
@@ -124,7 +124,11 @@ export class CampMenu {
     this.spotId = this.spots[i].id;
     this.spotObjs.forEach((o, k) => {
       const sel = k === i;
-      o.label.setScale(sel ? 2 : 1).setColor(sel ? COLORS.gold : '#ffffff').setAlpha(sel ? 1 : 0.85).setDepth(DEPTH.hud + (sel ? 2 : 0));
+      // Words on the rock are chiselled into it (dark letters with a lit lower
+      // lip); the chosen one lights up in gold and lifts off the stone.
+      const carved = this.spots[k].carved && !sel;
+      o.label.setScale(sel ? 2 : 1).setColor(sel ? COLORS.gold : carved ? '#23222c' : '#ffffff').setShadow(carved ? '#aeb2bf' : '#16141f')
+        .setAlpha(sel ? 1 : carved ? 0.92 : 0.85).setDepth(DEPTH.hud + (sel ? 2 : 0));
       if (o.badge) o.badge.setDepth(DEPTH.hud + (sel ? 2 : 0));
     });
     const mode = this.spotId === 'climb' && this.opts.mode ? this.opts.mode() : null;

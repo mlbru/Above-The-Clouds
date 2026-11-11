@@ -67,6 +67,7 @@ export class OutfitFx {
     if (this.acc === 'kite') this.drawKite(back, pts, ctx, dt);
     if (this.acc === 'collar') this.drawCollar(front, pts, ctx);
     if (this.acc === 'aurora') this.drawScarf(front, pts, ctx);
+    else if (ctx.cold || ctx.wind > 0.9) this.drawWindScarf(front, back, pts, ctx);
     if (this.jacket === 'bolt' && ctx.streak >= 10) {
       this.crackleIn -= dt;
       if (this.crackleIn <= 0) {
@@ -191,6 +192,35 @@ export class OutfitFx {
       const sx = front ? cx + 3 : cx - 6 - Math.round(i * 0.25 + sway * (i / 9) * 2);
       g.fillStyle(col(i * 0.12), 1).fillRect(sx, cy + 2 + i, 2, 1);
     }
+  }
+
+  // The climber's own knitted scarf, wrapped on when it turns cold or the
+  // wind picks up. Its tail streams downwind and flutters: hanging limp in
+  // still air, flying out sideways in a gale.
+  drawWindScarf(g, gBack, pts, ctx) {
+    const [x, y] = this.at(pts.neck);
+    const cx = Math.round(x), cy = Math.round(y);
+    const RED = 0xc8463b, CREAM = 0xf0e6d0, DARK = 0x7a2622;
+    g.fillStyle(DARK, 1).fillRect(cx - 5, cy - 1, 11, 4);
+    g.fillStyle(RED, 1).fillRect(cx - 4, cy, 9, 2);
+    g.fillStyle(CREAM, 1).fillRect(cx - 2, cy, 1, 2).fillRect(cx + 2, cy, 1, 2);
+    const w = Math.max(0, Math.min(1.4, ctx.wind || 0));
+    // Straight down in still air, out to the side (with the weather, rightward) in a gale.
+    const ang = Math.PI / 2 - (w / 1.4) * 1.35;
+    const dx = Math.cos(ang), dy = Math.sin(ang), px = -dy, py = dx;
+    const ox = cx + 3, oy = cy + 1;
+    const len = 11;
+    for (let i = 0; i < len; i++) {
+      const f = i / len;
+      const flap = Math.sin(this.t / (110 - w * 40) - i * 0.75) * f * (0.6 + w * 1.6);
+      const sx = Math.round(ox + dx * i + px * flap), sy = Math.round(oy + dy * i + py * flap);
+      const c = Math.floor(i / 3) % 2 ? CREAM : RED;
+      gBack.fillStyle(DARK, 1).fillRect(sx - 1, sy, 1, 2);
+      gBack.fillStyle(c, 1).fillRect(sx, sy, 2, 2);
+    }
+    // A little fringe on the end.
+    const ex = Math.round(ox + dx * len), ey = Math.round(oy + dy * len);
+    gBack.fillStyle(CREAM, 1).fillRect(ex, ey, 1, 1).fillRect(ex + Math.round(px * 2), ey + Math.round(py * 2), 1, 1);
   }
 
   onPerfect() {

@@ -3,7 +3,7 @@ import { SunRays } from '../world/SunRays.js';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, PX_PER_METER, LEVEL_PX, RENDER_AHEAD_LEVELS, levelToMeters, camXFor, IS_PORTRAIT } from '../config/gameConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
 import { randomSeed } from '../utils/seededRandom.js';
-import { DayNightSystem } from '../systems/DayNightSystem.js';
+import { DayNightSystem, sunHeight, lowSun } from '../systems/DayNightSystem.js';
 import { WeatherSystem } from '../systems/WeatherSystem.js';
 import { Background } from '../world/Background.js';
 import { Atmosphere } from '../world/Atmosphere.js';
@@ -18,6 +18,7 @@ import { CodeEntry } from '../ui/CodeEntry.js';
 import { buildClimberTexture } from '../render/textures.js';
 import { BIOMES, biomeMixAt, setBiomeTheme } from '../data/biomes.js';
 import { SEASONS, currentSeason } from '../data/seasons.js';
+import { lerpColor, warmthOf } from '../utils/color.js';
 import { POSES } from '../render/climberArt.js';
 import { Climber } from '../entities/Climber.js';
 import { Effects } from '../systems/Effects.js';
@@ -74,7 +75,7 @@ export class MenuScene extends Phaser.Scene {
     this.climber = null;
     // The camp follows your own clock: morning light in the morning, a starry
     // night with fireflies late at night. It drifts on slowly from there.
-    this.dayNight = new DayNightSystem({ dayLengthSec: 1800, startT: this.registry.get('dayT') ?? realClockT() });
+    this.dayNight = new DayNightSystem({ width: GAME_WIDTH, dayLengthSec: 1800, startT: this.registry.get('dayT') ?? realClockT() });
     this.campLife = { smokeT: 0, flies: [] };
     if (typeof window !== 'undefined') window.__menu = this;
     this.sunRays = null;
@@ -82,6 +83,11 @@ export class MenuScene extends Phaser.Scene {
     this.buildWorld();
     this.weather = new WeatherSystem(this);
     this.overlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    // Aerial depth: the upper wall fades into the haze of the sky, so the
+    // rock reads as rising away from you rather than as a flat backdrop.
+    this.haze = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.mist - 1);
+    // The hour's colour added into the shadows (see ClimbScene's grade).
+    this.lift = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.atmos = new Atmosphere(this);
     this.atmos.reduced = this.prog.settings.reducedParticles;
     const camp = this.mountain.getLevel(0).nodes[0];
@@ -345,7 +351,16 @@ export class MenuScene extends Phaser.Scene {
     const d = this.demo;
     const c = this.climber;
     if (!d.climbing) {
-      c.setPose(Math.floor(this.t / 2600) % 2 ? 'look2' : 'look');
+      // Waiting at camp the climber is never still for long: a stretch,
+      // chalking up, a drink, checking the map; at night warming the hands
+      // and pointing out the stars.
+      d.idleT = (d.idleT ?? 4000) - delta;
+      if (!c.fidgeting && c.busy === 0 && d.idleT <= 0) {
+        const night = this.dayNight.state().night > 0.55;
+        const pool = night ? ['warm', 'stargaze', 'look', 'chalk'] : ['stretch', 'chalk', 'drink', 'map', 'look', 'shake'];
+        c.fidget(pool[Math.floor(Math.random() * pool.length)], this.effects);
+        d.idleT = 5500 + Math.random() * 4500;
+      } else if (!c.fidgeting) c.setPose(Math.floor(this.t / 2600) % 2 ? 'look2' : 'look');
       d.wait -= delta;
       if (d.wait <= 0) this.demoClimb();
       return;
@@ -494,16 +509,17 @@ export class MenuScene extends Phaser.Scene {
     // The wall's rim catches the light of the hour, as on the climb.
     if (this.wall.setRim) {
       const sun = day.sun, moon = day.moon;
-      const side = (sun || moon) && (sun || moon).x >= 240 ? 'r' : 'l';
-      const str = sun ? 0.25 + Math.max(0, Math.min(1, (150 - sun.y) / 120)) * 0.5 : moon ? 0.32 * day.night : 0;
+      const side = (sun || moon) && (sun || moon).x >= GAME_WIDTH / 2 ? 'r' : 'l';
+      const h = sunHeight(day);
+      const str = sun ? (0.25 + h * 0.5) * Math.min(1, h / 0.08) : moon ? 0.34 * day.night * (0.45 + day.moonLit * 0.55) * Math.min(1, moon.h / 0.08) : 0;
       const col = sun ? 0xffe0b0 : 0x9fb8ff;
       this.wall.setRim({ [side]: [col, str], [side === 'l' ? 'r' : 'l']: [col, str * 0.18] });
-      const height = sun ? Math.max(0, Math.min(1, (150 - sun.y) / 120)) : 0.6;
+      const height = sun ? h : 0.6;
       const away = side === 'l' ? 1 : -1;
       this.wall.setSun({ dx: away * (1 + (1 - height) * 3), dy: 2 + (1 - height), shadow: sun ? 1 : 0.35 * day.night, shade: sun ? 0.55 - height * 0.2 : 0.3 * day.night, side });
     }
     if (!this.sunRays) this.sunRays = new SunRays(this, DEPTH.light - 2);
-    this.sunRays.update(dt, day, { reduced });
+    this.sunRays.update(dt, day, { sky: this.background, clouds: this.background.clouds, camY: this.camY, reduced });
   }
 
   update(time, delta) {
@@ -514,7 +530,15 @@ export class MenuScene extends Phaser.Scene {
     const alt = 3 + Math.sin(this.t / 9000) * 3 + Math.max(0, (this.homeY - this.camY) / PX_PER_METER);
     this.background.update(delta, alt, day, { birds: 1 }, { mix: biomeMixAt(alt) });
     this.weather.update(delta, { biome: BIOMES.green, alt, light: day.light, reduced: this.prog.settings.reducedParticles, snowBoost: this.season === 'christmas' ? 0.5 : 0 });
-    this.overlay.fillColor = day.light;
+    // The Green Rise keeps its fresh colour even at sunset (half the warmth).
+    this.overlay.fillColor = warmthOf(day.light, 0.5);
+    const hz = this.haze.clear(), top = GAME_HEIGHT * 0.62;
+    for (let i = 0; i < 12; i++) {
+      const y0 = Math.round((i * top) / 12), y1 = Math.round(((i + 1) * top) / 12);
+      hz.fillStyle(lerpColor(day.skyBottom, day.skyTop, 0.25), 0.3 * (1 - i / 12) ** 1.6 * (1 - day.night * 0.5)).fillRect(0, y0, GAME_WIDTH, y1 - y0);
+    }
+    this.lift.fillColor = warmthOf(lerpColor(day.lift, 0xff9a40, lowSun(day) * 0.25), 0.5);
+    this.lift.setAlpha(day.liftA * 3.5);
     if (!this.introRunning) this.updateDemo(delta);
     this.wall.update(delta, Math.ceil(-(this.camY / LEVEL_PX)) + RENDER_AHEAD_LEVELS, this.camY - 200, this.camY + GAME_HEIGHT);
     if (this.campMenu && this.campMenu.visible) this.campMenu.update(delta, !this.list && !this.demo.climbing && !this.introRunning);

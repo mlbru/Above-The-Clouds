@@ -506,3 +506,8 @@ export function biomeMixAt(heightMeters) {
   }
   return { a: BIOMES[cur], b: BIOMES[cur], t: 0 };
 }
+
+// How much of the hour's warmth each biome takes: the Green Rise stays fresh
+// and cool even at sunset; the hive and the dragon soak up every bit of gold.
+export const BIOME_WARMTH = { green: 0.5, stone: 0.8, frozen: 0.7, storm: 0.7, aurora: 0.75, hive: 1.15, dragon: 1.15, clockwork: 1.05 };
+export const mixWarmth = (mix) => (BIOME_WARMTH[mix.a.id] ?? 1) * (1 - mix.t) + (BIOME_WARMTH[mix.b.id] ?? 1) * mix.t;
