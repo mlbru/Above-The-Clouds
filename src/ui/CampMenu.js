@@ -1,5 +1,6 @@
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { PixelText, COLORS } from './PixelText.js';
+import { buildLogoTexture } from '../render/logoArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { JOURNAL_CHAPTERS, journalProgress } from '../data/journal.js';
 import { BIOMES } from '../data/biomes.js';
@@ -47,9 +48,12 @@ export class CampMenu {
 
     // In portrait the logo is smaller and sits below the touch buttons.
     const ly = IS_PORTRAIT ? 46 : 14;
-    this.logo = ui(new PixelText(sc, W, ly, 'ABOVE THE CLOUDS', { color: '#ffffff', shadow: '#2a2440' }).setOrigin(0.5, 0).setScale(IS_PORTRAIT ? 2 : 3));
-    this.logo.setTint(0xffffff, 0xffffff, 0x9fd8ff, 0x9fd8ff);
-    ui(new PixelText(sc, W, ly + (IS_PORTRAIT ? 18 : 24), o.subtitle(), { color: '#dfe8ff', shadow: '#2a2440' }).setOrigin(0.5, 0));
+    // The painted logo (render/logoArt.js) with a sparkle that twinkles across it.
+    const logoScale = IS_PORTRAIT ? 2 : 3;
+    const logoKey = buildLogoTexture(sc, `logo_title_${logoScale}`, 'ABOVE THE CLOUDS', logoScale);
+    this.logo = ui(sc.add.image(W, ly - 4, logoKey).setOrigin(0.5, 0));
+    this.logoTwinkle = ui(sc.add.image(W, ly, 'glow_small').setBlendMode('ADD').setTint(0xfff4c8).setScale(0.6).setAlpha(0));
+    ui(new PixelText(sc, W, ly - 4 + this.logo.height + 1, o.subtitle(), { color: '#dfe8ff', shadow: '#2a2440' }).setOrigin(0.5, 0));
 
     // The gear in the top right corner.
     const gx = GAME_WIDTH - 16, gy = 16;
@@ -151,7 +155,16 @@ export class CampMenu {
     this.t += dt;
     const s = this.spots && this.spots[this.spot];
     if (!s || !this.arrow.active) return;
-    if (this.logo) this.logo.y = (IS_PORTRAIT ? 46 : 14) + Math.round(Math.sin(this.t / 900));
+    if (this.logo) {
+      const ly = (IS_PORTRAIT ? 46 : 14) - 4;
+      this.logo.y = ly + Math.round(Math.sin(this.t / 900));
+      // A glint runs over the letters every few seconds.
+      const cyc = (this.t % 5200) / 5200;
+      if (this.logoTwinkle && this.logoTwinkle.active) {
+        const on = cyc < 0.18 ? Math.sin((cyc / 0.18) * Math.PI) : 0;
+        this.logoTwinkle.setPosition(this.logo.x - this.logo.width / 2 + 20 + (this.logo.width - 40) * (cyc / 0.18), this.logo.y + 8).setAlpha(on * 0.9).setScale(0.4 + on * 0.5);
+      }
+    }
     const bob = Math.round(Math.abs(Math.sin(this.t / 240)) * 3);
     this.arrow.setPosition(s.x, s.y - 26 - bob).setVisible(show);
     this.glow.setPosition(s.x, s.y + 22).setAlpha(show ? 0.35 + 0.1 * Math.sin(this.t / 300) : 0);

@@ -30,7 +30,13 @@ export class WallPainter {
     const canvas = makeCanvas(W, h);
     const ctx = canvas.getContext('2d');
     const img = ctx.createImageData(W, h);
-    const ledges = segment.levels.filter((lv) => lv.nodes.length && lv.nodes[0].kind === 'ledge').map((lv) => ({ y: lv.nodes[0].y, bounds: lv.bounds }));
+    // Ledges whose shelf or shadow reaches into this canvas, including the
+    // neighbours' (a ledge's shadow can fall into the section below it).
+    const ledges = [];
+    for (let lvl = segment.startLevel - 2; lvl <= segment.endLevel + 2; lvl++) {
+      const lv = segment.levels.find((x) => x.level === lvl) || (mountain.getLevel && mountain.getLevel(lvl));
+      if (lv && lv.nodes.length && lv.nodes[0].kind === 'ledge' && lv.bounds) ledges.push({ y: lv.nodes[0].y, bounds: lv.bounds });
+    }
     const cracks = this.makeCracks(segment);
     let waterfallX = null;
     if (segment.waterfall) {
@@ -212,21 +218,61 @@ export class WallPainter {
 
     this.paintEdge(img, base, wy, l, r, mix.a);
 
-    // Rest ledges protrude past the wall.
+    // Rest ledges: a real shelf of rock. A walkable top (pebbles, grass or
+    // snow), a lit front lip, a shaded face with a ragged underside, ends that
+    // taper and round off, and a soft shadow cast onto the wall below.
     for (const lg of ledges) {
       const d = wy - lg.y;
-      if (d < -3 || d > 11) continue;
+      if (d < -8 || d > 40) continue;
       const pal = mix.a;
+      const rock = pal.rock;
+      const snow = pal.weather && pal.weather.snow > 0.3;
+      const grass = !!pal.wall.ledgeFringe;
+      const top = ledgeTopColor(pal);
       const ll = Math.round(lg.bounds.l - 16 + el * 0.5), lr = Math.round(lg.bounds.r + 16 + er * 0.5);
       for (let x = Math.max(0, ll); x <= Math.min(W - 1, lr); x++) {
-        let c;
         const lip = Math.min(x - ll, lr - x);
-        if (d < 0) c = lip < 2 ? pal.outline : ledgeTopColor(pal);
-        else if (d === 0) c = pal.rock[4];
-        else if (d < 7) c = d === 6 ? pal.outline : pal.rock[d < 3 ? 3 : 2];
-        else c = bayer(x, wy) < (11 - d) / 6 ? pal.rock[0] : null;
-        if (d < 0 && pal.wall.ledgeFringe && ((x * 7) % 5 === 0) && d === -3) c = pal.accentA;
-        if (lip < 1 && d >= 0 && d < 7) c = pal.outline;
+        const t = Math.min(1, lip / 16);
+        const ease = t * t * (3 - 2 * t);
+        const n = this.edge(x * 0.09, lg.y * 0.013);
+        const n2 = this.detail(x * 0.31, lg.y * 0.07);
+        // The ends sit lower and thinner: a rounded tip instead of a plank end.
+        const topD = -4 + Math.round((1 - ease) * 3);
+        // Underneath: a thick lip of rock with chunky teeth hanging off it.
+        const cell = Math.floor((x + Math.round(n * 5)) / 7);
+        const tooth = hashInts(cell, lg.y, 61) % 4 === 0 ? Math.round((4 + (hashInts(cell, 9) % 7)) * (1 - Math.abs(((x + Math.round(n * 5)) % 7) - 3) / 4)) : 0;
+        const bottomD = Math.round(3 + ease * (10 + n * 8 + tooth));
+        let c = null;
+        if (d < topD) {
+          // Above the top: grass blades or snow that pokes up, sparse and uneven.
+          if (grass && d >= topD - 2 && n2 > 0.62 && (x * 7 + lg.y) % 3 === 0) c = d === topD - 1 ? pal.accentB : pal.accentC;
+          else if (snow && d === topD - 1 && n2 > 0.45) c = 0xf4f8ff;
+        } else if (d < 0) {
+          // The top: lit, speckled with small stones; snow lies on it up high.
+          const k = (d - topD) / Math.max(1, -topD);
+          c = snow ? (k < 0.5 ? 0xf4f8ff : 0xd8e4f4) : lerpColor(top, rock[4], 0.25 + 0.25 * (1 - k));
+          if (!snow && n2 > 0.72) c = rock[2];
+          else if (!snow && n2 < 0.12) c = rock[4];
+          if (grass && d === -1 && n2 > 0.4) c = pal.accentA;
+          if (d === topD && lip >= 2) c = snow ? 0xffffff : lerpColor(top, 0xffffff, 0.2);
+        } else if (d === 0) {
+          c = snow ? 0xe8f0fa : rock[4];
+        } else if (d < bottomD) {
+          // The face: lit from the upper left, darker as it goes under.
+          const k = (d - 1) / Math.max(1, bottomD - 1);
+          const v = 3.2 - k * 3 + (n2 - 0.5) * 1.2 + (x - ll < 24 ? 0.4 : 0) + (bayer(x, wy) - 0.5) * 0.6;
+          c = rock[Math.max(0, Math.min(4, Math.round(v)))];
+          // Icicles or snow drips hang over the lip up high.
+          if (snow && d <= 2 + Math.round(n * 3) && (x + Math.round(n * 9)) % 7 === 0) c = 0xcfe6fa;
+          // Grass strands hanging over the edge low down.
+          if (grass && d <= 1 + Math.round(n2 * 4) && (x * 5 + lg.y) % 6 === 0) c = pal.accentB;
+          if (d === bottomD - 1) c = pal.outline;
+        } else if (x >= l + 1 && x <= r - 1) {
+          // The shadow it throws on the wall, fading with distance.
+          const k = (d - bottomD) / 14;
+          if (k < 1 && bayer(x, wy) < (1 - k) * 0.55) c = rock[0];
+        }
+        if (c !== null && lip < 1 && d >= topD && d < bottomD) c = pal.outline;
         if (c !== null) this.put(img, base + x * 4, c);
       }
     }

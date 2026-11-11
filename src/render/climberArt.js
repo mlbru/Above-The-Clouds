@@ -115,7 +115,11 @@ function bendJoint(a, b, length, side) {
 }
 
 function drawHead(g, cx, cy, p, turn) {
+  // Neck and ears first, so the hair overlaps them.
+  g.rect(cx - 1, cy + 3, 3, 2, p.skinDark);
+  g.set(cx - 4, cy + 1, p.skin); g.set(cx + 4, cy + 1, p.skinDark);
   g.ellipse(cx, cy, 4, 4.6, p.hair);
+  g.set(cx - 2, cy + 3, darken(p.hair, 0.75)); g.set(cx + 2, cy + 3, darken(p.hair, 0.75));
   g.set(cx - 1, cy + 1, p.hairLight);
   g.set(cx + 1, cy - 1, p.hairLight);
   if (turn === 'left') { g.set(cx - 4, cy + 1, p.skin); g.set(cx - 4, cy + 2, p.skinDark); g.set(cx - 3, cy + 3, p.skin); }
@@ -167,6 +171,31 @@ function drawLimb(g, a, b, length, side, color, endColor, endW) {
   g.rect(Math.round(b[0] - endW / 2), Math.round(b[1] - 1), endW, 3, endColor);
 }
 
+// A limb with a lit edge and a shaded edge so it reads as round, a crease at
+// the joint, and a shaded glove or boot on the end.
+function drawLimbShaded(g, a, b, length, side, base, dark, light, endColor, endW, foot = false) {
+  const j = bendJoint(a, b, length, side);
+  g.line(a[0] + 1, a[1] + 1, j[0] + 1, j[1] + 1, dark, 3);
+  g.line(j[0] + 1, j[1] + 1, b[0] + 1, b[1] + 1, dark, 3);
+  g.line(a[0], a[1], j[0], j[1], base, 3);
+  g.line(j[0], j[1], b[0], b[1], base, 3);
+  g.line(a[0] - 1, a[1], j[0] - 1, j[1], light, 1);
+  g.set(j[0], j[1], dark);
+  const ex = Math.round(b[0] - endW / 2), ey = Math.round(b[1] - 1);
+  if (foot) {
+    // Boot: a chunky toe, laces, a dark rubber sole.
+    g.rect(ex, ey, endW + 1, 3, endColor);
+    g.rect(ex, ey + 2, endW + 1, 1, 0x2a1d15);
+    g.set(ex + 1, ey, lighten(endColor, 0.3));
+    g.set(ex + 2, ey + 1, 0xd8c8a8);
+  } else {
+    // Glove: knuckles lit on top, the palm in shade.
+    g.rect(ex, ey, endW, 3, endColor);
+    g.set(ex, ey, lighten(endColor, 0.35));
+    g.rect(ex, ey + 2, endW, 1, darken(endColor, 0.7));
+  }
+}
+
 function drawRear(g, pose, p, frameIndex) {
   const [dx, dy] = pose.b;
   const pb = pose.pb || 0;
@@ -174,20 +203,25 @@ function drawRear(g, pose, p, frameIndex) {
   const oy = dy + (pose.anchor === 54 ? 2 : 0);
   // Legs (behind everything else)
   const hipL = [ox - 3, oy + 32], hipR = [ox + 3, oy + 32];
-  drawLimb(g, hipL, pose.lf, 21, -1, p.pants, p.boots, 4);
-  drawLimb(g, hipR, pose.rf, 21, 1, p.pants, p.boots, 4);
-  g.set(pose.lf[0] - 2, pose.lf[1] + 1, p.sole); g.set(pose.lf[0] + 1, pose.lf[1] + 1, p.sole);
-  g.set(pose.rf[0] - 2, pose.rf[1] + 1, p.sole); g.set(pose.rf[0] + 1, pose.rf[1] + 1, p.sole);
+  const pantsLight = lighten(p.pants, 0.22);
+  drawLimbShaded(g, hipL, pose.lf, 21, -1, p.pants, p.pantsDark, pantsLight, p.boots, 4, true);
+  drawLimbShaded(g, hipR, pose.rf, 21, 1, p.pants, p.pantsDark, pantsLight, p.boots, 4, true);
   g.rect(ox - 5, oy + 30, 11, 4, p.pants);
+  g.rect(ox + 3, oy + 30, 3, 4, p.pantsDark);
   // Torso
+  // Torso: rounded shoulders, lit on the left, shaded on the right, a hem.
   g.rect(ox - 7, oy + 18, 15, 13, p.jacket);
   g.rect(ox - 6, oy + 17, 13, 1, p.jacket);
+  g.rect(ox - 7, oy + 18, 2, 12, p.jacketLight);
+  g.rect(ox + 6, oy + 18, 2, 13, p.jacketDark);
+  g.set(ox - 7, oy + 18, p.jacket); g.set(ox + 7, oy + 18, p.jacketDark);
   g.rect(ox - 7, oy + 30, 15, 1, p.jacketDark);
+  g.rect(ox - 5, oy + 17, 11, 1, p.jacketLight);
   if (p.jacketLogo !== null) { g.set(ox + 6, oy + 21, p.jacketLogo); g.set(ox + 7, oy + 22, p.jacketLogo); g.set(ox + 6, oy + 23, p.jacketLogo); }
   // Arms
   const shL = [ox - 7, oy + 20], shR = [ox + 7, oy + 20];
-  drawLimb(g, shL, pose.lh, 15, -1, p.jacket, p.glove, 3);
-  drawLimb(g, shR, pose.rh, 15, 1, p.jacket, p.glove, 3);
+  drawLimbShaded(g, shL, pose.lh, 15, -1, p.jacket, p.jacketDark, p.jacketLight, p.glove, 3);
+  drawLimbShaded(g, shR, pose.rh, 15, 1, p.jacket, p.jacketDark, p.jacketLight, p.glove, 3);
   g.set(shL[0], shL[1] - 1, p.jacketLight);
   // Backpack
   const py = oy + 18 + pb;
@@ -200,10 +234,22 @@ function drawRear(g, pose, p, frameIndex) {
   g.rect(ox - 3, py + 6, 7, 5, p.packDark);
   g.rect(ox - 2, py + 6, 5, 1, p.pack);
   g.set(ox, py + 3, 0xd8d0b8);
+  // A rounded pack: soft bottom corners and a lit lid flap.
+  g.set(ox - 5, py + 12, null); g.set(ox + 5, py + 12, null);
+  g.rect(ox - 4, py + 1, 9, 1, p.packLight);
+  g.rect(ox - 4, py + 2, 9, 1, p.pack);
+  // Shoulder straps over the jacket, compression straps, buckles and a bottle.
+  g.rect(ox - 6, py - 1, 1, 3, p.packDark); g.rect(ox + 6, py - 1, 1, 3, p.packDark);
+  g.rect(ox - 4, py + 4, 9, 1, p.packDark);
+  g.set(ox - 3, py + 4, 0xc8c8d8); g.set(ox + 3, py + 4, 0xc8c8d8);
+  g.set(ox - 1, py + 1, 0xc8c8d8); g.set(ox + 1, py + 1, 0xc8c8d8);
+  g.rect(ox + 6, py + 5, 2, 6, 0x4f86c0); g.set(ox + 6, py + 5, 0x9fd0f0); g.rect(ox + 6, py + 4, 2, 1, 0x2a2a3a);
   // Sleeping-pad roll on top
   g.rect(ox - 6, py - 4, 13, 3, p.roll);
   g.rect(ox - 6, py - 2, 13, 1, p.rollDark);
   g.set(ox - 6, py - 3, p.rollDark); g.set(ox + 6, py - 3, p.rollDark);
+  g.rect(ox - 3, py - 4, 1, 3, p.packDark); g.rect(ox + 3, py - 4, 1, 3, p.packDark);
+  g.rect(ox - 5, py - 4, 11, 1, lighten(p.roll, 0.25));
   if (p.packStyle === 'moss') {
     // Moss grows over the roll and the top of the pack, strands hang below.
     for (let x = ox - 6; x <= ox + 6; x++) {
@@ -214,6 +260,13 @@ function drawRear(g, pose, p, frameIndex) {
     for (let y = py + 2; y < py + 12; y++) for (let x = ox - 5; x <= ox + 5; x++) if ((x * 3 + y * 5) % 9 === 0) g.set(x, y, MOSS[1]);
     g.rect(ox - 4, py + 13, 1, 2, MOSS[0]); g.rect(ox + 3, py + 13, 1, 3, MOSS[0]); g.set(ox + 3, py + 15, MOSS[1]);
   }
+  // Harness: a waist belt with a buckle and gear loops, a few bright
+  // carabiners and a quickdraw hanging at the hips.
+  g.rect(ox - 6, oy + 30, 13, 2, 0x3a3a4c);
+  g.rect(ox - 6, oy + 30, 13, 1, 0x5a5a70);
+  g.set(ox - 4, oy + 31, 0xc8c8d8);
+  for (const [x, c] of [[ox - 6, 0xf2c14e], [ox - 5, 0xf0644b], [ox + 5, 0x6ad8ff], [ox + 6, 0x8fd16a]]) { g.set(x, oy + 32, c); g.set(x, oy + 33, darken(c, 0.7)); }
+  g.rect(ox + 6, oy + 34, 1, 2, 0x9a9ab0); g.set(ox + 6, oy + 36, 0xf2c14e);
   // Chalk bag
   g.rect(ox - 1, oy + 31, 3, 3, p.chalk);
   g.set(ox, oy + 31, p.chalkBand);
@@ -223,7 +276,7 @@ function drawRear(g, pose, p, frameIndex) {
     g.set(ox - 6, py - 2, 0x9aa4b0);
   }
   // Head
-  const headY = oy + 12 + (pose.head === 'down' ? 1 : 0);
+  const headY = oy + 11 + (pose.head === 'down' ? 1 : 0);
   drawHead(g, ox, headY, p, pose.head);
   if (p.acc === 'collar') {
     // A collar of black volcanic glass, its facets catching a violet light.
@@ -378,7 +431,7 @@ export function bodyPoints(name) {
     return { packTop: [39, 25], neck: [24, 26 + by], head: [24, 21 + by], shoulders: [[18, 29 + by], [30, 29 + by]], front: true };
   }
   const ox = 24 + pose.b[0], oy = pose.b[1] + (pose.anchor === 54 ? 2 : 0), pb = pose.pb || 0;
-  return { packTop: [ox, oy + 18 + pb - 5], neck: [ox, oy + 16], head: [ox, oy + 12], shoulders: [[ox - 7, oy + 20], [ox + 7, oy + 20]], front: false };
+  return { packTop: [ox, oy + 18 + pb - 5], neck: [ox, oy + 15], head: [ox, oy + 11], shoulders: [[ox - 7, oy + 20], [ox + 7, oy + 20]], front: false };
 }
 
 // Draws every pose into one sprite-sheet canvas (row of FRAME_W x FRAME_H frames).
