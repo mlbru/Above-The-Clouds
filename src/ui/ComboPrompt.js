@@ -106,9 +106,6 @@ export class ComboPrompt {
     this.glow = this.add.image(0, TRACK_Y, 'glow_small').setScrollFactor(0).setDepth(DEPTH.hud + 1).setBlendMode('ADD').setTint(0xf2c14e).setScale(1.3).setVisible(false);
     // Biome mechanics (whiteout) can make notes appear only shortly before the line.
     this.revealMs = (route.mods && route.mods.revealMs) || 0;
-    // The rope takes the route's colour, like a dyed climbing rope.
-    this.ropeA = lerpColor(0xe8d8b0, this.color, 0.55);
-    this.ropeB = lerpColor(0x8a6a3a, this.color, 0.35);
     // Trail Boons: SONGBIRD lets notes in later, CAT'S EYES keeps faded notes faintly lit.
     const boon = (this.scene.boonView && this.scene.boonView()) || {};
     this.minAlpha = boon.minAlpha || 0;
@@ -165,20 +162,10 @@ export class ComboPrompt {
     if (this.mode === 'recovery') return this.updateRecovery(now);
     const c = this.combo;
     // Track
-    // The track is a climbing rope: a soft shadow band so the arrows read,
-    // then a twisted three-strand rope that runs towards you with the notes.
-    g.fillStyle(0x0b0912, 0.42).fillRect(TRACK_X - 3, TRACK_Y - 9, TRACK_W + 6, 19);
-    g.fillStyle(0x0b0912, 0.25).fillRect(TRACK_X - 5, TRACK_Y - 7, TRACK_W + 10, 15);
-    const twist = Math.floor(now * PX_PER_MS) % 4;
-    g.fillStyle(0x3a2814, 1).fillRect(TRACK_X, TRACK_Y - 1, TRACK_W, 4);
-    for (let x = TRACK_X; x < TRACK_X + TRACK_W; x++) {
-      const k = (x + twist) % 4;
-      g.fillStyle(k < 2 ? this.ropeA : this.ropeB, 1).fillRect(x, TRACK_Y - 1 + (k === 1 ? 1 : k === 2 ? 2 : 0), 1, k === 3 ? 1 : 2);
-      if (k === 0) g.fillStyle(0xffffff, 0.35).fillRect(x, TRACK_Y - 1, 1, 1);
-    }
-    // A knot where the rope comes in.
-    g.fillStyle(this.ropeB, 1).fillRect(TRACK_X + TRACK_W - 3, TRACK_Y - 2, 4, 6);
-    g.fillStyle(this.ropeA, 1).fillRect(TRACK_X + TRACK_W - 2, TRACK_Y - 2, 2, 2);
+    drawFrame(g, TRACK_X - 5, TRACK_Y - 10, TRACK_W + 10, 21, { accent: this.accent, alpha: 0.85 });
+    g.fillStyle(0x3a3450, 1);
+    g.fillRect(TRACK_X, TRACK_Y, TRACK_W, 1);
+    for (let x = TRACK_X + 8; x < TRACK_X + TRACK_W; x += 12) g.fillRect(x, TRACK_Y - 1, 1, 3);
     // Good and perfect zones around the hit line
     const ref = c.current || c.notes[c.notes.length - 1];
     // The target zone always shows the real window of the next note, so it
@@ -190,12 +177,10 @@ export class ComboPrompt {
     g.fillStyle(zoneColor, this.flash > 0 ? 0.75 : 0.38);
     g.fillRect(HIT_X - perfW, TRACK_Y - 7, perfW * 2 + 1, 15);
     // The hit line glows.
-    // The hit line: a carabiner clipped to the rope, lit in the zone's colour.
-    g.fillStyle(0x16141f, 1).fillRect(HIT_X - 4, TRACK_Y - 10, 9, 21);
-    g.fillStyle(zoneColor, 1).fillRect(HIT_X - 3, TRACK_Y - 9, 7, 1).fillRect(HIT_X - 3, TRACK_Y + 9, 7, 1);
-    g.fillStyle(zoneColor, 1).fillRect(HIT_X - 4, TRACK_Y - 8, 1, 17).fillRect(HIT_X + 4, TRACK_Y - 8, 1, 17);
-    g.fillStyle(0xffffff, 0.9).fillRect(HIT_X - 3, TRACK_Y - 8, 1, 5);
-    g.fillStyle(0xffffff, 1).fillRect(HIT_X, TRACK_Y - 9, 1, 19);
+    g.fillStyle(zoneColor, 0.35);
+    g.fillRect(HIT_X - 1, TRACK_Y - 8, 3, 17);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(HIT_X, TRACK_Y - 9, 1, 19);
     // Whiteout: a wall of snow on the track that notes come out of.
     if (this.revealMs) {
       const fx = Math.round(HIT_X + this.revealMs * PX_PER_MS);
@@ -210,7 +195,7 @@ export class ComboPrompt {
     }
     // Sequence row background
     const n = c.notes.length;
-    g.fillStyle(0x0b0912, 0.38).fillRect(Math.round(GAME_WIDTH / 2 - (n * 10) / 2) - 4, TRACK_Y - 26, n * 10 + 6, 12);
+    drawFrame(g, Math.round(GAME_WIDTH / 2 - (n * 10) / 2) - 5, TRACK_Y - 27, n * 10 + 8, 14, { accent: this.accent, alpha: 0.75 });
     const t = this.scene.time.now;
     const clipR = TRACK_X + TRACK_W - 4;
     let gustSoon = false;
