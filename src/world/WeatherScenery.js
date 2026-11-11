@@ -6,6 +6,7 @@
 import Phaser from 'phaser';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, LEVEL_PX } from '../config/gameConfig.js';
 import { SKY } from '../systems/DayNightSystem.js';
+import { Audio } from '../systems/AudioSystem.js';
 
 const SHOWER_BIOMES = ['green', 'stone', 'hive'];
 const BOW = [0xff4a4a, 0xff9a3a, 0xffe04a, 0x6ade5a, 0x4ab8ff, 0x6a6aff, 0xb05aff];
@@ -45,7 +46,7 @@ export class WeatherScenery {
     // (It keeps the peak of the rain since it last cleared: the rain fades out slowly.)
     this.lastWet = Math.max(this.lastWet, wet);
     if (wet <= 0.3) {
-      if (this.lastWet > 0.55 && day.sun && day.sun.h < 0.95) this.bowLife = 32000;
+      if (this.lastWet > 0.55 && day.sun && day.sun.h < 0.95) { this.bowLife = 32000; Audio.play('rainbow'); }
       this.lastWet = 0;
     }
     this.drawBow(dt, day, sky);

@@ -18,7 +18,7 @@ class AudioSystemImpl {
     this.samples = {};
     this.sampleSources = [];
     this.plucks = {};
-    this.amb = { wind: 0.2, stream: 0, birds: 0, nextBirdAt: 0 };
+    this.amb = { wind: 0.2, stream: 0, birds: 0, rain: 0, flap: 0, nextBirdAt: 0, nextDropAt: 0, nextFlapAt: 0 };
     this.paused = false;
     this.lastPlay = {};
   }
@@ -394,6 +394,20 @@ class AudioSystemImpl {
         this.noiseHit({ dur: 0.12, type: 'highpass', freq: 2500, peak: 0.22 * v });
         this.noiseHit({ t: 0.05, dur: 2.6, type: 'lowpass', freq: 260, sweepTo: 90, peak: 0.42 * v, attack: 0.08, bus: this.ambBus, reverb: 0.6 });
         this.noiseHit({ t: 0.5, dur: 1.6, type: 'lowpass', freq: 180, peak: 0.22 * v, attack: 0.3, bus: this.ambBus });
+        // The roll comes back off the far ridges, quieter each time.
+        [1.4, 2.3, 3.4].forEach((d, i) => this.noiseHit({ t: d + Math.random() * 0.3, dur: 1.4, type: 'lowpass', freq: 150 - i * 20, peak: (0.12 - i * 0.03) * v, attack: 0.25, bus: this.ambBus, reverb: 0.5 }));
+      },
+      // The gondola rolling over a pylon's wheels: a metal clack-clack.
+      clack() {
+        [0, 0.09].forEach((d) => {
+          this.tone({ t: d, freq: 820, toFreq: 640, dur: 0.06, type: 'square', peak: 0.03 });
+          this.noiseHit({ t: d, dur: 0.04, freq: 3200, q: 2, peak: 0.08 });
+          this.tone({ t: d, freq: 120, toFreq: 70, dur: 0.08, peak: 0.12 });
+        });
+      },
+      // A rainbow: a soft rising shimmer of bells.
+      rainbow() {
+        [0, 4, 7, 11, 14, 19, 24].forEach((st, i) => this.tone({ t: i * 0.11, freq: 523 * 2 ** (st / 12), dur: 1.4, peak: 0.025, attack: 0.02, reverb: 0.8 }));
       },
       // A far-off rumble before a storm.
       rumble() { this.noiseHit({ dur: 3, type: 'lowpass', freq: 140, sweepTo: 80, peak: 0.3, attack: 0.8, bus: this.ambBus }); },
@@ -543,6 +557,49 @@ class AudioSystemImpl {
     this.streamGain = ctx.createGain(); this.streamGain.gain.value = 0;
     stream.connect(lp).connect(hp).connect(this.streamGain).connect(this.ambBus);
     stream.start();
+    // Rain: a soft hiss of drops in the air and a low wash of water on rock
+    // (single drops pattering on the stone are added in update()).
+    const rain = ctx.createBufferSource();
+    rain.buffer = this.noise; rain.loop = true;
+    const rh = ctx.createBiquadFilter(); rh.type = 'highpass'; rh.frequency.value = 1800;
+    const rl = ctx.createBiquadFilter(); rl.type = 'lowpass'; rl.frequency.value = 7000;
+    this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
+    rain.connect(rh).connect(rl).connect(this.rainGain).connect(this.ambBus);
+    rain.start();
+    const wash = ctx.createBufferSource();
+    wash.buffer = this.brown; wash.loop = true;
+    const wl = ctx.createBiquadFilter(); wl.type = 'lowpass'; wl.frequency.value = 900;
+    this.washGain = ctx.createGain(); this.washGain.gain.value = 0;
+    wash.connect(wl).connect(this.washGain).connect(this.ambBus);
+    wash.start(0, 1.3);
+  }
+
+  // The gondola's hum while a lift ride plays: a low motor drone with a
+  // slow wobble, and the rope singing faintly above it.
+  startHum() {
+    if (!this.ctx || this.ctx.state !== 'running' || this.hum) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.8);
+    g.connect(this.ambBus);
+    const oscs = [[55, 'sawtooth', 0.5], [110.5, 'triangle', 0.35], [880, 'sine', 0.05]].map(([f, type, v]) => {
+      const o = ctx.createOscillator(); o.type = type; o.frequency.value = f;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+      const og = ctx.createGain(); og.gain.value = v;
+      o.connect(lp).connect(og).connect(g); o.start();
+      return o;
+    });
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.7;
+    const lg = ctx.createGain(); lg.gain.value = 3;
+    lfo.connect(lg).connect(oscs[0].frequency); lfo.start();
+    this.hum = { g, nodes: [...oscs, lfo] };
+  }
+
+  stopHum() {
+    if (!this.hum) return;
+    const { g, nodes } = this.hum, t = this.ctx.currentTime;
+    this.hum = null;
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.6);
+    nodes.forEach((n) => n.stop(t + 0.7));
   }
 
   // A recorded wind loop takes over from the filtered noise (same gain curve).
@@ -559,8 +616,9 @@ class AudioSystemImpl {
     this.windSample = src;
   }
 
-  setAmbience({ wind = 0.2, stream = 0, birds = 0 }) {
-    this.amb.wind = wind; this.amb.stream = stream; this.amb.birds = birds;
+  // rain: 0..1 how hard it rains. flap: 0..1 how hard the scarf is flapping.
+  setAmbience({ wind = 0.2, stream = 0, birds = 0, rain = 0, flap = 0 }) {
+    this.amb.wind = wind; this.amb.stream = stream; this.amb.birds = birds; this.amb.rain = rain; this.amb.flap = flap;
   }
 
   setMusicMode({ root, scale, instrument = 'pluck', tempo = 90, octave = 12, motif = null, drum = false, song = null }) {
@@ -649,6 +707,22 @@ class AudioSystemImpl {
     if (!this.windSample) this.windFilter.frequency.setTargetAtTime(300 + this.amb.wind * 500 * gust, t, 0.8);
     else this.windSample.playbackRate.setTargetAtTime(0.85 + gust * 0.3, t, 0.8);
     this.streamGain.gain.setTargetAtTime(this.amb.stream * 0.07, t, 1.0);
+    const rain = this.amb.rain;
+    if (this.rainGain) {
+      this.rainGain.gain.setTargetAtTime(rain * 0.05 * (0.85 + 0.15 * gust), t, 1.2);
+      this.washGain.gain.setTargetAtTime(rain * 0.09, t, 1.5);
+    }
+    // Single drops pattering on the rock, closer and further away.
+    if (rain > 0.05 && t > this.amb.nextDropAt) {
+      this.amb.nextDropAt = t + (0.02 + Math.random() * 0.12) / rain;
+      this.noiseHit({ dur: 0.02 + Math.random() * 0.03, freq: 2500 + Math.random() * 3500, q: 2, peak: (0.015 + Math.random() * 0.035) * rain, bus: this.ambBus });
+    }
+    // The scarf snapping in the gusts.
+    if (this.amb.flap > 0.1 && gust > 0.75 && t > this.amb.nextFlapAt) {
+      this.amb.nextFlapAt = t + 0.9 + Math.random() * 2.2;
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) this.noiseHit({ t: i * (0.07 + Math.random() * 0.04), dur: 0.05, freq: 1400 + Math.random() * 900, q: 0.8, peak: 0.035 * this.amb.flap, attack: 0.008, bus: this.ambBus });
+    }
     if (this.amb.birds > 0 && t > this.amb.nextBirdAt) {
       this.amb.nextBirdAt = t + 3 + Math.random() * 9 / this.amb.birds;
       this.chirp();

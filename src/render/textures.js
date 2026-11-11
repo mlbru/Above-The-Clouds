@@ -5,6 +5,7 @@ import { darken, lighten, lerpColor, bayer, rgb } from '../utils/color.js';
 import { SeededRandom, makeNoise2D } from '../utils/seededRandom.js';
 import { drawClimberSheet, FRAME_NAMES, FRAME_W, FRAME_H, POSES } from './climberArt.js';
 import { BIOMES } from '../data/biomes.js';
+import { holdShapeGrid, holdShapeKey, shapesFor, SHAPED_BIOMES_SKIP } from './holdArt.js';
 import { ridgeHeights, buildBackdropTextures } from './backdropArt.js';
 import { buildShopTextures } from './shopArt.js';
 import { buildCampTextures } from './campArt.js';
@@ -179,6 +180,11 @@ export function buildHoldTextures(scene) {
         addGrid(scene, holdKey(biome.id, kind, hazard), holdGrid(biome, kind, hazard));
       }
     }
+  }
+  // Holds with character (render/holdArt.js): the shapes each biome uses.
+  for (const biome of Object.values(BIOMES)) {
+    if (SHAPED_BIOMES_SKIP.includes(biome.id)) continue;
+    for (const shape of new Set([...shapesFor(biome.id, 'hold'), ...shapesFor(biome.id, 'jug')])) addGrid(scene, holdShapeKey(biome.id, shape), holdShapeGrid(biome, shape));
   }
   // The Bone Garden's other bone shapes.
   for (let v = 1; v < BONE_HOLD_VARIANTS; v++) {

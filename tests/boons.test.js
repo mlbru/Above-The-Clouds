@@ -9,10 +9,16 @@ test('golden city is decided by the seed, never at base camp', () => {
     assert.equal(goldenCityAt(seed, 55), goldenCityAt(seed, 55));
     assert.equal(goldenCityAt(seed, 0), false);
   }
-  // Roughly 1 in 150 stretches over many seeds.
-  let hits = 0, n = 0;
-  for (let seed = 1; seed < 3000; seed++) for (const from of [55, 208, 333, 486]) { n++; if (goldenCityAt(seed, from)) hits++; }
-  assert.ok(hits / n > GOLDEN_CITY.chance * 0.5 && hits / n < GOLDEN_CITY.chance * 1.8, `rate ${hits / n}`);
+  // Roughly 1 mountain in 200 hides it, and then in exactly one stretch.
+  let seeds = 0;
+  const N = 20000;
+  for (let seed = 1; seed <= N; seed++) {
+    let n = 0;
+    for (let k = 1; k <= 40; k++) if (goldenCityAt(seed, stretchAt(k).from)) n++;
+    assert.ok(n <= 1, `seed ${seed} has ${n} cities`);
+    seeds += n;
+  }
+  assert.ok(seeds / N > GOLDEN_CITY.chance * 0.6 && seeds / N < GOLDEN_CITY.chance * 1.5, `rate ${seeds / N}`);
 });
 
 test('stretches follow the biome sequence and then the high loop', () => {

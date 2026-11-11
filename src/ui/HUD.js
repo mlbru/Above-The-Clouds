@@ -51,6 +51,7 @@ export class HUD {
     this.debug = new PixelText(scene, 8, 62, '', { color: '#c8ffc8' }).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
     this.toasts = [];
     this.toastQueue = [];
+    this.toastCur = null;
     this.visible = true;
     this.blink = 0;
   }
@@ -337,25 +338,40 @@ export class HUD {
   }
 
   // Understated messages that stack quietly under the grip meter.
+  // Messages on the right: one at a time, sliding in under the streak
+  // counter. The same message is never queued twice, and while several are
+  // waiting each one stays up for less time so none of them pile up.
   toast(text, color = COLORS.text) {
+    if (this.toastQueue.some((q) => q.text === text) || (this.toastCur && this.toastCur.text === text)) return;
     this.toastQueue.push({ text, color });
   }
 
-  updateToasts() {
-    if (this.toastQueue.length && this.toasts.length < 3) {
-      const { text, color } = this.toastQueue.shift();
-      const t = new PixelText(this.scene, GAME_WIDTH - 8, TOAST_Y + this.toasts.length * 9, text, { color }).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(0);
-      t.setVisible(this.visible);
-      this.toasts.push(t);
-      this.scene.tweens.add({
-        targets: t, alpha: 1, duration: 500, hold: 3800, yoyo: true,
-        onComplete: () => {
-          this.toasts = this.toasts.filter((o) => o !== t);
-          t.destroy();
-          this.toasts.forEach((o, i) => o.setY(TOAST_Y + i * 9));
-        },
-      });
+  toastSlotY() {
+    const st = this.streak;
+    return st.text ? Math.round(st.y + st.displayHeight + 3) : TOAST_Y - 9;
+  }
+
+  updateToasts(dt = 16) {
+    const cur = this.toastCur;
+    if (cur) {
+      cur.t += dt;
+      const o = cur.obj;
+      // Follow the streak counter as it grows and shrinks.
+      o.y += (this.toastSlotY() - o.y) * Math.min(1, dt / 90);
+      if (!cur.leaving && cur.t > cur.hold) {
+        cur.leaving = true;
+        this.scene.tweens.add({ targets: o, alpha: 0, x: o.x + 14, duration: 220, ease: 'Quad.easeIn', onComplete: () => { o.destroy(); this.toasts = []; this.toastCur = null; } });
+      }
+      return;
     }
+    if (!this.toastQueue.length) return;
+    const { text, color } = this.toastQueue.shift();
+    const o = new PixelText(this.scene, GAME_WIDTH + 6, this.toastSlotY(), text, { color }).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(0);
+    o.setVisible(this.visible);
+    this.toasts = [o];
+    const waiting = this.toastQueue.length;
+    this.toastCur = { obj: o, text, t: 0, hold: waiting >= 2 ? 1100 : waiting === 1 ? 1700 : 2400 + Math.min(1200, text.length * 30) };
+    this.scene.tweens.add({ targets: o, x: GAME_WIDTH - 8, alpha: 1, duration: 260, ease: 'Back.easeOut' });
   }
 
   setDebug(text) {

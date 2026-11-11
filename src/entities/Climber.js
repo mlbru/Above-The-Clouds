@@ -30,13 +30,31 @@ const MOODS = {
   pant: [['pant', 520], ['pant_b', 520], ['pant', 520], ['pant_b', 520], ['pant', 520], ['pant_b', 520], ['stand', 0]],
 };
 
+// A smooth round glow (no dither, so it never shows a checkerboard when big).
+function smoothGlow(scene) {
+  const key = 'glow_smooth';
+  if (scene.textures.exists(key)) return key;
+  const r = 32, c = document.createElement('canvas');
+  c.width = c.height = r * 2;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(r, r, 0, r, r, r);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.7, 'rgba(255,255,255,0.18)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, r * 2, r * 2);
+  scene.textures.addCanvas(key, c);
+  return key;
+}
+
 // The climber sprite. Its position is the "attach point": the hands on a hold
 // for wall poses, or the feet on the ground for ledge poses.
 export class Climber {
   constructor(scene, x, y) {
     this.scene = scene;
     this.sprite = scene.add.sprite(x, y, 'climber', 'stand').setDepth(DEPTH.climber);
-    this.lamp = scene.add.image(x, y, 'glow').setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+    this.lamp = scene.add.image(x, y, smoothGlow(scene)).setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     // The headlamp's beam: a soft cone up the rock ahead (see updateLamp).
     this.cone = scene.add.graphics().setDepth(DEPTH.light + 1).setBlendMode('ADD');
     // Props held during ledge idles; the map sits behind the body.
@@ -283,7 +301,8 @@ export class Climber {
   updateLamp(night) {
     const h = this.head;
     // At night the headlamp throws a wide warm pool of light on the rock.
-    this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 14)).setScale(night > 0.5 ? 2 : 1).setTint(0xffe8c0).setAlpha(Math.max(0, night - 0.3) * 0.42);
+    // A warm pool of lamplight on the rock around the hands and face.
+    this.lamp.setPosition(Math.round(h.x), Math.round(h.y - 14)).setScale(1.2 + Math.min(1, night) * 0.9).setTint(0xffd8a0).setAlpha(Math.max(0, night - 0.25) * 0.5);
     // The beam: four nested wedges from the forehead up the wall, brightest
     // in the middle, with a bright spot where it lands on the rock.
     const g = this.cone;

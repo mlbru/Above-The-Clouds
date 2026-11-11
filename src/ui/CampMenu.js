@@ -1,5 +1,6 @@
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { PixelText, COLORS } from './PixelText.js';
+import { measureLine } from '../utils/pixelFont.js';
 import { buildLogoTexture } from '../render/logoArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { JOURNAL_CHAPTERS, journalProgress } from '../data/journal.js';
@@ -55,6 +56,21 @@ export class CampMenu {
     this.logoTwinkle = ui(sc.add.image(W, ly, 'glow_small').setBlendMode('ADD').setTint(0xfff4c8).setScale(0.6).setAlpha(0));
     ui(new PixelText(sc, W, ly - 4 + this.logo.height + 1, o.subtitle(), { color: '#dfe8ff', shadow: '#2a2440' }).setOrigin(0.5, 0));
 
+    // Bram's forecast: his face and one line at a time, typed out, under the
+    // logo. A Golden City line shimmers gold with sparks around it.
+    this.fc = null;
+    if (o.forecast) {
+      const lines = o.forecast().filter((l) => measureLine(l.text) + 30 <= GAME_WIDTH - 8);
+      if (lines.length) {
+        const fy = ly - 4 + this.logo.height + 13;
+        this.fc = { lines, i: -1, t: 0, typed: -1, y: fy, blink: 0 };
+        this.fcG = ui(sc.add.graphics());
+        this.fcFace = ui(sc.add.sprite(0, fy + 8, 'bram_face', 0));
+        this.fcText = ui(new PixelText(sc, 0, fy + 5, '', { color: '#f4efe4', shadow: '#16141f' }));
+        this.nextForecast();
+      }
+    }
+
     // The gear in the top right corner.
     const gx = GAME_WIDTH - 16, gy = 16;
     const gear = ui(sc.add.graphics());
@@ -106,6 +122,58 @@ export class CampMenu {
     const want = this.spots.findIndex((s) => s.id === this.spotId);
     this.select(want < 0 ? 0 : want, true);
     this.visible = true;
+  }
+
+  nextForecast() {
+    const fc = this.fc;
+    fc.i = (fc.i + 1) % fc.lines.length;
+    fc.t = 0;
+    fc.typed = -1;
+    const line = fc.lines[fc.i];
+    const w = measureLine(line.text);
+    const x0 = Math.round(GAME_WIDTH / 2 - (w + 26) / 2);
+    this.fcFace.setX(x0 + 9);
+    this.fcText.setX(x0 + 26).setText('').setColor(line.gold ? '#ffe27a' : '#f4efe4').setAlpha(1);
+    fc.x0 = x0; fc.w = w;
+  }
+
+  updateForecast(dt) {
+    const fc = this.fc;
+    if (!fc || !this.fcText.active) return;
+    fc.t += dt;
+    const line = fc.lines[fc.i];
+    const n = Math.min(line.text.length, Math.floor(fc.t / 30));
+    if (n !== fc.typed) {
+      fc.typed = n;
+      this.fcText.setText(line.text.slice(0, n));
+      if (n > 0 && n < line.text.length && n % 3 === 0) Audio.play('tick', { volume: 0.15 });
+    }
+    // Bram blinks now and then and moves his mouth while he talks.
+    fc.blink -= dt;
+    const talking = n < line.text.length;
+    this.fcFace.setFrame(fc.blink < 0 && fc.blink > -140 ? 1 : 0);
+    if (fc.blink < -140) fc.blink = 2200 + Math.random() * 2400;
+    const g = this.fcG.clear();
+    // A little speech tail from his face to the words.
+    const tx = fc.x0 + 20, ty = fc.y + 8;
+    g.fillStyle(line.gold ? 0xffe27a : 0xf4efe4, 0.9).fillRect(tx, ty, 2, 1).fillRect(tx + 1, ty - 1, 1, 1).fillRect(tx + 1, ty + 1, 1, 1);
+    if (talking) g.fillStyle(0x16141f, 1).fillRect(fc.x0 + 8, fc.y + 14 + (Math.floor(fc.t / 90) % 2), 3, 1);
+    if (line.gold) {
+      // The gold shimmers and a few sparks twinkle round it.
+      this.fcText.setColor(['#ffe27a', '#fff6c8', '#ffd24a', '#fff1a0'][Math.floor(fc.t / 160) % 4]);
+      for (let k = 0; k < 6; k++) {
+        const a = Math.max(0, Math.sin(fc.t / 300 + k * 1.7));
+        if (a < 0.3) continue;
+        const sx = fc.x0 + 26 + ((k * 37) % Math.max(1, fc.w)), sy = fc.y + (k % 2 ? 1 : 13);
+        g.fillStyle(0xfff6c8, a).fillRect(sx, sy, 1, 1);
+        if (a > 0.85) g.fillStyle(0xffd24a, a * 0.6).fillRect(sx - 1, sy, 3, 1).fillRect(sx, sy - 1, 1, 3);
+      }
+    }
+    // After a while the next line (if he has more than one to say).
+    if (fc.lines.length > 1 && fc.t > line.text.length * 30 + 6500) {
+      this.fcText.setAlpha(Math.max(0, 1 - (fc.t - line.text.length * 30 - 6500) / 300));
+      if (fc.t > line.text.length * 30 + 6800) this.nextForecast();
+    }
   }
 
   hide() {
@@ -169,6 +237,7 @@ export class CampMenu {
         this.logoTwinkle.setPosition(this.logo.x - this.logo.width / 2 + 20 + (this.logo.width - 40) * (cyc / 0.18), this.logo.y + 8).setAlpha(on * 0.9).setScale(0.4 + on * 0.5);
       }
     }
+    this.updateForecast(dt);
     const bob = Math.round(Math.abs(Math.sin(this.t / 240)) * 3);
     this.arrow.setPosition(s.x, s.y - 26 - bob).setVisible(show);
     this.glow.setPosition(s.x, s.y + 22).setAlpha(show ? 0.35 + 0.1 * Math.sin(this.t / 300) : 0);

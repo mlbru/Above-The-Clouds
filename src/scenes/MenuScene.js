@@ -13,6 +13,8 @@ import { Audio } from '../systems/AudioSystem.js';
 import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
 import { FancyMenu } from '../ui/FancyMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
+import { forecastLines } from '../data/forecast.js';
+import { liftHeight } from '../data/lifts.js';
 import { cleanDares, dareLabel, dareScale } from '../data/dares.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
 import { buildClimberTexture } from '../render/textures.js';
@@ -167,6 +169,14 @@ export class MenuScene extends Phaser.Scene {
           return this.season ? `${SEASONS[this.season].greeting}  •  ${line}` : line;
         },
         mode: () => ({ text: `< ${BALANCE.modes[this.mode].label} >${cleanDares(this.prog.settings.dares).length ? ' + DARES' : ''}`, color: { normal: COLORS.green, hard: COLORS.gold, summit: COLORS.red }[this.mode] }),
+        // Bram's forecast for this mountain (data/forecast.js): only what the seed fixes.
+        forecast: () => {
+          const lift = this.prog.data.lift;
+          return forecastLines(this.seed, {
+            startMeters: lift ? liftHeight(lift) : 0,
+            boons: this.mode === 'normal' && !cleanDares(this.prog.settings.dares).length,
+          });
+        },
         onDown: () => this.cycleMode(1),
         onGear: () => this.showOptions(),
         onBoard: leaderboardEnabled() ? () => this.openLeaderboard() : null,

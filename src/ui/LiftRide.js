@@ -127,6 +127,7 @@ export class LiftRide {
 
     Audio.swell(24);
     Audio.play('creak');
+    Audio.startHum();
     this.draw();
   }
 
@@ -156,7 +157,7 @@ export class LiftRide {
     if (this.stub.scale > 3) this.stub.setScale(Math.max(3, this.stub.scale - delta / 400));
     // Rolling over a pylon's wheels: a clatter and a bounce.
     for (const p of this.pylons) {
-      if (!p.passed && this.dist >= p.u) { p.passed = true; this.bump = 1; Audio.play('rockhit'); Audio.play('creak'); }
+      if (!p.passed && this.dist >= p.u) { p.passed = true; this.bump = 1; Audio.play('clack'); Audio.play('creak'); }
     }
     if (Math.floor(before / 1100) !== Math.floor(this.t / 1100) && speedAt(this.t) > 0.5) Audio.play('cloth');
     this.bump = Math.max(0, this.bump - delta / 600);
@@ -368,7 +369,8 @@ export class LiftRide {
   finish() {
     if (this.done) return;
     this.done = true;
-    Audio.play('rockhit');
+    Audio.stopHum();
+    Audio.play('clack');
     cloudPass(this.scene, () => this.parts.forEach((o) => o.destroy()), () => this.opts.onDone());
   }
 }

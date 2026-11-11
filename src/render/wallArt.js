@@ -8,6 +8,35 @@ import { rgb, bayer, lerpColor } from '../utils/color.js';
 import { makeCanvas } from '../utils/pixelGrid.js';
 
 const W = 480;
+
+// PROTOTYPE (?rock=new): the rock face as big angled plates instead of
+// dithered blotches. Each plate tilts its own way and takes the light from
+// the upper left (lit, mid or shadowed), with a dark seam between plates, a
+// lit lip along a plate's top edge and a shadow under the plate above.
+// Per biome the plates have their own shape: layered blocks on the Stone
+// Wall, tall black shards in the Obsidian Spires, riveted panels on the
+// Clockwork Bastion...
+export const ROCK_FACETS = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('rock') === 'new';
+const FACET = {
+  default: { cw: 42, ch: 30, jit: 0.9, cut: 0.5 },
+  green: { cw: 40, ch: 30, jit: 0.95, cut: 0.4 },
+  stone: { cw: 58, ch: 24, jit: 0.85, cut: 0.55 },
+  frozen: { cw: 46, ch: 38, jit: 0.95, cut: 0.6 },
+  clouds: { cw: 44, ch: 32, jit: 0.9, cut: 0.4 },
+  hive: { cw: 20, ch: 17, jit: 0.35, stagger: true, cut: 0.9 },
+  obsidian: { cw: 16, ch: 54, jit: 0.8, cut: 0.7 },
+  crystal: { cw: 20, ch: 42, jit: 0.85, cut: 0.65 },
+  clockwork: { cw: 38, ch: 24, jit: 0.06, stagger: true, cut: 1 },
+  storm: { cw: 44, ch: 28, jit: 0.9, cut: 0.5 },
+  aurora: { cw: 48, ch: 36, jit: 0.95, cut: 0.5 },
+  bones: { cw: 30, ch: 24, jit: 0.9, cut: 0.5 },
+  dragon: { cw: 26, ch: 20, jit: 0.6, stagger: true, cut: 0.8 },
+};
+const hash2 = (x, y, s) => {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 2147483647)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+};
 // Deep enough for a tall portrait screen looking down at base camp.
 export const BASE_GROUND_PX = 260;
 
@@ -120,6 +149,51 @@ export class WallPainter {
     return { l: make(-1), r: make(1), sl: shade(-1), sr: shade(1) };
   }
 
+  // The plate under (x, wy): nearest of a jittered grid of plate centres,
+  // stretched to the biome's plate shape. Returns its light (0..1) and
+  // whether the pixel is on a seam, a plate's lit top lip, or in the shadow
+  // under the plate above.
+  facet(x, wy, st) {
+    const iy0 = Math.floor(wy / st.ch);
+    let d1 = 1e9, d2 = 1e9, b1 = null, b2 = null;
+    for (let dy = -1; dy <= 1; dy++) {
+      const iy = iy0 + dy;
+      const shift = st.stagger && (iy & 1) ? 0.5 : 0;
+      const ix0 = Math.floor(x / st.cw - shift);
+      for (let dx = -1; dx <= 1; dx++) {
+        const ix = ix0 + dx;
+        const px = (ix + shift + 0.5 + (hash2(ix, iy, 1) - 0.5) * st.jit) * st.cw;
+        const py = (iy + 0.5 + (hash2(ix, iy, 2) - 0.5) * st.jit) * st.ch;
+        const u = (x - px) / st.cw, v = (wy - py) / st.ch;
+        const d = u * u + v * v;
+        const c = { ix, iy, px, py };
+        if (d < d1) { d2 = d1; b2 = b1; d1 = d; b1 = c; } else if (d < d2) { d2 = d; b2 = c; }
+      }
+    }
+    // Distance to the border between the two nearest plates, in pixels.
+    const edge = (Math.sqrt(d2) - Math.sqrt(d1)) * Math.min(st.cw, st.ch) * 0.5;
+    // The plate's tilt: lit when it faces up and left.
+    const nx = hash2(b1.ix, b1.iy, 3) * 2 - 1, ny = hash2(b1.ix, b1.iy, 4) * 2 - 1;
+    let v = 0.55 - nx * 0.16 - ny * 0.2;
+    // Within a plate: lighter towards its top, falling into shade at its foot.
+    v -= ((wy - b1.py) / st.ch) * 0.18;
+    // Big soft patches of light and shade across many plates.
+    v += (this.edge(x * 0.008 + 40, wy * 0.007) - 0.5) * 0.3;
+    const above = b2.py < b1.py - st.ch * 0.25;
+    const below = b2.py > b1.py + st.ch * 0.25;
+    // Only some borders are cut deep (a crack with a lit lip and a shadow);
+    // the rest are just a change of plane, so it reads as broken rock, not masonry.
+    const lo = b1.ix * 7919 + b1.iy < b2.ix * 7919 + b2.iy ? b1 : b2, hi = lo === b1 ? b2 : b1;
+    const cut = hash2(lo.ix * 31 + hi.ix, lo.iy * 31 + hi.iy, 5) < st.cut;
+    const wob = (hash2(x >> 2, wy >> 2, 6) - 0.5) * 0.8;
+    return {
+      v,
+      seam: cut && edge + wob < 0.9,
+      lip: cut && edge < 2.2 && above,
+      under: cut && edge < 4.5 && below,
+    };
+  }
+
   heightRow(wy) {
     const row = new Float32Array(W);
     for (let x = 0; x < W; x++) row[x] = this.stepNoise.fbm(x * 0.02, wy * 0.028, 3);
@@ -211,9 +285,24 @@ export class WallPainter {
       let idx = Math.floor(v * 3.4 + 0.3 + (bayer(x, wy) - 0.5) * 0.7);
       if (seam) idx = 0;
       else if (s > sUp) idx = Math.max(idx, 3);
+      let facetSeam = false;
+      if (ROCK_FACETS) {
+        const f = this.facet(x, wy, FACET[pal.id] || FACET.default);
+        // Broad light: the sunward edge brighter, the far edge in shade.
+        let fv = f.v;
+        if (fromL < 12) fv += (12 - fromL) * 0.012;
+        if (fromR < 22) fv -= (22 - fromR) * 0.01;
+        if (dEdge < 6) fv -= (6 - dEdge) * 0.04;
+        idx = Math.max(1, Math.min(4, Math.round(fv * 3.2 + 0.4)));
+        if (f.seam) { idx = 0; facetSeam = true; }
+        else if (f.lip) idx = Math.min(4, idx + 1);
+        else if (f.under) idx = Math.max(1, idx - 1);
+        // Grain: a few loose single pixels, no dither.
+        else if (hash2(x, wy, 7) < 0.05) idx = Math.max(1, Math.min(4, idx + (hash2(x, wy, 9) < 0.5 ? -1 : 1)));
+      }
       // Gentle rock layers: a darker band with a lit lip every ~40 px, wavy.
       const band = ((wy + Math.round((this.edge(x * 0.03, wy * 0.004) - 0.5) * 14)) % 41 + 41) % 41;
-      if (dEdge > 3 && !seam) {
+      if (dEdge > 3 && !seam && !facetSeam && !ROCK_FACETS) {
         if (band === 0) idx = Math.min(idx, 1);
         else if (band === 1) idx = Math.max(0, idx - 1);
         else if (band === 40 && idx < 4) idx += 1;

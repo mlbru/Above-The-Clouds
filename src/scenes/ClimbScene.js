@@ -65,6 +65,7 @@ import { climbBoons } from './climbBoons.js';
 import { biomeMoments } from './biomeMoments.js';
 import { SunRays } from '../world/SunRays.js';
 import { WeatherScenery } from '../world/WeatherScenery.js';
+import { NightWall } from '../world/NightWall.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -176,6 +177,9 @@ export class ClimbScene extends Phaser.Scene {
     this.wall = new WallRenderer(this, this.mountain, this.seed);
     this.wetWall = new WetWall(this, this.mountain);
     this.scenery = new WeatherScenery(this, this.mountain);
+    this.nightWall = new NightWall(this, this.mountain);
+    // A lift ride cut short by leaving the run must not leave its hum playing.
+    this.events.once('shutdown', () => Audio.stopHum());
     this.showerK = 0;
     this.critters = this.tutorial ? null : new Critters(this, this.mountain, this.seed);
     this.weather = new WeatherSystem(this);
@@ -1025,8 +1029,10 @@ export class ClimbScene extends Phaser.Scene {
       const tx = this.leapAcross ? this.from.x : this.from.x + (this.to.x - this.from.x) * p;
       const ty = this.from.y + (this.to.y - this.from.y) * p;
       let pose;
-      if (note.dir === 'L') pose = note.result === 'perfect' ? 'perfectL' : 'reachL';
-      else if (note.dir === 'R') pose = note.result === 'perfect' ? 'perfectR' : 'reachR';
+      // A risky route's long reaches stretch the whole body out.
+      const far = route.type === 'risky';
+      if (note.dir === 'L') pose = far ? 'reachL_far' : note.result === 'perfect' ? 'perfectL' : 'reachL';
+      else if (note.dir === 'R') pose = far ? 'reachR_far' : note.result === 'perfect' ? 'perfectR' : 'reachR';
       else pose = ['pull', 'stepL', 'stepR'][note.index % 3];
       this.climber.via(note.dir === 'L' ? 'reachL_mid' : note.dir === 'R' ? 'reachR_mid' : 'pull_mid', pose);
       // Hit-stop: on a perfect the climber freezes in the flash for a moment
@@ -1389,6 +1395,12 @@ export class ClimbScene extends Phaser.Scene {
       this.recordPassed = true;
       const m = this.recordMark;
       this.effects.sparkle(m.flag.x, m.y - 10, 14);
+      // A fist in the air (one hand still on the rock).
+      this.time.delayedCall(450, () => {
+        if (this.state !== STATE.ROUTE_SELECT || this.climber.busy) return;
+        this.climber.hold('pump', 260).then(() => this.climber.hold('pump_b', 160)).then(() => this.climber.hold('pump', 260));
+        this.effects.confettiBurst(this.climber.x + 8, this.climber.y - 12, 24);
+      });
       this.tweens.add({ targets: m.flag, y: m.flag.y - 8, scaleY: 1.3, duration: 260, yoyo: true, ease: 'Quad.easeOut' });
       this.tweens.add({ targets: [m.g, m.flag, m.label], alpha: 0, duration: 1600, delay: 1400, onComplete: () => { m.g.destroy(); m.flag.destroy(); m.label.destroy(); } });
       this.recordMark = null;
@@ -1496,9 +1508,18 @@ export class ClimbScene extends Phaser.Scene {
       this.flashHold(t.id);
       await this.climber.hold('grab', 140);
     } else {
-      const flourish = s.allPerfect ? (t.x < this.from.x ? 'perfectL' : 'perfectR') : 'grab';
-      this.climber.setPose(flourish);
-      await this.climber.tweenTo(t.x, t.y, s.allPerfect ? 170 : 240, s.allPerfect ? 'Back.easeOut' : 'Sine.easeOut');
+      if (route.type === 'risky' && !s.miss) {
+        // A dyno: a short leap to the last hold, a catch, the legs swinging in.
+        this.climber.setPose('dyno');
+        Audio.play('cloth');
+        await this.climber.jumpTo(t.x, t.y, 200, 9);
+        this.climber.setPose('dyno_catch');
+        this.climber.squash(1.12, 0.86, 180);
+      } else {
+        const flourish = s.allPerfect ? (t.x < this.from.x ? 'perfectL' : 'perfectR') : 'grab';
+        this.climber.setPose(flourish);
+        await this.climber.tweenTo(t.x, t.y, s.allPerfect ? 170 : 240, s.allPerfect ? 'Back.easeOut' : 'Sine.easeOut');
+      }
       Audio.play('grab', { icy: t.hazard === 'icy' });
       this.climber.squash(1.1, 0.9, 160);
       this.effects.chalk(t.x, t.y + 2);
@@ -2805,7 +2826,7 @@ export class ClimbScene extends Phaser.Scene {
     draw(x, y, bottom, 2);
     // The flash lights the wall's edges white for a moment (see updateLight).
     this.flashUntil = this.clock + 220;
-    const flash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xe8f0ff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud - 1).setAlpha(this.settings.shake ? 0.3 : 0.08);
+    const flash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xe8f0ff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud - 1).setAlpha(this.settings.shake ? 0.14 : 0.05);
     this.tweens.add({ targets: [g, flash], alpha: 0, duration: 380, ease: 'Quad.easeIn', onComplete: () => { g.destroy(); flash.destroy(); } });
     this.time.delayedCall(120 + this.runRng.int(0, 500), () => Audio.play('thunder', { volume: 0.8 + this.runRng.range(0, 0.3) }));
     if (this.settings.shake) this.cam.shake(260, 0.0025);
@@ -2949,7 +2970,8 @@ export class ClimbScene extends Phaser.Scene {
           const missed = this.recovery.update(now);
           if (missed.length) this.recoveryFail(missed[0]);
         }
-        this.climber.setPose(Math.floor(now / 110) % 2 ? 'slip' : 'slip2');
+        // Scrabbling, the legs swinging loose under the hands.
+        this.climber.setPose(['slip', 'swingL', 'slip2', 'swingR'][Math.floor(now / 120) % 4]);
         break;
       case STATE.FALLING:
         break;
@@ -3003,6 +3025,14 @@ export class ClimbScene extends Phaser.Scene {
     const grade = lerpColor(GRADE[gradeMix.a.id] || 0xffffff, GRADE[gradeMix.b.id] || 0xffffff, gradeMix.t);
     const warmth = mixWarmth(gradeMix);
     light = multiplyColor(warmthOf(light, warmth), lerpColor(0xffffff, grade, 1 - day.night * 0.5));
+    // Lightning lights the whole face like daylight for a split second
+    // (a bright flash, a dip, a second weaker flash).
+    const fl = (this.flashUntil || 0) - this.clock;
+    if (fl > 0) {
+      const p = 1 - fl / 220;
+      const strobe = p < 0.25 ? 1 : p < 0.45 ? 0.25 : p < 0.6 ? 0.8 : 1 - p;
+      light = lerpColor(light, 0xe8f0ff, Math.max(0, Math.min(1, strobe)) * 0.9);
+    }
     this.lightOverlay.fillColor = light;
     // The grade's second half: the hour's colour added into the shadows (rose
     // at dawn, teal in the morning, amber at golden hour, violet at dusk).
@@ -3019,6 +3049,7 @@ export class ClimbScene extends Phaser.Scene {
     const camLevelTop = -(this.camY / LEVEL_PX);
     this.wall.update(dt, Math.ceil(camLevelTop) + RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
     this.wetWall.update(dt, Math.max(storm, shower * 0.85), this.camY);
+    this.nightWall.update(dt, Math.max(day.night * 0.9, dark, storm * 0.6) * (fl > 0 ? 0 : 1), this.camX, this.camY, this.settings.reducedParticles);
     if (this.critters) this.critters.update(dt, this.climber, this.camY);
 
     const wallState = this.state === STATE.ROUTE_SELECT ? 'wall'
@@ -3074,7 +3105,10 @@ export class ClimbScene extends Phaser.Scene {
 
     Audio.setAmbience({
       wind: Math.min(1, ambience.wind * 0.8 + Math.min(1, alt / 1000) * 0.4 + whiteout * 0.5),
-      stream: Math.max(this.wall.waterfallNear(this.climber.y) ? 0.9 : ambience.stream * 0.35, (this.showerK || 0) * 0.7),
+      stream: this.wall.waterfallNear(this.climber.y) ? 0.9 : ambience.stream * 0.35,
+      rain: Math.max(this.showerK || 0, this.wetWall.wet > 0.3 && stormSky > 0.3 ? stormSky : 0),
+      // The scarf (see OutfitFx) snaps in the wind while it is on.
+      flap: (biome.weather.snow > 0.3 || day.night > 0.6 || mech.wind > 0.9) ? Math.min(1, mech.wind + biome.weather.wind * 0.6 + (this.gustActive ? 0.6 : 0)) : 0,
       birds: day.night < 0.4 ? ambience.birds : 0,
     });
     Audio.update();

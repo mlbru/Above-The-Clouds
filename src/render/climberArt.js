@@ -29,6 +29,18 @@ export const POSES = {
   reachL_mid: { lh: [14, 3], rh: [30, 6], lf: [20, 52], rf: [29, 50], b: [-1, 1], anchor: 5 },
   reachR_mid: { lh: [18, 6], rh: [34, 3], lf: [19, 50], rf: [28, 52], b: [1, 1], anchor: 5 },
   pull_mid: { lh: [18, 7], rh: [30, 7], lf: [18, 49], rf: [30, 48], b: [0, -2], anchor: 5 },
+  // Long reaches on a risky route: the whole body stretched out sideways.
+  reachL_far: { lh: [5, 1], rh: [31, 8], lf: [23, 54], rf: [32, 49], b: [-4, 2], anchor: 5 },
+  reachR_far: { lh: [17, 8], rh: [43, 1], lf: [16, 49], rf: [25, 54], b: [4, 2], anchor: 5 },
+  // A dyno: arms flung up, body stretched, legs trailing; then the catch.
+  dyno: { lh: [19, 1], rh: [29, 1], lf: [17, 55], rf: [31, 55], b: [0, 6], anchor: 5 },
+  dyno_catch: { lh: [18, 5], rh: [30, 4], lf: [13, 50], rf: [24, 55], b: [-3, 4], anchor: 5 },
+  // Slipping: the legs swing loose from side to side under the hands.
+  swingL: { lh: [17, 1], rh: [31, 1], lf: [9, 52], rf: [21, 54], b: [-3, 6], head: 'down', anchor: 5 },
+  swingR: { lh: [17, 1], rh: [31, 1], lf: [27, 54], rf: [39, 52], b: [3, 6], head: 'down', anchor: 5 },
+  // A new record on the wall: one hand on the rock, the other fist up.
+  pump: { lh: [18, 5], rh: [39, 1], lf: [19, 52], rf: [30, 50], b: [-1, 1], head: 'right', anchor: 5 },
+  pump_b: { lh: [18, 5], rh: [37, 4], lf: [19, 52], rf: [30, 51], b: [-1, 2], head: 'right', anchor: 5 },
   // Topping out onto a ledge: elbows over the edge, then a knee up.
   mantle: { lh: [13, 30], rh: [35, 30], lf: [18, 50], rf: [31, 46], b: [0, 0], anchor: 30 },
   mantle2: { lh: [14, 36], rh: [34, 36], lf: [17, 53], rf: [31, 44], b: [0, 5], head: 'down', anchor: 36 },

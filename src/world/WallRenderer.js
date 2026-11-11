@@ -2,6 +2,7 @@ import { DEPTH, LEVEL_PX, levelToY, levelToMeters, GAME_WIDTH, GAME_HEIGHT, CAME
 import { WallPainter } from '../render/wallArt.js';
 import { holdKey, BONE_HOLD_VARIANTS } from '../render/textures.js';
 import { biomeAt } from '../data/biomes.js';
+import { holdShapeKey, shapesFor, SHAPED_BIOMES_SKIP } from '../render/holdArt.js';
 import { SeededRandom, hashInts } from '../utils/seededRandom.js';
 import { HUT_SIZE } from '../render/campArt.js';
 import { lerpColor } from '../utils/color.js';
@@ -121,13 +122,21 @@ export class WallRenderer {
         const hsh = hashInts(Math.round(node.x), Math.round(node.y), 83);
         const boneHold = biome.id === 'bones' && node.kind === 'hold' && (!node.hazard || node.hazard === 'crumbling');
         if (boneHold && hsh % BONE_HOLD_VARIANTS) key += `_v${hsh % BONE_HOLD_VARIANTS}`;
+        // Every other plain hold and jug: one of the biome's hold shapes.
+        let jx = 0, jy = 0;
+        if (!node.hazard && !SHAPED_BIOMES_SKIP.includes(biome.id)) {
+          const shapes = shapesFor(biome.id, node.kind);
+          key = holdShapeKey(biome.id, shapes[(hsh >>> 3) % shapes.length]);
+          // Nudged a pixel off the grid so the rows don't line up so neatly.
+          jx = ((hsh >>> 7) % 3) - 1; jy = ((hsh >>> 9) % 3) - 1;
+        }
         // A soft shadow under each hold so it sits on the rock instead of on top
         // of it; ice, crystal and aurora holds glow faintly instead.
         const look = HOLD_SHADOW[biome.id] || HOLD_SHADOW.default;
-        const shadow = this.scene.add.image(node.x + look.dx, node.y + 3 + look.dy, key).setDepth(DEPTH.holds - 1).setTintFill(look.tint).setAlpha(look.alpha);
+        const shadow = this.scene.add.image(node.x + jx + look.dx, node.y + 3 + jy + look.dy, key).setDepth(DEPTH.holds - 1).setTintFill(look.tint).setAlpha(look.alpha);
         if (look.glow) shadow.setBlendMode('ADD').setScale(1.3);
-        else (v.shadows || (v.shadows = [])).push({ img: shadow, x: node.x, y: node.y + 3, alpha: look.alpha, len: 1 });
-        const s = this.scene.add.image(node.x, node.y + 3, key).setDepth(DEPTH.holds);
+        else (v.shadows || (v.shadows = [])).push({ img: shadow, x: node.x + jx, y: node.y + 3 + jy, alpha: look.alpha, len: 1 });
+        const s = this.scene.add.image(node.x + jx, node.y + 3 + jy, key).setDepth(DEPTH.holds);
         if (boneHold && (hsh >> 4) % 2) { s.setFlipX(true); shadow.setFlipX(true); }
         v.holds.set(node.id, s);
         v.objects.push(shadow, s);
