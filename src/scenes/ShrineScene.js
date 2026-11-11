@@ -122,6 +122,17 @@ export class ShrineScene extends Phaser.Scene {
     this.walkWarned = false;
     this.texKeys = [];
     this.trail = [];
+    // Phaser reuses this scene object for every cairn: forget the last visit's
+    // objects (they were destroyed with it) so they are built fresh.
+    this.rerollText = null;
+    this.rerollGem = null;
+    this.rerollZone = null;
+    this.walkText = null;
+    this.walkZone = null;
+    this.flying = null;
+    this.sayLock = false;
+    this.sockets = [];
+    this.tablets = [];
     this.events.once('shutdown', () => this.cleanup());
 
     const W = GAME_WIDTH, H = GAME_HEIGHT;

@@ -94,41 +94,22 @@ export class HUD {
     this.updateToasts(dt);
   }
 
-  // Dark glass plates behind the readouts, each with a thin rim in a colour
-  // that means something: the biome's accent on the left, the grip's own on the right.
+  // No plates: the readouts float over the scene with their outline shadow.
+  // Only the biome's slip is drawn here, as a little rope coil after its name
+  // (gold while you still have it, a frayed red end when it is used).
   drawPlates(accent, slip) {
     const g = this.plates;
     g.clear();
-    if (!this.visible) return;
-    const plate = (x, y, w, h, c) => {
-      g.fillStyle(0x000000, 0.28).fillRect(x + 2, y + h, w - 3, 1).fillRect(x + w, y + 2, 1, h - 3);
-      g.fillStyle(0x0b0912, 0.74).fillRect(x + 1, y, w - 2, h).fillRect(x, y + 1, w, h - 2);
-      g.fillStyle(0xffffff, 0.045).fillRect(x + 1, y + 1, w - 2, Math.floor(h / 2));
-      g.fillStyle(c, 0.95).fillRect(x + 3, y, w - 6, 1);
-      g.fillStyle(c, 0.4).fillRect(x + 1, y + 1, 1, 1).fillRect(x + w - 2, y + 1, 1, 1).fillRect(x, y + 3, 1, h - 6);
-    };
-    const pipW = slip === null ? 0 : 10;
-    const top = 20 + this.height.width * 2 + 6 + this.best.width;
-    const lw = Math.max(top, 8 + this.biome.width + pipW, this.next.text ? 8 + this.next.width : 0) + 7;
-    const lh = this.next.text ? 42 : 33;
-    plate(3, 3, lw, lh, accent);
-    // A thin rule between the height and the biome lines.
-    g.fillStyle(accent, 0.25).fillRect(8, 20, lw - 10, 1);
-    // One slip per biome: a gold rope coil while you still have it, a frayed red end when not.
-    if (slip !== null) {
-      const px = 8 + this.biome.width + 4, py = 24;
-      if (slip) {
-        g.fillStyle(0x7a4a1a, 1).fillRect(px, py, 6, 5);
-        g.fillStyle(0xf2c14e, 1).fillRect(px + 1, py, 4, 1).fillRect(px, py + 1, 1, 3).fillRect(px + 5, py + 1, 1, 3).fillRect(px + 1, py + 4, 4, 1).fillRect(px + 2, py + 2, 2, 1);
-      } else {
-        g.fillStyle(0xf0644b, 1).fillRect(px, py, 1, 1).fillRect(px + 1, py + 1, 1, 1).fillRect(px + 2, py + 2, 1, 1).fillRect(px + 3, py + 3, 1, 1).fillRect(px + 4, py + 4, 1, 1);
-        g.fillRect(px + 4, py, 1, 1).fillRect(px + 3, py + 1, 1, 1).fillRect(px + 1, py + 3, 1, 1).fillRect(px, py + 4, 1, 1);
-      }
+    if (!this.visible || slip === null) return;
+    const px = 8 + this.biome.width + 4, py = 24;
+    g.fillStyle(0x16141f, 1).fillRect(px - 1, py - 1, 8, 7);
+    if (slip) {
+      g.fillStyle(0x7a4a1a, 1).fillRect(px, py, 6, 5);
+      g.fillStyle(0xf2c14e, 1).fillRect(px + 1, py, 4, 1).fillRect(px, py + 1, 1, 3).fillRect(px + 5, py + 1, 1, 3).fillRect(px + 1, py + 4, 4, 1).fillRect(px + 2, py + 2, 2, 1);
+    } else {
+      g.fillStyle(0xf0644b, 1).fillRect(px, py, 1, 1).fillRect(px + 1, py + 1, 1, 1).fillRect(px + 2, py + 2, 1, 1).fillRect(px + 3, py + 3, 1, 1).fillRect(px + 4, py + 4, 1, 1);
+      g.fillRect(px + 4, py, 1, 1).fillRect(px + 3, py + 1, 1, 1).fillRect(px + 1, py + 3, 1, 1).fillRect(px, py + 4, 1, 1);
     }
-    // Gems: a small pill under the plate.
-    plate(3, 45, 20 + this.gemText.width, 12, 0x9fe8ff);
-    // Grip, top right.
-    plate(GAME_WIDTH - 98, 3, 95, 23, 0x8fd16a);
   }
 
   // ---------- storm meter ----------
@@ -279,20 +260,8 @@ export class HUD {
     const drawLines = () => {
       lines.clear();
       const w = Math.round(prog.w), cx = GAME_WIDTH / 2;
-      // A ribbon: a dark band under the name and its subtitle, notched tails
-      // folding behind at both ends, and gold rules along its edges.
+      // Two gold rules above and below the name.
       const y0 = CARD_Y - 2, y1 = CARD_Y + 31;
-      if (w > 10) {
-        const tail = Math.min(14, w / 4);
-        for (const sx of [-1, 1]) {
-          const ex = cx + sx * (w + 2);
-          const x0 = sx < 0 ? ex - tail : ex;
-          lines.fillStyle(0x07060c, 0.85).fillRect(x0, y0 + 5, tail, y1 - y0 - 2);
-          lines.fillStyle(0x3a2a10, 1).fillRect(sx < 0 ? x0 : x0 + tail - 1, y0 + 5, 1, y1 - y0 - 2);
-        }
-        lines.fillStyle(0x0b0912, 0.82).fillRect(cx - w - 2, y0, w * 2 + 4, y1 - y0);
-        lines.fillStyle(0xffffff, 0.05).fillRect(cx - w - 2, y0 + 1, w * 2 + 4, Math.floor((y1 - y0) / 2));
-      }
       for (const y of [y0, y1]) {
         lines.fillStyle(0x16141f, 0.6); lines.fillRect(cx - w, y + 1, w * 2, 1);
         lines.fillStyle(0xf2c14e, 1); lines.fillRect(cx - w, y, w * 2, 1);
