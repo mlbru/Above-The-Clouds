@@ -1,6 +1,7 @@
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { lerpColor } from '../utils/color.js';
 import { BIOMES, biomeLocalAlt } from '../data/biomes.js';
+import { SkyLife } from './SkyLife.js';
 
 const HORIZON = 160;
 // Parallax ranges: E = the altitude (m) at which the range sits on the horizon,
@@ -66,6 +67,7 @@ export class Background {
     this.time = 0;
     this.floatersVisible = false;
     this.auroraVisible = false;
+    this.skyLife = new SkyLife(scene);
   }
 
   // mix: biomeMixAt() at the camera height. whiteout: 0..1 storm strength.
@@ -106,6 +108,7 @@ export class Background {
       g.fillStyle(skyBottom, 1);
       g.fillRect(0, 200, GAME_WIDTH, GAME_HEIGHT - 200);
     }
+    this.skyLife.update(dt, alt, day, skyBottom);
     this.stars.setAlpha(Math.max(0, day.night - 0.2) * 1.2).setY(Math.round(-10 + (alt * 0.01) % 10));
     const overcast = mix ? Math.min(1, [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.overcast || 0) * weight(b.id), 0) + storm) : 0;
     this.sun.setAlpha(1 - overcast * 0.9);

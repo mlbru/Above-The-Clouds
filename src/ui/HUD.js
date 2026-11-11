@@ -243,7 +243,8 @@ export class HUD {
   }
 
   // Biome title card: rules slide out from the centre and the name types in.
-  showBanner(title, sub = '') {
+  // color: the biome's accent, used for the rules and the subtitle.
+  showBanner(title, sub = '', color = 0xf2c14e) {
     const sc = this.scene;
     const scale = 2;
     const fullW = measureLine(title) * scale;
@@ -253,7 +254,7 @@ export class HUD {
     if (this.cardTimer) this.cardTimer.remove();
     sc.tweens.killTweensOf([this.banner, this.bannerSub, this.cardLines]);
     this.banner.setOrigin(0, 0).setX(left).setText('').setAlpha(1);
-    this.bannerSub.setText(sub).setAlpha(0);
+    this.bannerSub.setText(sub).setAlpha(0).setColor(`#${lerpColor(color, 0xffffff, 0.4).toString(16).padStart(6, '0')}`);
     const lines = this.cardLines.setAlpha(1);
     const prog = { w: 0 };
     const maxW = fullW / 2 + 26;
@@ -264,7 +265,7 @@ export class HUD {
       const y0 = CARD_Y - 2, y1 = CARD_Y + 31;
       for (const y of [y0, y1]) {
         lines.fillStyle(0x16141f, 0.6); lines.fillRect(cx - w, y + 1, w * 2, 1);
-        lines.fillStyle(0xf2c14e, 1); lines.fillRect(cx - w, y, w * 2, 1);
+        lines.fillStyle(color, 1); lines.fillRect(cx - w, y, w * 2, 1);
         if (w > 6) { lines.fillRect(cx - w - 3, y, 2, 1); lines.fillRect(cx + w + 1, y, 2, 1); }
       }
     };

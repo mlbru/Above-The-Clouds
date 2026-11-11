@@ -36,6 +36,22 @@ function urlSeed() {
   } catch { return null; }
 }
 
+// Your local time of day as the game's day phase (0 dawn, 0.2 midday,
+// 0.54 sunset, 0.69+ night), so the title camp matches the sky outside.
+export function realClockT(date = new Date()) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  const keys = [[0, 0.82], [5.5, 0.97], [6.5, 0.02], [8.5, 0.09], [12, 0.24], [16.5, 0.44], [19, 0.54], [20.5, 0.62], [22, 0.7], [24, 0.82]];
+  for (let i = 0; i < keys.length - 1; i++) {
+    const [h0, t0] = keys[i], [h1, t1] = keys[i + 1];
+    if (h >= h0 && h <= h1) {
+      let a = t0, b = t1;
+      if (b < a) b += 1;
+      return ((a + ((h - h0) / (h1 - h0)) * (b - a)) % 1 + 1) % 1;
+    }
+  }
+  return 0.24;
+}
+
 export class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
@@ -55,7 +71,11 @@ export class MenuScene extends Phaser.Scene {
     this.campMenu = null;
     this.wall = null;
     this.climber = null;
-    this.dayNight = new DayNightSystem({ dayLengthSec: 240, startT: this.registry.get('dayT') ?? 0.02 });
+    // The camp follows your own clock: morning light in the morning, a starry
+    // night with fireflies late at night. It drifts on slowly from there.
+    this.dayNight = new DayNightSystem({ dayLengthSec: 1800, startT: this.registry.get('dayT') ?? realClockT() });
+    this.campLife = { smokeT: 0, flies: [] };
+    if (typeof window !== 'undefined') window.__menu = this;
     this.background = new Background(this);
     this.buildWorld();
     this.weather = new WeatherSystem(this);
@@ -438,6 +458,47 @@ export class MenuScene extends Phaser.Scene {
     if (event.code === 'Escape' && this.campMenu && this.campMenu.visible) this.showOptions();
   }
 
+  // Life at camp: smoke and sparks from the fire, fireflies over the meadow
+  // at night, and the rim light of the hour on the wall.
+  updateCampLife(dt, day) {
+    const spots = this.wall && this.wall.campSpots;
+    if (!spots || !spots.fire) return;
+    const life = this.campLife;
+    const reduced = this.prog.settings.reducedParticles;
+    life.smokeT += dt;
+    const fire = spots.fire;
+    if (life.smokeT > (reduced ? 420 : 200)) {
+      life.smokeT = 0;
+      const p = this.add.rectangle(fire.x + Phaser.Math.Between(-2, 2), fire.y - 8, 2, 2, day.night > 0.5 ? 0x8a8aa0 : 0xeeeaf4, 0.75).setDepth(DEPTH.decor + 3);
+      this.tweens.add({ targets: p, y: p.y - Phaser.Math.Between(34, 56), x: p.x + Phaser.Math.Between(4, 16), scale: 3, alpha: 0, duration: Phaser.Math.Between(1800, 2600), ease: 'Sine.easeOut', onComplete: () => p.destroy() });
+      if (Math.random() < 0.35) {
+        const e = this.add.rectangle(fire.x + Phaser.Math.Between(-3, 3), fire.y - 6, 1, 1, 0xffb040).setDepth(DEPTH.decor + 3);
+        this.tweens.add({ targets: e, y: e.y - Phaser.Math.Between(14, 30), x: e.x + Phaser.Math.Between(-6, 6), alpha: 0, duration: Phaser.Math.Between(700, 1200), onComplete: () => e.destroy() });
+      }
+    }
+    // Fireflies come out after dusk and blink as they drift.
+    const want = !reduced && day.night > 0.45 ? 16 : 0;
+    while (life.flies.length < want) {
+      const f = this.add.rectangle(this.camp.x + Phaser.Math.Between(-220, 220), this.camp.y - Phaser.Math.Between(4, 70), 1, 1, 0xd8ff7a).setDepth(DEPTH.decor + 4).setBlendMode('ADD');
+      f.base = { x: f.x, y: f.y, p: Math.random() * 10, s: 0.5 + Math.random() };
+      life.flies.push(f);
+    }
+    while (life.flies.length > want) life.flies.pop().destroy();
+    for (const f of life.flies) {
+      const t = this.t / 1000 * f.base.s + f.base.p;
+      f.setPosition(f.base.x + Math.sin(t * 0.7) * 14, f.base.y + Math.sin(t * 1.3) * 6);
+      f.setAlpha(Math.max(0, Math.sin(t * 2.1)) * day.night);
+    }
+    // The wall's rim catches the light of the hour, as on the climb.
+    if (this.wall.setRim) {
+      const sun = day.sun, moon = day.moon;
+      const side = (sun || moon) && (sun || moon).x >= 240 ? 'r' : 'l';
+      const str = sun ? 0.25 + Math.max(0, Math.min(1, (150 - sun.y) / 120)) * 0.5 : moon ? 0.32 * day.night : 0;
+      const col = sun ? 0xffe0b0 : 0x9fb8ff;
+      this.wall.setRim({ [side]: [col, str], [side === 'l' ? 'r' : 'l']: [col, str * 0.18] });
+    }
+  }
+
   update(time, delta) {
     this.t += delta;
     this.dayNight.update(delta);
@@ -453,6 +514,7 @@ export class MenuScene extends Phaser.Scene {
     this.climber.updateLamp(day.night);
     this.wall.night = day.night;
     this.atmos.update(delta, { day, biome: BIOMES.green });
+    this.updateCampLife(delta, day);
     Audio.setAmbience({ wind: 0.25, stream: 0, birds: day.night < 0.4 ? 1 : 0 });
     Audio.update();
   }

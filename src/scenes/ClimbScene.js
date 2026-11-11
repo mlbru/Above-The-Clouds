@@ -62,6 +62,7 @@ import { findCosmetic } from '../data/cosmetics.js';
 import { GEM_TARGET } from '../ui/HUD.js';
 import { toCss, lerpColor } from '../utils/color.js';
 import { climbBoons } from './climbBoons.js';
+import { biomeMoments } from './biomeMoments.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -93,6 +94,14 @@ const biomeMixWeight = (mix, id) => (mix.a.id === id ? 1 - mix.t : 0) + (mix.b.i
 const REST_IDLE_FIRST = 6000;
 // F3 is a media key on most Macs (needs fn), and the ` key sends different
 // codes on European keyboards, so the debug toggle accepts all of these.
+// Each biome's colour grade, multiplied into the light of the hour.
+const GRADE = {
+  green: 0xfffff4, stone: 0xfaf6ee, frozen: 0xeef4ff, clouds: 0xfff8f0, hive: 0xffeac0,
+  obsidian: 0xe8dcff, crystal: 0xf8ecff, clockwork: 0xfff0d8, storm: 0xdde4f4,
+  aurora: 0xe4fff4, bones: 0xf4ece0, dragon: 0xffe4d0,
+};
+const multiplyColor = (a, b) => (((((a >> 16) & 255) * ((b >> 16) & 255)) / 255) << 16) | (((((a >> 8) & 255) * ((b >> 8) & 255)) / 255) << 8) | (((a & 255) * (b & 255)) / 255);
+
 const isDebugKey = (e) => e.code === 'F3' || e.code === 'Backquote' || e.code === 'IntlBackslash' || ['`', '~', '§', '±'].includes(e.key);
 
 function urlSeed() {
@@ -170,6 +179,8 @@ export class ClimbScene extends Phaser.Scene {
     // The Dragon's Spine: the dragon's eye, up in the sky beside the wall.
     this.dragon = new Dragon(this);
     this.lightOverlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xffffff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    // Golden hour: a warm glow over everything while the sun is low.
+    this.goldenOverlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a40).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.light + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.atmos = new Atmosphere(this);
     this.atmos.reduced = this.settings.reducedParticles;
 
@@ -1131,6 +1142,9 @@ export class ClimbScene extends Phaser.Scene {
       if (!r.gem) continue;
       const y = r.target.y - 6;
       const img = this.add.image(r.target.x, y, `gem_${r.gem.type}`).setDepth(this.city.active ? this.city.gemDepth : DEPTH.holds + 2).setScale(0);
+      // A soft glow in the gem's own colour, breathing under it.
+      img.glow = this.add.image(r.target.x, y, 'glow_small').setDepth(img.depth - 1).setBlendMode('ADD').setTint(GEMS[r.gem.type] ? GEMS[r.gem.type].color : 0xffffff).setScale(1.6).setAlpha(0);
+      this.tweens.add({ targets: img.glow, alpha: { from: 0.25, to: 0.6 }, scale: { from: 1.4, to: 1.9 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.tweens.add({ targets: img, scale: 1, duration: 320, ease: 'Back.easeOut' });
       this.tweens.add({ targets: img, y: y - 1, duration: 420, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [1] });
       this.effects.sparkle(r.target.x, y, 4);
@@ -1142,6 +1156,7 @@ export class ClimbScene extends Phaser.Scene {
     if (!g || !g.img) return;
     const img = g.img;
     this.tweens.killTweensOf(img);
+    if (img.glow) { this.tweens.killTweensOf(img.glow); img.glow.destroy(); }
     this.tweens.add({ targets: img, alpha: 0, y: img.y - 5, duration: 280, onComplete: () => img.destroy() });
   }
 
@@ -1173,7 +1188,7 @@ export class ClimbScene extends Phaser.Scene {
     this.floatText(`${gem.name} +${value}`, toCss(gem.color), 26, true);
     if (firstOfKind) this.hud.toast(`NEW GEM FOUND: ${gem.name}`, toCss(gem.color));
     const sx = (img ? img.x : node.x) - this.cam.scrollX, sy = (img ? img.y : node.y - 6) - this.cam.scrollY;
-    if (img) { this.tweens.killTweensOf(img); img.destroy(); }
+    if (img) { this.tweens.killTweensOf(img); if (img.glow) { this.tweens.killTweensOf(img.glow); img.glow.destroy(); } img.destroy(); }
     this.flyingGems = (this.flyingGems || []).filter((f) => f.active);
     if (this.flyingGems.length >= 4) this.flyingGems.shift().destroy();
     const fly = this.add.image(sx, sy, `gem_${gem.id}`).setScrollFactor(0).setDepth(DEPTH.hud + 2);
@@ -2191,8 +2206,10 @@ export class ClimbScene extends Phaser.Scene {
     this.tweens.add({ targets: bars[0], y: 18, duration: 450, ease: 'Quad.easeOut' });
     this.tweens.add({ targets: bars[1], y: H - 18, duration: 450, ease: 'Quad.easeOut' });
     Audio.swell(16);
+    // The biome's own entrance moment plays while the camera drifts up.
+    this.time.delayedCall(250, () => this.biomeMoment(b));
     this.time.delayedCall(700, () => {
-      this.hud.showBanner(b.name, isNew ? 'A NEW PART OF THE MOUNTAIN' : `${Math.floor(levelToMeters(this.node.level))} M`);
+      this.hud.showBanner(b.name, isNew ? 'A NEW PART OF THE MOUNTAIN' : `${Math.floor(levelToMeters(this.node.level))} M`, b.accentC);
       Audio.play('titlecard');
     });
     this.panoramaBars = bars;
@@ -2763,6 +2780,8 @@ export class ClimbScene extends Phaser.Scene {
       }
     };
     draw(x, y, bottom, 2);
+    // The flash lights the wall's edges white for a moment (see updateLight).
+    this.flashUntil = this.clock + 220;
     const flash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xe8f0ff).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud - 1).setAlpha(this.settings.shake ? 0.3 : 0.08);
     this.tweens.add({ targets: [g, flash], alpha: 0, duration: 380, ease: 'Quad.easeIn', onComplete: () => { g.destroy(); flash.destroy(); } });
     this.time.delayedCall(120 + this.runRng.int(0, 500), () => Audio.play('thunder', { volume: 0.8 + this.runRng.range(0, 0.3) }));
@@ -2948,7 +2967,14 @@ export class ClimbScene extends Phaser.Scene {
     if (storm > 0.01) light = lerpColor(light, 0x3a4058, storm * 0.45);
     // The dragon's sky: everything turns ember red while it watches.
     if (this.pressure > 0.01) light = lerpColor(light, 0xff6a4a, this.pressure * 0.3);
+    // Colour grade: every biome tints the light its own way (amber in the hive,
+    // violet in the black glass...), and a low sun lays a warm wash over it all.
+    const gradeMix = biomeMixAt(climberAlt);
+    const grade = lerpColor(GRADE[gradeMix.a.id] || 0xffffff, GRADE[gradeMix.b.id] || 0xffffff, gradeMix.t);
+    light = multiplyColor(light, lerpColor(0xffffff, grade, 1 - day.night * 0.5));
     this.lightOverlay.fillColor = light;
+    const low = day.sun ? Math.max(0, 1 - Math.max(0, (150 - day.sun.y) / 120) / 0.45) : 0;
+    this.goldenOverlay.setAlpha(low * 0.16 * (1 - dark) * (1 - storm));
     this.climber.updateLamp(Math.max(day.night, dark, storm * 0.7));
     this.wall.night = Math.max(day.night, dark, storm * 0.5);
     this.updateLight(day, dark, storm);
@@ -3064,7 +3090,8 @@ export class ClimbScene extends Phaser.Scene {
     }
     strength *= dim;
     const other = side === 'l' ? 'r' : 'l';
-    this.wall.setRim({ [side]: [color, strength], [other]: [lerpColor(color, 0x6a7ab8, 0.6), strength * 0.18] });
+    if (this.clock < (this.flashUntil || 0)) this.wall.setRim({ l: [0xe8f0ff, 0.95], r: [0xe8f0ff, 0.95] });
+    else this.wall.setRim({ [side]: [color, strength], [other]: [lerpColor(color, 0x6a7ab8, 0.6), strength * 0.18] });
     // The shadow: a dark copy of the climber, a few pixels off on the far side.
     const sh = this.climberShadow, sp = this.climber.sprite;
     if (!sh) return;
@@ -3293,4 +3320,4 @@ export class ClimbScene extends Phaser.Scene {
 }
 
 // Trail Boons (scenes/climbBoons.js).
-Object.assign(ClimbScene.prototype, climbBoons);
+Object.assign(ClimbScene.prototype, climbBoons, biomeMoments);
