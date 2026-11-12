@@ -253,7 +253,57 @@ function chalkGrid(v) {
 
 export const HUT_SIZE = { w: 54, h: 40, chimney: { x: 40, y: 0 }, lantern: { x: 36, y: 28 } };
 
+// The camp requests board: a cork board on a post with a little roof,
+// three paper notes pinned on it (data/requests.js, scenes/RequestsScene.js).
+function boardGrid() {
+  const g = new PixelGrid(26, 34);
+  g.rect(12, 14, 3, 20, WOOD_D); g.rect(12, 14, 1, 20, WOOD);
+  // A little shingle roof against the rain.
+  g.rect(1, 1, 24, 3, 0x5a3a22); g.rect(2, 0, 22, 1, 0x7a5232); g.rect(1, 3, 24, 1, 0x3a2414);
+  // Frame and cork.
+  g.rect(2, 4, 22, 15, WOOD_D);
+  g.rect(3, 5, 20, 13, 0xb4824a);
+  for (let i = 0; i < 26; i++) g.set(3 + ((i * 7) % 20), 5 + ((i * 5) % 13), i % 3 ? 0x9a6a3a : 0xc89660);
+  // Three notes: cream, blue-lined, and a child's yellow one; red pins.
+  g.rect(4, 7, 5, 6, 0xf0e6cc); g.rect(5, 9, 3, 1, 0xa8a090); g.rect(5, 11, 3, 1, 0xa8a090); g.set(6, 7, 0xd83a22);
+  g.rect(10, 6, 6, 7, 0xe8eef4); g.rect(11, 8, 4, 1, 0x7a9ac8); g.rect(11, 10, 4, 1, 0x7a9ac8); g.set(12, 6, 0xd83a22);
+  g.rect(17, 8, 5, 7, 0xf8e080); g.set(18, 10, 0xd84a3a); g.set(20, 11, 0x4a8ad8); g.set(19, 13, 0x4ab84a); g.set(19, 8, 0xd83a22);
+  g.outline(OUT);
+  return g;
+}
+
+// People at the fire, sitting: the ones whose story notes you finished.
+// look: [coat, coat dark, hat or hair, skin, extra]
+const PEOPLE_LOOK = {
+  ines: { coat: 0x4f86f0, dark: 0x2f5aa8, top: 0x2a2018, skin: 0xe8b48a, extra: 'camera' },
+  pim: { coat: 0xa8743e, dark: 0x7a5228, top: 0x6a5a3a, skin: 0xf0c8a0, extra: 'hat' },
+  marta: { coat: 0x8a6ab8, dark: 0x5a4288, top: 0xd8d4cc, skin: 0xe0b090, extra: 'shawl' },
+  noor: { coat: 0xf2c14e, dark: 0xc8902a, top: 0x3a2418, skin: 0xc8946a, extra: 'small' },
+  tenzin: { coat: 0xe8762a, dark: 0xa84a14, top: 0x2a2018, skin: 0xb07a50, extra: 'robe' },
+};
+function personFrame(id, f) {
+  const p = PEOPLE_LOOK[id];
+  const g = new PixelGrid(12, 16);
+  const small = p.extra === 'small';
+  const top = small ? 4 : 1, by = f ? 1 : 0;
+  // Body (sitting: knees out front), arms, head.
+  g.rect(3, top + 6 + by, 6, small ? 5 : 6, p.coat);
+  g.rect(3, top + 6 + by, 1, small ? 5 : 6, p.dark);
+  g.rect(4, 13, 6, 2, p.dark); g.rect(9, 13, 2, 3, 0x3a3440);
+  if (p.extra === 'robe') g.rect(2, top + 9 + by, 9, 4, p.coat);
+  g.rect(4, top + 1 + by, 4, 4, p.skin);
+  g.rect(4, top + by, 4, 2, p.top);
+  if (p.extra === 'hat') { g.rect(2, top - 1 + by, 8, 1, p.top); g.rect(4, top - 2 + by, 4, 2, p.top); }
+  if (p.extra === 'shawl') g.rect(3, top + 5 + by, 6, 2, 0xc84a5a);
+  if (p.extra === 'camera') { g.rect(7, top + 7 + by, 3, 2, 0x2a2a30); g.set(8, top + 7 + by, 0x9fd8ff); }
+  g.set(7, top + 2 + by, OUT);
+  g.outline(OUT);
+  return g;
+}
+
 export function buildCampTextures(scene) {
+  add(scene, 'camp_board', boardGrid());
+  for (const id of Object.keys(PEOPLE_LOOK)) addFrames(scene, `camp_person_${id}`, [personFrame(id, 0), personFrame(id, 1)]);
   addFrames(scene, 'camp_fire', [0, 1, 2].map(fireFrame));
   add(scene, 'camp_bench', benchGrid());
   add(scene, 'camp_wood', woodGrid());

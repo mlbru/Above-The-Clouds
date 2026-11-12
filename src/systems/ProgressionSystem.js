@@ -32,8 +32,15 @@ export const DEFAULT_SETTINGS = {
   hitStop: 'subtle',
   weatherCoat: true,
   ledgeLife: 'lively',
+  // ACCESS (Settings): note colours for colour-blind sight, a high-contrast
+  // track, and the input latency measured on the calibration screen (ms).
+  noteColors: 'standard',
+  highContrast: false,
+  latency: 0,
   // Bram's dares picked for the next endless run (data/dares.js).
   dares: [],
+  // THIN AIR tier for the next Normal run (0: off). See data/thinAir.js.
+  thinAir: 0,
   // The debug overlay in runs (F3 / ` or the menus).
   debugOverlay: false,
 };
@@ -196,6 +203,18 @@ export class ProgressionSystem {
   }
 
   dareBestFor(key) { return this.data.dareBest[key] || 0; }
+
+  // ---------- Thin Air (data/thinAir.js) ----------
+  recordThinAirHeight(h, tier) {
+    const best = this.data.thinAirBest || (this.data.thinAirBest = {});
+    const v = Math.floor(h * 10) / 10;
+    if (v <= (best[tier] || 0)) return { newBest: false, unlocks: [] };
+    best[tier] = v;
+    this.save();
+    return { newBest: true, unlocks: [] };
+  }
+
+  thinAirBestFor(tier) { return (this.data.thinAirBest && this.data.thinAirBest[tier]) || 0; }
 
   // ---------- biome mastery ----------
   stars(biomeId) { return (this.data.mastery && this.data.mastery[biomeId]) || []; }

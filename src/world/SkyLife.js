@@ -80,11 +80,40 @@ export class SkyLife {
       for (let k = 1; k <= 6; k++) g.fillRect(x - k, y - wy * (k / 6) - 1, 1, 1).fillRect(x + k, y - wy * (k / 6) - 1, 1, 1);
     }
 
+    // Someone else on a far peak: a tiny figure inching up a distant ridge,
+    // with a headlamp at night that now and then swings to wave at you.
+    if (!this.other && alt < 1200 && (this.wait.other = (this.wait.other ?? rnd(15000, 40000)) - dt) < 0) {
+      const left = Math.random() < 0.5;
+      this.other = { x: left ? rnd(18, 70) : rnd(W - 70, W - 18), y: rnd(150, 185), life: rnd(40000, 70000), wave: rnd(6000, 14000) };
+    }
+    if (this.other) {
+      const o = this.other;
+      o.life -= dt;
+      o.x += 0.0009 * dt * (o.x < W / 2 ? 1 : -1);
+      o.y -= 0.0012 * dt;
+      o.wave -= dt;
+      const waving = o.wave < 0 && o.wave > -1600;
+      if (o.wave < -1600) o.wave = rnd(9000, 20000);
+      const x = Math.round(o.x), y = Math.round(o.y);
+      const body = haze(0x2a2028, 0.55 - day.night * 0.25);
+      const step = Math.floor(this.t / 700) % 2;
+      g.fillStyle(body, 1).fillRect(x, y, 1, 2).fillRect(x, y - 1, 1, 1);
+      g.fillStyle(haze(0xc84a3a, 0.5), 1).fillRect(x, y, 1, 1);
+      if (!waving) g.fillStyle(body, 1).fillRect(x - 1 + step * 2, y - 1, 1, 1);
+      else g.fillStyle(body, 1).fillRect(x + (Math.floor(this.t / 160) % 2 ? 1 : -1), y - 2, 1, 1);
+      if (day.night > 0.45) {
+        const on = !waving || Math.floor(this.t / 160) % 2;
+        if (on) g.fillStyle(0xfff0c0, 0.9).fillRect(x, y - 1, 1, 1).fillStyle(0xffe8a0, 0.25).fillRect(x - 1, y - 2, 3, 3);
+      }
+      if (o.life <= 0 || alt >= 1200) { this.other = null; this.wait.other = rnd(40000, 90000); }
+    }
+
     // Shooting stars at night, anywhere.
     if (day.night > 0.6 && (this.wait.star -= dt) < 0) {
       this.wait.star = rnd(4000, 12000);
-      this.stars.push({ x: rnd(40, W - 40), y: rnd(10, 60), vx: rnd(-160, -90) * (Math.random() < 0.5 ? 1 : -1), vy: rnd(40, 70), life: 700 });
-      if (this.onStar) this.onStar();
+      const star = { x: rnd(40, W - 40), y: rnd(10, 60), vx: rnd(-160, -90) * (Math.random() < 0.5 ? 1 : -1), vy: rnd(40, 70), life: 700 };
+      this.stars.push(star);
+      if (this.onStar && this.onStar(star)) star.life = 1500;
     }
     this.stars = this.stars.filter((s) => (s.life -= dt) > 0);
     for (const s of this.stars) {

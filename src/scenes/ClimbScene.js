@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT, DEPTH, CAMERA_ANCHOR, GENERATE_AHEAD_LEVELS, RENDER_AHEAD_LEVELS, KEEP_BELOW_LEVELS,
-  levelToMeters, yToMeters, LEVEL_PX, PX_PER_METER, METERS_PER_LEVEL, camXFor,
+  levelToMeters, yToMeters, LEVEL_PX, PX_PER_METER, METERS_PER_LEVEL, camXFor, IS_TOUCH,
 } from '../config/gameConfig.js';
 import { BALANCE } from '../config/balanceConfig.js';
 import { Mountain } from '../systems/SegmentGenerator.js';
@@ -23,7 +23,7 @@ import { OutfitFx } from '../entities/OutfitFx.js';
 import { Climber } from '../entities/Climber.js';
 import { HUD } from '../ui/HUD.js';
 import { RouteSelector } from '../ui/RouteSelector.js';
-import { ComboPrompt } from '../ui/ComboPrompt.js';
+import { ComboPrompt, applyNotePalette } from '../ui/ComboPrompt.js';
 import { RestMenu } from '../ui/RestMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
 import { PixelText, COLORS } from '../ui/PixelText.js';
@@ -56,6 +56,8 @@ import { POSES } from '../render/climberArt.js';
 import { FIDGET_NAMES, LIVELY_NAMES } from '../entities/Climber.js';
 import { WeatherCoat } from '../entities/WeatherCoat.js';
 import { DARE, cleanDares, dareKey, dareLabel, dareScale } from '../data/dares.js';
+import { THIN_AIR, activeThinAir, thinAirConfig, thinAirTop } from '../data/thinAir.js';
+import { checkRequests, whoOf } from '../data/requests.js';
 import { GEMS } from '../data/gems.js';
 import { GEAR_BY_ID, PERK_BY_ID, GEM_INCOME, GEAR_FX } from '../data/shop.js';
 import { findCosmetic } from '../data/cosmetics.js';
@@ -166,16 +168,20 @@ export class ClimbScene extends Phaser.Scene {
     this.runOverUI = null;
 
     this.mode = this.tutorial || this.expedition ? 'normal' : BALANCE.modes[this.settings.mode] ? this.settings.mode : 'normal';
-    this.modeCfg = modeConfig(this.mode);
+    // THIN AIR (data/thinAir.js): Normal with a tier's rules stacked on top.
+    this.thinAir = this.tutorial || this.expedition ? 0 : activeThinAir(this.prog.data);
+    this.modeCfg = this.thinAir ? thinAirConfig(this.thinAir) : modeConfig(this.mode);
     // Bram's dares (endless runs only, data/dares.js). A dared run keeps its own record.
     this.dares = this.tutorial || this.expedition ? [] : cleanDares(this.settings.dares);
     this.dared = this.dares.length > 0;
     this.dareKey = this.dared ? dareKey(this.dares, this.mode) : null;
-    this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : this.expedition ? new ExpeditionMountain(this.expedition, BALANCE) : new Mountain(this.seed, BALANCE, this.mode);
+    this.mountain = this.tutorial ? new TutorialMountain(BALANCE) : this.expedition ? new ExpeditionMountain(this.expedition, BALANCE) : new Mountain(this.seed, BALANCE, this.thinAir ? this.modeCfg : this.mode);
     this.mountain.ensureLevel(GENERATE_AHEAD_LEVELS);
     this.grip = new GripSystem(BALANCE, this.modeCfg);
     this.dayNight = new DayNightSystem({ width: GAME_WIDTH, dayLengthSec: 600, startT: this.dares.includes('night') ? 0.8 : this.dayT ?? 0.09 });
     this.background = new Background(this);
+    // Now and then a shooting star can be wished on (see wishStar).
+    this.background.skyLife.onStar = (star) => this.wishStar(star);
     this.wall = new WallRenderer(this, this.mountain, this.seed);
     this.wetWall = new WetWall(this, this.mountain);
     this.scenery = new WeatherScenery(this, this.mountain);
@@ -186,6 +192,7 @@ export class ClimbScene extends Phaser.Scene {
     this.events.once('shutdown', () => Audio.stopHum());
     this.showerK = 0;
     this.critters = this.tutorial ? null : new Critters(this, this.mountain, this.seed);
+    if (this.critters) this.critters.onFollow = () => { if (!this.director) { this.prog.bump('goatFriends'); this.checkLogbook(); } };
     this.weather = new WeatherSystem(this);
     this.mechanics = this.tutorial ? null : new BiomeMechanics(new SeededRandom(hashInts(this.seed, 4242)));
     this.effects = new Effects(this);
@@ -244,6 +251,12 @@ export class ClimbScene extends Phaser.Scene {
     this.setupLava(start);
 
     this.cam = this.cameras.main;
+    // SCREEN SHAKE: LOW keeps every jolt but softens it.
+    if (this.settings.shake === 'low') {
+      const shake = this.cam.shake.bind(this.cam);
+      this.cam.shake = (ms, k = 0.005, ...rest) => shake(ms, k * 0.4, ...rest);
+    }
+    applyNotePalette(this.settings.noteColors, this.settings.highContrast);
     this.cam.setRoundPixels(true);
     this.camY = start.y - STAND_HAND - GAME_HEIGHT * CAMERA_ANCHOR;
     this.camX = camXFor(start.x);
@@ -387,6 +400,9 @@ export class ClimbScene extends Phaser.Scene {
       const lag = pn - event.timeStamp;
       if (lag > 0 && lag < 120) t -= lag;
     }
+    // LATENCY (Settings): a screen or speaker that runs late makes every
+    // press late by the same amount; take it back off.
+    if (event) t -= this.settings.latency || 0;
     return t;
   }
 
@@ -425,6 +441,7 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
+    if (this.wish && code === 'KeyE') { this.makeWish(); return; }
     if (isDebugKey(event) && this.prog.debugUnlocked) { this.setDebug(!this.debugVisible); return; }
     if (code === 'KeyB' && ((this.debugVisible && this.prog.debugUnlocked) || this.prog.autopilotUnlocked)) {
       const modes = [null, 'perfect', 'sloppy'];
@@ -765,7 +782,7 @@ export class ClimbScene extends Phaser.Scene {
       this.addStreak();
       this.floatText(fire ? (note.result === 'perfect' ? 'THROUGH THE FIRE!' : 'SINGED!') : note.result === 'perfect' ? 'DODGED!' : 'CLOSE ONE!', COLORS.green, 12);
       Audio.play('good');
-      if (!this.director) { this.prog.bump(fire ? 'fireDodges' : 'dodges'); this.checkLogbook(); }
+      if (!this.director) { this.prog.bump(fire ? 'fireDodges' : 'dodges'); if (!fire) this.run.dodges = (this.run.dodges || 0) + 1; this.checkLogbook(); }
     } else if (fire) {
       // Caught in the flames: grip burns away, the climber smokes.
       this.dodgeHits++;
@@ -928,7 +945,7 @@ export class ClimbScene extends Phaser.Scene {
         hidden: n.hidden || (blind && !n.still),
       }));
     }
-    const beatMs = Math.round(route.beatMs * (this.dares.includes('quick') ? DARE.tempo : 1) * this.bfx.beatScale);
+    const beatMs = Math.round(route.beatMs * (this.dares.includes('quick') ? DARE.tempo : 1) * (this.modeCfg.tempo || 1) * this.bfx.beatScale);
     this.combo = new ComboSystem({
       notes,
       minGapMs: r.minGapMs,
@@ -1060,6 +1077,8 @@ export class ClimbScene extends Phaser.Scene {
       } else {
         Audio.play('grab');
         this.climber.squash(0.95, 1.06, 140);
+        // A near miss on the last move: the body wobbles before it settles.
+        if (this.successes >= n) this.time.delayedCall(160, () => this.climber.wobble());
         // Caught it, just: a few grains of the hold break off under the fingers.
         if (!this.settings.reducedParticles) this.effects.pebbleFall(hx, hy + 3, 2, biome.rock[3]);
       }
@@ -1106,6 +1125,7 @@ export class ClimbScene extends Phaser.Scene {
       const g = ms ? ms.grip : k > last.at && (k - last.at) % cfg.every === 0 ? cfg.laterGrip : 0;
       if (g) { grip += g; at = k; }
     }
+    if (this.modeCfg.noStreakGrip) grip = 0;
     if (grip) {
       this.grip.change(grip);
       Audio.play('streakmilestone');
@@ -1159,7 +1179,7 @@ export class ClimbScene extends Phaser.Scene {
   get gemScale() { return (GEM_INCOME.modeScale[this.mode] || 1) * dareScale(this.dares) * (this.bfx ? this.bfx.gemScale : 1); }
 
   // The record this run plays against: the mode's, or the dare set's own.
-  get recordBest() { return this.dared ? this.prog.dareBestFor(this.dareKey) : this.prog.bestFor(this.mode); }
+  get recordBest() { return this.dared ? this.prog.dareBestFor(this.dareKey) : this.thinAir ? this.prog.thinAirBestFor(this.thinAir) : this.prog.bestFor(this.mode); }
 
   // Each offered route may carry a gem on its target. Only the route you take
   // keeps its gem; the others fade away.
@@ -1470,6 +1490,12 @@ export class ClimbScene extends Phaser.Scene {
       this.run.riskyRow = route.type === 'risky' ? this.run.riskyRow + 1 : 0;
       this.run.riskyBest = Math.max(this.run.riskyBest || 0, this.run.riskyRow);
       if (this.mechanics && this.mechanics.get('whiteout').active) this.run.whiteoutClimbs++;
+      // Wear on the rock: holds in biomes you climb a lot get polished (WallRenderer).
+      if (!this.expedition) {
+        const w = this.prog.data.wear || (this.prog.data.wear = {});
+        const id = biomeAt(levelToMeters(t.level)).id;
+        w[id] = (w[id] || 0) + 1;
+      }
     }
     if (route.mods && route.mods.discovery) this.discover(route.mods.discovery);
     if (s.miss === 1) {
@@ -1594,8 +1620,14 @@ export class ClimbScene extends Phaser.Scene {
     else this.prog.addClimbed(gain);
     const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] }
       : this.expedition ? { newBest: this.prog.recordExpeditionHeight(this.expedition.id, h), unlocks: [] }
-        : this.dared ? this.prog.recordDareHeight(h, this.dareKey) : this.prog.recordHeight(h, this.mode);
-    if (newBest && !this.director && !this.expedition && !this.devRun && !this.dared) queueSubmit(this.prog);
+        : this.dared ? this.prog.recordDareHeight(h, this.dareKey)
+          : this.thinAir ? this.prog.recordThinAirHeight(h, this.thinAir) : this.prog.recordHeight(h, this.mode);
+    if (newBest && !this.director && !this.expedition && !this.devRun && !this.dared && !this.thinAir) queueSubmit(this.prog);
+    // THIN AIR: the next tier opens at the Crystal Heights.
+    if (this.thinAir && this.thinAir < THIN_AIR.tiers && h >= THIN_AIR.nextAt && !this.run.tierOpened && thinAirTop(this.prog.data) > this.thinAir) {
+      this.run.tierOpened = true;
+      this.hud.toast(`THIN AIR ${this.thinAir + 1} IS OPEN`, '#9fe8ff');
+    }
     if (newBest && !this.run.newBestShown && this.run.startBest > 0) {
       this.run.newBestShown = true;
       this.celebrateRecord();
@@ -1933,6 +1965,11 @@ export class ClimbScene extends Phaser.Scene {
     const best = this.recordBest;
     const reached = this.run.maxHeight || 0;
     const fallH = levelToMeters(this.node.level);
+    // For Bram's greeting back at camp (data/bramTalk.js).
+    if (!this.director && !this.expedition && !this.devRun) {
+      this.prog.data.lastRun = { reached: Math.max(reached, fallH), mode: this.mode, record: reached >= best && reached > this.run.startBest };
+      this.prog.save();
+    }
     this.runOverUI = new RunSummary(this, {
       modeLabel: this.dared ? `${this.modeCfg.label} DARE ${dareLabel(this.dares)}` : this.modeCfg.label,
       reached: Math.max(reached, fallH),
@@ -1952,7 +1989,7 @@ export class ClimbScene extends Phaser.Scene {
     }, {
       onAgain: () => this.climbAgain(),
       onTitle: () => this.toMenu(),
-      onBoard: leaderboardEnabled() && !this.director && !this.expedition && !this.devRun && !this.dared ? () => this.openLeaderboard() : null,
+      onBoard: leaderboardEnabled() && !this.director && !this.expedition && !this.devRun && !this.dared && !this.thinAir ? () => this.openLeaderboard() : null,
       boardLabel: playerName(this.prog) ? '[L] LEADERBOARD' : '[L] JOIN THE LEADERBOARD',
     });
     this.cam.fadeIn(500, 10, 12, 20);
@@ -2129,7 +2166,7 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   // LIGHT PACK: a ledge only fills the grip up to half.
-  get ledgeCap() { return this.grip.max * (this.dares.includes('light') ? DARE.lightCap : 1) * (this.bfx ? this.bfx.ledgeFill : 1); }
+  get ledgeCap() { return this.grip.max * (this.dares.includes('light') ? DARE.lightCap : 1) * (this.modeCfg.ledgeFill || 1) * (this.bfx ? this.bfx.ledgeFill : 1); }
 
   refillAtLedge() {
     if (this.ledgeCap < this.grip.max) { this.grip.resetHang(); this.grip.set(Math.max(this.grip.value, this.ledgeCap)); }
@@ -2188,6 +2225,7 @@ export class ClimbScene extends Phaser.Scene {
       this.tweens.add({ targets: flash, alpha: 0, duration: 400, onComplete: () => flash.destroy() });
       this.prog.addPhoto();
       if (this.dayNight.state().night > 0.5) this.prog.bump('nightPhotos');
+      if (biomeAt(levelToMeters(this.node.level)).id === 'dragon') this.prog.bump('dragonPhotos');
       this.checkLogbook();
       try {
         const a = document.createElement('a');
@@ -2215,11 +2253,26 @@ export class ClimbScene extends Phaser.Scene {
   // ---------------------------------------------------------------- Bram's logbook
   checkLogbook() {
     if (this.director || !this.run) return;
+    this.checkCampRequests();
     for (const st of this.prog.checkStamps(this.run)) {
       this.run.stamps.push(st);
       this.hud.toast(`LOGBOOK STAMP: ${st.name}  +${st.gems}◆`, COLORS.gold);
       this.hud.setGems(this.prog.gems, true);
       this.hud.gemGain(st.gems, COLORS.gold);
+      Audio.play('stamp');
+    }
+  }
+
+  // Camp requests (data/requests.js): notes on the corkboard at base camp.
+  // Only Normal endless runs count; a finished note is announced here and
+  // paid when you open the board.
+  checkCampRequests() {
+    if (this.expedition || this.devRun || this.dared || this.mode !== 'normal') return;
+    const done = checkRequests(this.prog.data, this.run);
+    if (!done.length) return;
+    this.prog.save();
+    for (const n of done) {
+      this.hud.toast(`${whoOf(n).name}'S NOTE IS DONE  •  ◆${Math.round(n.gems)} AT CAMP`, '#ffb0a0');
       Audio.play('stamp');
     }
   }
@@ -2739,9 +2792,10 @@ export class ClimbScene extends Phaser.Scene {
   // turns off everything that moves the view or the box.
   updatePressure(dt, p, bounds) {
     this.pressure = (this.pressure || 0) + (p - (this.pressure || 0)) * Math.min(1, dt / 600);
-    const k = this.pressure;
     const t = this.clock / 1000;
     const shake = this.settings.shake;
+    // LOW shake: the box only sways a little.
+    const k = this.pressure * (shake === 'low' ? 0.3 : 1);
     if (k > 0.02 && shake && !this.tipOpen) {
       this.comboUI.setSway({
         x: (Math.sin(t * 1.7) * 10 + Math.sin(t * 4.3) * 3) * k,
@@ -2931,6 +2985,7 @@ export class ClimbScene extends Phaser.Scene {
     const dt = frozen || this.liftRide ? 0 : Math.min(delta, 100);
     this.clock += dt;
     this.lastFramePerf = performance.now();
+    if (this.wish && (this.clock > this.wish.until || !((this.state === STATE.RESTING && !this.atCamp) || this.state === STATE.ROUTE_SELECT))) this.endWish();
     const now = this.clock;
     this.showStars();
     this.city.update(dt);
@@ -3047,6 +3102,8 @@ export class ClimbScene extends Phaser.Scene {
     if (!this.director) this.foreground.update(dt, climberAlt, this.camY, light, this.settings.reducedParticles);
     this.lens.update(dt, {
       rain: Math.max(shower, stormSky > 0.4 ? stormSky : 0), snow: Math.min(1, whiteout + mech.snow),
+      // Frost creeps in from the corners in the cold biomes (more at night and in a whiteout).
+      frost: this.director ? 0 : Math.min(1, (biomeMixWeight(biomeMixAt(climberAlt), 'frozen') + biomeMixWeight(biomeMixAt(climberAlt), 'aurora')) * (0.55 + day.night * 0.3) + whiteout * 0.4),
       light, reduced: this.settings.reducedParticles,
     });
     // The grade's second half: the hour's colour added into the shadows (rose
@@ -3087,6 +3144,7 @@ export class ClimbScene extends Phaser.Scene {
     this.updateBeatPulse(biome, cold);
     this.climber.idle(dt, { state: wallState, gripRatio: this.grip.ratio, cold: biome.weather.snow > 0.3 || day.night > 0.6, effects: this.effects, sitting: this.sitting });
     const climberMix = biomeMixAt(climberAlt);
+    if (!this.atCamp && !this.paused) this.run.climbMs = (this.run.climbMs || 0) + dt;
     this.outfit.update(dt, {
       hanging: this.state === STATE.ROUTE_SELECT && this.node && this.node.kind !== 'ledge',
       moving: this.state === STATE.CLIMBING_COMBO,
@@ -3097,7 +3155,15 @@ export class ClimbScene extends Phaser.Scene {
       wind: (this.gustActive ? 1 : 0) + mech.wind + biome.weather.wind * 0.4,
       bpm: biome.music.tempo,
       cold: biome.weather.snow > 0.3 || day.night > 0.6,
+      // Taped fingers after half an hour on the mountain, worn red after an hour.
+      tape: this.expedition || this.director ? 0 : this.run.climbMs > 3600000 ? 2 : this.run.climbMs > 1800000 ? 1 : 0,
     });
+    this.effects.breathAlt = climberAlt;
+    // While choosing, glance over at a route with a gem on it.
+    if (this.state === STATE.ROUTE_SELECT && this.node && this.node.kind !== 'ledge') {
+      const g = this.routes.find((r) => r.gem && !r.taken);
+      this.climber.lookSide = g && Math.abs(g.target.x - this.climber.x) > 12 ? Math.sign(g.target.x - this.climber.x) : 0;
+    } else this.climber.lookSide = 0;
     // WEATHER ON YOU: what the climber is exposed to right now.
     const onWall = wallState === 'wall' || this.state === STATE.CLIMBING_COMBO || this.state === STATE.DODGING;
     this.coat.enabled = this.settings.weatherCoat !== false;
@@ -3113,7 +3179,7 @@ export class ClimbScene extends Phaser.Scene {
     this.hud.update(dt, {
       heightM: climberAlt,
       best: this.expedition ? Math.max(this.run.startBest, this.run.maxHeight || 0) : this.recordBest,
-      modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
+      modeLabel: this.director ? 'TUTORIAL' : this.expedition ? this.expedition.name : [this.devRun ? 'DEV' : '', this.mode === 'normal' && !this.thinAir ? '' : this.modeCfg.label, this.dared ? `DARE ${dareLabel(this.dares)}` : ''].filter(Boolean).join(' '),
       biomeName: this.director ? biome.name : this.expedition ? this.pitchLabel() : biome.name,
       // The biome's one slip, shown as a little rope coil (gone: a frayed end).
       slip: this.director || this.expedition ? null : !this.run.biomeFalls[biomeStretchAt(climberAlt)],
@@ -3324,6 +3390,42 @@ export class ClimbScene extends Phaser.Scene {
     this.effects.trail(h.x, h.y + 14);
   }
 
+  // A shooting star you can wish on: rare, only while you hang still or
+  // rest. Press E (or tap the sky) before it burns out for a gem of luck.
+  wishStar(star) {
+    const still = (this.state === STATE.RESTING && !this.atCamp) || this.state === STATE.ROUTE_SELECT;
+    if (!still || this.wish || this.director || this.expedition || this.tipOpen || Math.random() > 0.35) return false;
+    const text = IS_TOUCH ? 'TAP THE SKY: MAKE A WISH' : 'E  MAKE A WISH';
+    const label = new PixelText(this, GAME_WIDTH / 2, 76, text, { color: '#fff4c8', shadow: '#16141f' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud).setAlpha(0);
+    this.tweens.add({ targets: label, alpha: 1, duration: 160 });
+    const zone = IS_TOUCH ? this.add.zone(0, 0, GAME_WIDTH, 90).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud).setInteractive() : null;
+    if (zone) zone.on('pointerdown', () => this.makeWish());
+    this.wish = { star, label, zone, until: this.clock + 1500 };
+    Audio.play('wish');
+    return true;
+  }
+
+  makeWish() {
+    const w = this.wish;
+    if (!w) return;
+    this.endWish();
+    Audio.play('perfect', { streak: 12 });
+    this.effects.sparkle(this.climber.x, this.climber.y - 30, 10);
+    this.floatText('A WISH! +1 GEM', '#fff4c8', 24, true);
+    this.awardGems(1);
+    if (this.state === STATE.RESTING && !this.climber.busy) this.climber.hold('point', 1300);
+    this.prog.bump('wishes');
+    this.checkLogbook();
+  }
+
+  endWish() {
+    const w = this.wish;
+    if (!w) return;
+    this.wish = null;
+    if (w.zone) w.zone.destroy();
+    this.tweens.add({ targets: w.label, alpha: 0, duration: 200, onComplete: () => w.label.destroy() });
+  }
+
   floatText(text, color, dy = 0, pop = false) {
     if (this.floaters.length > 3) this.floaters.shift().destroy();
     const h = this.climber.head;
@@ -3447,7 +3549,7 @@ export class ClimbScene extends Phaser.Scene {
       `BIOME ${biome.id.toUpperCase()}   SEG ${seg ? seg.index : '-'} ${seg ? seg.templateId.toUpperCase() : ''}`,
       `NODE ${this.node.id}  LV ${this.node.level}  H ${levelToMeters(this.node.level).toFixed(1)}M  CP LV ${this.checkpoint.level}`,
       `GRIP ${this.grip.value.toFixed(1)}   TIME ${day.name} ${(day.t * 24).toFixed(1)}H   MODE ${this.modeCfg.label}`,
-      (() => { const d = difficultyAt(levelToMeters(this.node.level), this.mode); return `RAMP BEAT x${d.beatScale.toFixed(2)} WIN x${d.windowScale.toFixed(2)} +${d.extraInputs} REST/${d.restEvery}`; })(),
+      (() => { const d = difficultyAt(levelToMeters(this.node.level), this.thinAir ? this.modeCfg : this.mode); return `RAMP BEAT x${d.beatScale.toFixed(2)} WIN x${d.windowScale.toFixed(2)} +${d.extraInputs} REST/${d.restEvery}`; })(),
       `ROUTE ${this.route ? this.route.type.toUpperCase() + ' ' + this.route.pattern.join('') + ' ' + (this.route.tags || []).join(' ') : '-'}`,
       `INPUT ${cur ? `${cur.index + 1}/${this.combo.notes.length} ${cur.dir} IN ${Math.round(cur.time - this.now())}MS` : '-'}`,
       `LAST ${this.lastJudge}`,

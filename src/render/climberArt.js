@@ -11,6 +11,9 @@ const OUTLINE = 0x16141f;
 export const POSES = {
   hang: { lh: [18, 5], rh: [30, 5], lf: [19, 52], rf: [30, 51], b: [0, 0], anchor: 5 },
   hang_b: { lh: [18, 5], rh: [30, 5], lf: [19, 52], rf: [30, 51], b: [0, 1], pb: 1, anchor: 5 },
+  // Hanging and glancing over at a route with a gem on it.
+  hang_lookL: { lh: [18, 5], rh: [30, 5], lf: [19, 52], rf: [30, 51], b: [0, 0], head: 'left', anchor: 5 },
+  hang_lookR: { lh: [18, 5], rh: [30, 5], lf: [19, 52], rf: [30, 51], b: [0, 0], head: 'right', anchor: 5 },
   hang_tired: { lh: [18, 5], rh: [30, 5], lf: [18, 54], rf: [31, 53], b: [0, 3], pb: 1, head: 'down', anchor: 5 },
   reachL: { lh: [10, 0], rh: [30, 6], lf: [20, 52], rf: [29, 48], b: [-2, 1], anchor: 5 },
   reachR: { lh: [18, 6], rh: [38, 0], lf: [19, 48], rf: [28, 52], b: [2, 1], anchor: 5 },

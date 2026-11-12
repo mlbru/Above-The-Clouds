@@ -6,6 +6,8 @@ import { Audio } from '../systems/AudioSystem.js';
 import { JOURNAL_CHAPTERS, journalProgress } from '../data/journal.js';
 import { BIOMES } from '../data/biomes.js';
 import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
+import { thinAirTop, activeThinAir } from '../data/thinAir.js';
+import { ensureRequests } from '../data/requests.js';
 
 // Base camp as a menu, used by the title screen and by base camp during a
 // run: the logo, one floating word over each spot at camp (the wall is CLIMB,
@@ -95,6 +97,8 @@ export class CampMenu {
     const j = journalProgress(prog);
     const unseen = JOURNAL_CHAPTERS.reduce((n, c) => n + c.entries.filter((e) => e.known(prog) && !(d.journalSeen || []).includes(e.id)).length, 0);
     this.spots = [
+      // Camp requests: the corkboard on its post past the woodpile.
+      a.requests && sp.board && (() => { const st = ensureRequests(d); const done = st.active.filter((n) => n.done).length; return { id: 'requests', label: 'REQUESTS', x: sp.board.x, y: sp.board.y - 40, badge: done ? `${done} DONE` : `${st.active.length} NOTES`, badgeNew: !!done, go: a.requests }; })(),
       a.collection && sp.fire && { id: 'collection', label: 'COLLECTION', x: sp.fire.x, y: sp.fire.y - 20, badge: unseen ? `${unseen} NEW` : `${j.seen}/${j.total}`, badgeNew: !!unseen, go: a.collection },
       a.expeditions && sp.sign && { id: 'expeditions', label: 'EXPEDITIONS', x: sp.sign.x, y: sp.sign.y - 34, go: a.expeditions },
       a.climb && { id: 'climb', label: 'CLIMB', x: camp.x, y: camp.y - 62, go: a.climb, carved: true },
@@ -102,6 +106,8 @@ export class CampMenu {
       a.map && { id: 'map', label: 'MAP', x: camp.x - 62, y: camp.y - 96, badge: mapBadge(prog), badgeNew: false, go: a.map, carved: true },
       // Bram's dares: chalked on the rock beside the start of the climb.
       a.dares && { id: 'dares', label: 'DARES', x: camp.x + 62, y: camp.y - 96, badge: o.dares ? o.dares() : null, badgeNew: false, go: a.dares, carved: true },
+      // THIN AIR: Bram's altimeter hangs on a piton high on the wall, once you have seen the dragon.
+      a.thinAir && thinAirTop(d) > 0 && { id: 'thinair', label: 'THIN AIR', x: camp.x + 108, y: camp.y - 124, badge: activeThinAir(d) ? `TIER ${activeThinAir(d)}` : `${thinAirTop(d)}/10 OPEN`, badgeNew: false, go: a.thinAir, carved: true, altimeter: true },
       a.shop && sp.trader && { id: 'shop', label: 'SHOP', x: sp.trader.x, y: sp.trader.y - 40, badge: `◆${prog.gems}`, go: a.shop },
       a.wardrobe && sp.tent && { id: 'wardrobe', label: 'WARDROBE', x: sp.tent.x, y: sp.tent.y - 22, badge: fresh ? `${fresh} NEW` : null, badgeNew: !!fresh, go: a.wardrobe },
     ].filter(Boolean).sort((p, q) => p.x - q.x);
@@ -113,6 +119,28 @@ export class CampMenu {
       zone.on('pointerup', (p) => { if (p.getDistance() < 12) { this.select(i); this.activate(); } });
       return { label, badge };
     });
+    // Bram's altimeter on its piton, over the THIN AIR words, with a pennant
+    // for the highest tier you have climbed on.
+    const alt = this.spots.find((s) => s.altimeter);
+    if (alt) {
+      const g = world(sc.add.graphics()).setDepth(DEPTH.decor + 1);
+      const ax = Math.round(alt.x), ay = Math.round(alt.y - 24);
+      g.fillStyle(0x6a6a74, 1).fillRect(ax - 1, ay - 13, 3, 2);
+      g.fillStyle(0x5a3a22, 1).fillRect(ax - 1, ay - 11, 2, 5);
+      g.fillStyle(0x7a5420, 1).fillCircle(ax, ay, 7);
+      g.fillStyle(0xc8963c, 1).fillCircle(ax, ay, 6);
+      g.fillStyle(0xf2ead6, 1).fillCircle(ax, ay, 4);
+      g.fillStyle(0xd83a22, 1).fillRect(ax, ay - 3, 1, 3);
+      g.fillStyle(0x2a2018, 1).fillRect(ax, ay, 1, 1);
+      g.fillStyle(0xffffff, 0.6).fillRect(ax - 3, ay - 3, 2, 1);
+      const climbed = Object.entries(d.thinAirBest || {}).filter(([, m]) => m > 0).map(([t]) => Number(t));
+      const high = climbed.length ? Math.max(...climbed) : 0;
+      if (high) {
+        g.fillStyle(0x4a4038, 1).fillRect(ax + 9, ay - 12, 1, 16);
+        g.fillStyle(0x9fe8ff, 1).fillTriangle(ax + 10, ay - 12, ax + 10, ay - 4, ax + 19, ay - 8);
+        for (let i = 0; i < Math.min(high, 5); i++) g.fillStyle(0x16304a, 1).fillRect(ax + 11 + i, ay - 9, 1, 2);
+      }
+    }
     this.arrow = world(sc.add.image(0, 0, 'arrow_s_D').setTint(0xf2c14e));
     this.glow = world(sc.add.image(0, 0, 'glow').setBlendMode('ADD').setTint(0xffd27a));
     this.glow.setDepth(DEPTH.decor - 1);

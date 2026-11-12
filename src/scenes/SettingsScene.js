@@ -6,7 +6,7 @@ import { SETTING_SECTIONS } from '../ui/SettingsMenu.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
-const ROW_H = 12;
+const ROW_H = GAME_HEIGHT < 300 && !IS_PORTRAIT ? 11 : 12;
 const INK = '#16141f';
 
 // Breaks text into lines that fit `maxW` pixels in the pixel font.
@@ -35,6 +35,9 @@ const ICONS = {
     g.fillStyle(c, 1).fillRect(x + 3, y, 2, 8).fillRect(x, y + 3, 8, 2);
     g.fillStyle(c, 0.5).fillRect(x + 1, y + 1, 1, 1).fillRect(x + 6, y + 1, 1, 1).fillRect(x + 1, y + 6, 1, 1).fillRect(x + 6, y + 6, 1, 1);
   },
+  access: (g, x, y, c) => {
+    g.fillStyle(c, 1).fillRect(x + 3, y, 2, 2).fillRect(x + 1, y + 3, 6, 1).fillRect(x + 3, y + 3, 2, 3).fillRect(x + 2, y + 6, 1, 2).fillRect(x + 5, y + 6, 1, 2);
+  },
   play: (g, x, y, c) => {
     g.fillStyle(c, 1).fillRect(x + 3, y, 2, 1).fillRect(x + 2, y + 1, 4, 2).fillRect(x + 1, y + 3, 6, 2).fillRect(x, y + 5, 8, 3);
     g.fillStyle(0x16141f, 1).fillRect(x + 4, y + 2, 1, 4);
@@ -62,6 +65,8 @@ export class SettingsScene extends Phaser.Scene {
     this.demo = this.add.graphics().setDepth(2);
     this.objs = [];
     this.t = 0;
+    // The scene object is reused: forget the last visit's latency test.
+    this.calib = null; this.calibFace = null; this.calibZone = null;
     // Every selectable line: setting rows, then the buttons.
     this.items = [];
     SETTING_SECTIONS.forEach((sec) => sec.rows.forEach((row) => this.items.push({ kind: 'row', row, sec })));
@@ -102,6 +107,13 @@ export class SettingsScene extends Phaser.Scene {
     const it = this.item;
     if (it.kind !== 'row') return;
     const row = it.row;
+    if (row.type === 'calibrate') {
+      // ← → nudge the delay by 5 ms by hand.
+      this.set('latency', Math.max(-200, Math.min(200, (this.s.latency || 0) + d * 5)));
+      Audio.play('tick');
+      this.render();
+      return;
+    }
     if (row.type === 'volume') {
       const v = Math.max(0, Math.min(1, Math.round((this.s[row.key] + d * 0.1) * 10) / 10));
       if (v === this.s[row.key]) return;
@@ -119,6 +131,7 @@ export class SettingsScene extends Phaser.Scene {
 
   activate() {
     const it = this.item;
+    if (it.kind === 'row' && it.row.type === 'calibrate') { this.startCalibration(); return; }
     if (it.kind === 'row') { this.change(1); return; }
     Audio.play('select');
     this.close(it.id === 'code');
@@ -225,6 +238,16 @@ export class SettingsScene extends Phaser.Scene {
       if (sel) { this.text(bx - 26, y + 2, '<', COLORS.gold); this.text(right - 3, y + 2, '>', COLORS.gold); }
       return;
     }
+    if (row.type === 'calibrate') {
+      const v = this.s.latency || 0;
+      const label = 'TAP TEST', pw = measureLine(label) + 6, px = right - pw - (sel ? 8 : 0);
+      g.fillStyle(sec.color, 1).fillRect(px + 1, y, pw - 2, 9).fillRect(px, y + 1, pw, 7);
+      this.text(px + 3, y + 2, label, INK, 1, null);
+      this.zone(px, y - 1, pw, ROW_H - 1, () => { this.index = k; this.startCalibration(); });
+      this.text(px - 6, y + 2, `${v > 0 ? '+' : ''}${v} MS`, sel ? COLORS.text : COLORS.dim).setOrigin(1, 0);
+      if (sel) { this.text(px - 54, y + 2, '<', COLORS.gold); this.text(right - 3, y + 2, '>', COLORS.gold); }
+      return;
+    }
     // Choices as pills, right-aligned; the active one filled in the section colour.
     const at = this.valueIndex(row);
     const widths = row.values.map(([, shown]) => measureLine(shown) + 6);
@@ -275,6 +298,15 @@ export class SettingsScene extends Phaser.Scene {
       const v = this.s[row.key];
       this.text(x, y, `${Math.round(v * 100)}%`, toCss(sec.color), 2);
       y += 16;
+    } else if (row.type === 'calibrate') {
+      const v = this.s.latency || 0;
+      this.text(x, y, `${v > 0 ? '+' : ''}${v} MS`, toCss(sec.color), 2);
+      y += 16;
+      const desc = this.text(x, y, wrap(row.text, w), COLORS.dim);
+      y += desc.height + 6;
+      g.fillStyle(sec.color, 0.3).fillRect(x, y - 3, w, 1);
+      const t = this.text(x, y, wrap(this.calib ? 'TAP SPACE (OR THE SCREEN) EACH TIME THE SPOON HITS THE POT.' : 'SPACE STARTS THE TEST. ← → SET IT BY HAND.', w), COLORS.text);
+      y += t.height + 6;
     } else {
       const [, shown, what] = row.values[this.valueIndex(row)];
       this.text(x, y, shown, toCss(sec.color), 2);
@@ -298,6 +330,7 @@ export class SettingsScene extends Phaser.Scene {
     const g = this.demo;
     g.clear();
     const b = this.demoBox;
+    if (this.calibFace) this.calibFace.setVisible(false);
     if (!b) return;
     g.fillStyle(0x0c0a12, 0.9).fillRect(b.x, b.y, b.w, b.h);
     g.fillStyle(b.sec.color, 0.35).fillRect(b.x, b.y, b.w, 1).fillRect(b.x, b.y + b.h - 1, b.w, 1);
@@ -379,13 +412,106 @@ export class SettingsScene extends Phaser.Scene {
         if (up) g.fillStyle(0x4f9ad8, 1).fillRect(cx + 4, cy - 12, 3, 5);
         break;
       }
+      case 'noteColors': case 'highContrast': {
+        // A strip of the track with a mirrored, a thermal and a gust note.
+        const hc = this.s.highContrast;
+        g.fillStyle(hc ? 0x000000 : 0x1c1a28, 1).fillRect(b.x + 4, cy - 7, b.w - 8, 15);
+        g.fillStyle(hc ? 0xffffff : 0x3a3450, 1).fillRect(b.x + 4, cy, b.w - 8, 1);
+        const pal = { standard: [0xff6ad8, 0xffb45a, 0x9fd8ff], deutan: [0x3ac8ff, 0xffe040, 0xe8e4ff], tritan: [0xff3a7a, 0xff8a3a, 0xd8d8d8] }[this.s.noteColors] || [0xff6ad8, 0xffb45a, 0x9fd8ff];
+        const span = b.w - 24;
+        pal.forEach((c, i) => {
+          const nx = Math.round(b.x + 12 + ((i * span) / 3 + this.t / 30) % span);
+          // A chunky up-arrow with a dark outline, like the notes on the track.
+          for (const [dx, dy, w, h] of [[-1, -4, 3, 2], [-3, -2, 7, 2], [-4, 0, 9, 1], [-1, 1, 3, 4]]) g.fillStyle(0x16141f, 1).fillRect(nx + dx - 1, cy + dy - 1, w + 2, h + 2);
+          for (const [dx, dy, w, h] of [[0, -4, 1, 2], [-2, -2, 5, 2], [-3, 0, 7, 1], [-1, 1, 3, 4]]) g.fillStyle(c, 1).fillRect(nx + dx, cy + dy, w, h);
+        });
+        break;
+      }
+      case 'latency':
+        this.drawCalibration(g, b, cx, cy);
+        break;
       default:
         g.fillStyle(b.sec.color, 0.6).fillRect(cx - 1, cy - 1, 3, 3);
     }
   }
 
+  // ---------------------------------------------------------------- latency test
+  // Bram taps a cooking pot with a spoon on a steady beat. After two count-in
+  // clangs you tap along eight times; the middle of your offsets (so one
+  // stray tap does not count) is how late this screen and speaker run.
+  startCalibration() {
+    Audio.init();
+    this.calib = { t0: performance.now() + 700, period: 600, next: 0, taps: [], done: false };
+    if (!this.calibZone) {
+      this.calibZone = this.add.zone(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(10).setInteractive();
+      this.calibZone.on('pointerdown', (p) => this.calibTap(p.event ? p.event.timeStamp : performance.now()));
+    }
+    this.calibZone.setVisible(true).setInteractive();
+    this.render();
+  }
+
+  calibTap(stamp) {
+    const c = this.calib;
+    if (!c || c.done) return;
+    const k = Math.round((stamp - c.t0) / c.period);
+    if (k < 2) return;
+    c.taps.push(stamp - (c.t0 + k * c.period));
+    Audio.play('ui');
+    if (c.taps.length >= 8) {
+      const sorted = [...c.taps].sort((a, b) => a - b);
+      const mid = Math.round((sorted[3] + sorted[4]) / 2);
+      c.done = true;
+      c.result = Math.max(-200, Math.min(200, Math.round(mid / 5) * 5));
+      this.set('latency', c.result);
+      this.time.delayedCall(1400, () => { this.calib = null; if (this.calibZone) this.calibZone.disableInteractive().setVisible(false); this.render(); });
+      this.render();
+    }
+  }
+
+  drawCalibration(g, b, cx, cy) {
+    const c = this.calib;
+    const now = performance.now();
+    // The pot: a dark iron belly on a little fire, the spoon above it.
+    const px = cx + 10, py = b.y + b.h - 12;
+    g.fillStyle(0xe8762a, 0.8).fillRect(px - 5, py + 7, 10, 2);
+    g.fillStyle(0xffd070, 0.8).fillRect(px - 2, py + 6, 4, 2);
+    g.fillStyle(0x16141f, 1).fillRect(px - 9, py - 4, 18, 10);
+    g.fillStyle(0x3a3a44, 1).fillRect(px - 8, py - 3, 16, 8);
+    g.fillStyle(0x6a6a78, 1).fillRect(px - 8, py - 3, 16, 1);
+    let hit = 0;
+    if (c) {
+      const ph = ((now - c.t0) % c.period + c.period) % c.period / c.period;
+      hit = now >= c.t0 ? Math.pow(1 - ph, 4) : 0;
+      // Clang on the beat (count-in clangs are higher).
+      while (!c.done && now >= c.t0 + c.next * c.period) {
+        Audio.play(c.next < 2 ? 'tick' : 'grab');
+        c.next++;
+      }
+    } else hit = Math.pow(1 - ((this.t % 900) / 900), 4) * 0.5;
+    // The spoon: raised between beats, down on the pot on the beat.
+    const ang = -0.2 - (1 - hit) * 0.9;
+    const sx = px - 16, sy = py - 14;
+    for (let i = 0; i < 14; i++) g.fillStyle(i > 10 ? 0xc8c2b0 : 0x8a6a4a, 1).fillRect(Math.round(sx + Math.cos(ang) * i), Math.round(sy - Math.sin(ang) * i), 2, 2);
+    if (hit > 0.6) g.lineStyle(1, 0xffffff, hit - 0.4).strokeCircle(px - 4, py - 5, 6 + (1 - hit) * 10);
+    if (!this.calibFace) this.calibFace = this.add.sprite(0, 0, 'bram_face', 0).setDepth(3);
+    this.calibFace.setPosition(b.x + 14, py - 6).setFrame(hit > 0.6 ? 1 : 0).setVisible(true);
+    // Your taps, as dots: early left of the line, late right of it.
+    if (c) {
+      const lx = b.x + b.w - 34, ly = b.y + 8;
+      g.fillStyle(0x4a4560, 1).fillRect(lx - 24, ly + 3, 48, 1);
+      g.fillStyle(0xffffff, 1).fillRect(lx, ly, 1, 7);
+      c.taps.forEach((o) => g.fillStyle(this.s.noteColors === 'deutan' ? 0x3ac8ff : 0x8fd16a, 1).fillRect(Math.round(lx + Math.max(-24, Math.min(24, o / 8))) - 1, ly + 2, 2, 3));
+      for (let i = 0; i < 8; i++) g.fillStyle(i < c.taps.length ? 0xf2c14e : 0x3a3550, 1).fillRect(lx - 24 + i * 6, ly + 10, 4, 2);
+    }
+  }
+
   // ---------------------------------------------------------------- input
   onKey(event) {
+    if (this.calib) {
+      if (event.code === 'Escape') { this.calib = null; if (this.calibZone) this.calibZone.disableInteractive().setVisible(false); this.render(); }
+      else if (!event.repeat && (event.code === 'Space' || event.code === 'Enter' || ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.code))) this.calibTap(event.timeStamp || performance.now());
+      return;
+    }
     if (event.repeat && !['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(event.code)) return;
     switch (event.code) {
       case 'ArrowUp': case 'KeyW': this.move(-1); break;

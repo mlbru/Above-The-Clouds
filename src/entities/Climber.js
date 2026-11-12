@@ -70,6 +70,10 @@ export class Climber {
     this.breathPhase = 0;
     this.trembleT = 0;
     this.offsetX = 0;
+    // Set by the scene while choosing: -1/1 glances at a route with a gem on that side.
+    this.lookSide = 0;
+    // A near miss: a quick 1px wobble (see wobble()).
+    this.wobbleT = 0;
     this.x = x;
     this.y = y;
     this.setPose('stand');
@@ -259,22 +263,34 @@ export class Climber {
     return new Promise((resolve) => this.scene.time.delayedCall(ms, () => { this.busy--; resolve(); }));
   }
 
+  // A GOOD (not perfect) hit: the body wobbles for a moment, 1px each way.
+  wobble() { this.wobbleT = 300; }
+
   // Idle behaviour: breathing, tired breathing and trembling at low grip.
+  // The breathing speeds up and gets louder smoothly as the grip runs out.
   idle(dt, { state, gripRatio = 1, cold = false, effects = null, sitting = false }) {
     this.breathT += dt;
     const tired = gripRatio < 0.3;
-    const period = state === 'wall' ? (tired ? 650 : gripRatio < 0.6 ? 1000 : 1400) : sitting ? 1800 : 1500;
+    const strain = Math.max(0, Math.min(1, (1 - gripRatio) / 0.85));
+    const period = state === 'wall' ? Math.round(1450 - strain * strain * 850) : sitting ? 1800 : 1500;
     if (this.breathT > period) {
       this.breathT = 0;
       this.breathPhase = 1 - this.breathPhase;
       if (this.breathPhase === 1) {
-        if (state === 'wall') Audio.play('breath', { intensity: tired ? 1 : gripRatio < 0.6 ? 0.5 : 0.1 });
+        if (state === 'wall') Audio.play('breath', { intensity: 0.08 + strain * strain * 0.92 });
         if (cold && effects && !this.beatBreath) { const h = this.head; effects.breathPuff(h.x + 2, h.y + 2); }
       }
+    }
+    if (this.wobbleT > 0) {
+      this.wobbleT -= dt;
+      const k = this.wobbleT <= 0 ? 0 : [1, -1, 1, 0][Math.floor((300 - this.wobbleT) / 75) % 4];
+      if (k !== this.offsetX) { this.offsetX = k; this.sync(); }
+      return;
     }
     if (this.busy > 0 || this.fidgetT) return;
     if (state === 'wall') {
       if (tired) this.setPose(this.breathPhase ? 'hang_tired' : 'hang_b');
+      else if (this.lookSide) this.setPose(this.lookSide < 0 ? 'hang_lookL' : 'hang_lookR');
       else this.setPose(this.breathPhase ? 'hang_b' : 'hang');
     } else if (state === 'ledge') {
       if (sitting) this.setPose(this.breathPhase ? 'sit_b' : 'sit');

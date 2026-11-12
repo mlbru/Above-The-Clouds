@@ -7,6 +7,9 @@ import { SeededRandom, hashInts } from '../utils/seededRandom.js';
 import { HUT_SIZE } from '../render/campArt.js';
 import { lerpColor } from '../utils/color.js';
 import { currentSeason } from '../data/seasons.js';
+import { BIOMES } from '../data/biomes.js';
+import { PEOPLE } from '../data/requests.js';
+import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 
 // Decorations that give light at night: [texture key part, colour, size, strength].
 const LIGHT_OF = [
@@ -44,6 +47,29 @@ const HOLD_SHADOW = {
 const WALL_BUDGET_MS = 3;
 
 // Owns all per-segment visuals and releases them when segments are pruned.
+// Other climbers' tents at camp: the orange tent with its colour channels
+// swapped round, so each one is a clean blue, green or rose.
+function tentVariant(scene, i) {
+  const key = `decor_tent_v${i}`;
+  if (scene.textures.exists(key)) return key;
+  const src = scene.textures.get('decor_tent').getSourceImage();
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height), p = img.data;
+  const order = [[2, 1, 0], [1, 0, 2], [0, 2, 1], [2, 0, 1]][i % 4];
+  for (let k = 0; k < p.length; k += 4) {
+    const r = p[k], g = p[k + 1], b = p[k + 2];
+    if (p[k + 3] === 0 || !(r > g + 30 && g >= b)) continue;
+    const ch = [r, g, b];
+    p[k] = ch[order[0]]; p[k + 1] = ch[order[1]]; p[k + 2] = ch[order[2]];
+  }
+  ctx.putImageData(img, 0, 0);
+  scene.textures.addCanvas(key, c);
+  return key;
+}
+
 export class WallRenderer {
   constructor(scene, mountain, seed) {
     this.scene = scene;
@@ -52,6 +78,9 @@ export class WallRenderer {
     this.visuals = new Map();
     this.jobs = [];
     this.animated = [];
+    // How worn each biome's holds are from all your climbs: { [biomeId]: climbs }.
+    const prog = scene.registry && scene.registry.get('progression');
+    this.wear = (prog && prog.data.wear) || {};
     this.onRemove = (seg) => this.removeSegment(seg.index);
     mountain.on('remove', this.onRemove);
   }
@@ -92,6 +121,7 @@ export class WallRenderer {
       if (a.type === 'flags') a.obj.setFrame(Math.floor(t / 350 + a.phase) % 2);
       if (a.type === 'trader') a.obj.setFrame(Math.floor(t / 140) % 26 === 0 ? 1 : Math.floor(t / 900) % 2 ? 2 : 0);
       if (a.type === 'fire') a.obj.setFrame(Math.floor(t / 110) % 3);
+      if (a.type === 'person') a.obj.setFrame(Math.floor(t / 1300 + a.phase) % 4 === 0 ? 1 : 0);
       // Fire and lamps glow brighter as night falls.
       if (a.type === 'flicker') a.obj.setAlpha((a.base + Math.sin(t / 90 + a.phase) * 0.06 + Math.sin(t / 37 + a.phase) * 0.04) * (0.6 + (this.night || 0) * 1.1));
       // Pools of light from fires, lamps, vents and crystals: only at night.
@@ -140,6 +170,14 @@ export class WallRenderer {
         if (boneHold && (hsh >> 4) % 2) { s.setFlipX(true); shadow.setFlipX(true); }
         v.holds.set(node.id, s);
         v.objects.push(shadow, s);
+        // Polished by a thousand hands: in biomes you climb a lot, some holds
+        // wear smooth and catch the light (a sheen and one bright pixel).
+        const worn = Math.min(0.55, (this.wear[biome.id] || 0) / 700);
+        if (worn > 0 && !node.hazard && ((hsh >>> 12) % 100) / 100 < worn) {
+          const sheen = this.scene.add.image(s.x, s.y, key).setDepth(DEPTH.holds + 0.1).setTintFill(0xfff8e8).setAlpha(0.16).setBlendMode('ADD').setFlipX(s.flipX);
+          const glint = this.scene.add.rectangle(s.x - 1 + ((hsh >>> 5) % 3) - 1, s.y - Math.round(s.height / 2) + 1, 2, 1, 0xffffff, 0.75).setDepth(DEPTH.holds + 0.2);
+          v.objects.push(sheen, glint);
+        }
       }
     }
     for (const d of seg.decor) {
@@ -189,7 +227,7 @@ export class WallRenderer {
       const biome = biomeAt(levelToMeters(seg.startLevel));
       const left = rng.chance(0.5);
       const midY = levelToY((seg.startLevel + seg.endLevel) / 2);
-      const img = this.scene.add.image(left ? -rng.int(4, 18) : WORLD_WIDTH + rng.int(4, 18), midY * 1.35, `fg_${biome.id}`)
+      const img = this.scene.add.image(left ? -rng.int(4, 18) : WORLD_WIDTH + rng.int(4, 18), midY * 1.35, `fg_${biome.id}_${rng.int(0, 2)}`)
         .setOrigin(0, 0.5).setScrollFactor(1, 1.35).setDepth(DEPTH.foreground).setFlipX(!left);
       if (!left) img.setOrigin(1, 0.5);
       v.objects.push(img);
@@ -225,6 +263,7 @@ export class WallRenderer {
       add(this.scene.add.image(spot(128), node.y, 'decor_pine').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(true));
       if (seg.index === 0) this.placeCampLife(node, side, rng, add);
       if (seg.index === 0 && !this.scene.tutorial) this.placeSeason(node, side, spot, rng, add);
+      if (seg.index === 0 && !this.scene.tutorial) this.placeCampGrowth(node, side, spot, rng, add);
     } else if (type === 'hut') {
       this.placeHut(spot(66), node, add);
     } else if (type === 'viewpoint') {
@@ -244,6 +283,75 @@ export class WallRenderer {
     }
     // An expedition ledge with one of Bram's journal pages: a little cairn holds it down.
     if (seg.rest.journal != null) add(this.scene.add.image(spot(36), node.y, 'decor_cairn').setOrigin(0.5, 1).setDepth(DEPTH.decor).setScale(0.75));
+  }
+
+  // Base camp grows with you: the requests board, an extra tent for every
+  // 500 m of Normal record, bunting with a pennant for every mastered biome,
+  // Bram's stall getting grander as you spend gems, and the people whose
+  // story notes you finished sitting round the fire.
+  placeCampGrowth(node, side, spot, rng, add) {
+    const sc = this.scene, y = node.y;
+    const prog = sc.registry && sc.registry.get('progression');
+    const d = prog ? prog.data : {};
+    const clampX = (x) => Math.max(10, Math.min(WORLD_WIDTH - 10, Math.round(x)));
+    // The corkboard on its post, past the woodpile.
+    const bx = clampX(node.x - side * 140);
+    add(sc.add.image(bx, y + 1, 'camp_board').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side > 0));
+    this.campSpots = { ...(this.campSpots || {}), board: { x: bx, y } };
+    // Tents: one more for every 500 m of record, pitched beyond the pines.
+    const best = (d.bestByMode && d.bestByMode.normal) || 0;
+    const tents = Math.min(4, Math.floor(best / 500));
+    for (let i = 0; i < tents; i++) {
+      const tx = clampX(node.x + side * (148 + i * 26));
+      add(sc.add.image(tx, y + (i % 2), tentVariant(sc, i)).setOrigin(0.5, 1).setDepth(DEPTH.decor - 1 + (i % 2)).setScale(0.8).setFlipX(i % 2 === 1));
+    }
+    // Bunting from the tent to the pines: a pennant per mastered biome.
+    const mastered = MASTERY_BIOMES.filter((id) => ((d.mastery && d.mastery[id]) || []).length >= STARS.length);
+    if (mastered.length) {
+      const g = add(sc.add.graphics().setDepth(DEPTH.decor + 1));
+      const x0 = spot(70), x1 = spot(132), ly = y - 30;
+      const n = mastered.length;
+      const sag = (x) => ly + Math.sin(((x - x0) / (x1 - x0)) * Math.PI) * 6;
+      for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) g.fillStyle(0x4a4038, 1).fillRect(x, Math.round(sag(x)), 1, 1);
+      mastered.forEach((id, i) => {
+        const px = Math.round(x0 + ((i + 0.5) / n) * (x1 - x0));
+        const py = Math.round(sag(px)) + 1;
+        const b = BIOMES[id];
+        g.fillStyle(0x16141f, 1).fillTriangle(px - 3, py - 1, px + 3, py - 1, px, py + 6);
+        g.fillStyle(b.accentA, 1).fillTriangle(px - 2, py, px + 2, py, px, py + 4);
+        g.fillStyle(b.accentB, 1).fillRect(px - 1, py, 2, 1);
+      });
+    }
+    // Bram's stall, by gems spent: an awning, then a string of lanterns too.
+    const spent = Math.max(0, (d.gemsEarned || 0) - (d.gems || 0));
+    if (this.trader && spent >= 400) {
+      const tx = this.trader.x, g = add(sc.add.graphics().setDepth(DEPTH.decor + 2));
+      const ax = Math.round(tx - 15), ay = y - 30;
+      g.fillStyle(0x3a2414, 1).fillRect(ax - 1, ay, 1, 30).fillRect(ax + 31, ay, 1, 30);
+      for (let i = 0; i < 8; i++) g.fillStyle(i % 2 ? 0xf0e6cc : 0xc8463b, 1).fillRect(ax + i * 4, ay - 2, 4, 5);
+      for (let i = 0; i < 8; i++) g.fillStyle(i % 2 ? 0xf0e6cc : 0xc8463b, 1).fillRect(ax + i * 4 + 1, ay + 3, 2, 1);
+      g.fillStyle(0x16141f, 0.5).fillRect(ax, ay + 4, 32, 1);
+      if (spent >= 2000) {
+        for (let i = 0; i < 4; i++) {
+          const lx = ax + 3 + i * 9, ly2 = ay + 6 + (i % 2);
+          g.fillStyle(0x16141f, 1).fillRect(lx - 1, ly2, 3, 4);
+          const l = add(sc.add.rectangle(lx, ly2 + 2, 1, 2, 0xffd070).setDepth(DEPTH.decor + 3));
+          this.animated.push({ type: 'flicker', obj: l, base: 0.8, phase: i * 1.3, seg: 0 });
+          const glow = add(sc.add.image(lx, ly2 + 2, 'glow_small').setDepth(DEPTH.decor + 2).setBlendMode('ADD').setTint(0xffb050).setScale(0.8).setAlpha(0.3));
+          this.animated.push({ type: 'flicker', obj: glow, base: 0.3, phase: i * 1.3, seg: 0 });
+        }
+      }
+    }
+    // Friends at the fire.
+    const friends = [...new Set(((d.requests && d.requests.storyDone) || []).map((rid) => rid.split('-')[0]))].filter((id) => PEOPLE[id] && sc.textures.exists(`camp_person_${id}`));
+    const fx = node.x - side * 84;
+    // On the bench first, then round the far side of the fire.
+    const seats = [-15, 19, -23, 29, 12];
+    friends.slice(0, seats.length).forEach((id, i) => {
+      const px = clampX(fx + side * seats[i]);
+      const p = add(sc.add.sprite(px, y + 1, `camp_person_${id}`, 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setFlipX(px > fx));
+      this.animated.push({ type: 'person', obj: p, phase: i * 1.7, seg: 0 });
+    });
   }
 
   // Halloween and Christmas at base camp (data/seasons.js): carved pumpkins

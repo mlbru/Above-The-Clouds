@@ -9,9 +9,21 @@ import { gearTicks } from '../systems/mechanics/Gears.js';
 import { Audio } from '../systems/AudioSystem.js';
 
 const PX_PER_MS = 0.085;
-export const THERMAL_TINT = 0xffb45a;
-// Mirrored notes are drawn the wrong way round in magenta: press the other way.
-export const MIRROR_TINT = 0xff6ad8;
+// Note colours, by the NOTE COLOURS setting (applyNotePalette). Mirrored
+// notes are drawn the wrong way round in magenta: press the other way.
+// Colour-blind palettes swap the hues that collide for that kind of sight.
+const PALETTES = {
+  standard: { thermal: 0xffb45a, mirror: 0xff6ad8, mirrorCur: 0xffa8ec, gust: 0x9fd8ff },
+  deutan: { thermal: 0xffe040, mirror: 0x3ac8ff, mirrorCur: 0x9fe6ff, gust: 0xe8e4ff },
+  tritan: { thermal: 0xff8a3a, mirror: 0xff3a7a, mirrorCur: 0xff9ab8, gust: 0xd8d8d8 },
+};
+export const NOTE_TINT = { ...PALETTES.standard };
+// HIGH CONTRAST: a near-black track with a bright line and stronger zones.
+let HIGH_CONTRAST = false;
+export function applyNotePalette(name, highContrast = false) {
+  Object.assign(NOTE_TINT, PALETTES[name] || PALETTES.standard);
+  HIGH_CONTRAST = !!highContrast;
+}
 const FLIP = { L: 'R', R: 'L', U: 'U' };
 // What the note looks like on the track (a mirrored note shows the other arrow).
 const shownDir = (note) => (note.mirror ? FLIP[note.dir] : note.dir);
@@ -136,7 +148,7 @@ export class ComboPrompt {
       this.items.push({ note, big, small, big2, small2, mark: null, holdBar, cog, cogS, ticks: -1 });
     });
     if (combo.notes.some((n) => n.gust)) {
-      this.gustIcon = this.add.image(TRACK_X + TRACK_W - 6, TRACK_Y - 33, 'icon_wind').setOrigin(1, 0).setTint(0x9fd8ff).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false);
+      this.gustIcon = this.add.image(TRACK_X + TRACK_W - 6, TRACK_Y - 33, 'icon_wind').setOrigin(1, 0).setTint(NOTE_TINT.gust).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false);
     }
     const tags = [...(route.tags || []), ...(route.mods ? [route.mods.tag] : []), ...(route.thermal ? ['THERMAL'] : [])];
     let line = `${route.label} ROUTE${tags.length ? '  \u2022 ' + tags.join(' ') : ''}`;
@@ -162,8 +174,9 @@ export class ComboPrompt {
     if (this.mode === 'recovery') return this.updateRecovery(now);
     const c = this.combo;
     // Track
-    drawFrame(g, TRACK_X - 5, TRACK_Y - 10, TRACK_W + 10, 21, { accent: this.accent, alpha: 0.85 });
-    g.fillStyle(0x3a3450, 1);
+    drawFrame(g, TRACK_X - 5, TRACK_Y - 10, TRACK_W + 10, 21, { accent: this.accent, alpha: HIGH_CONTRAST ? 1 : 0.85 });
+    if (HIGH_CONTRAST) g.fillStyle(0x000000, 1).fillRect(TRACK_X - 3, TRACK_Y - 8, TRACK_W + 6, 17);
+    g.fillStyle(HIGH_CONTRAST ? 0xffffff : 0x3a3450, 1);
     g.fillRect(TRACK_X, TRACK_Y, TRACK_W, 1);
     for (let x = TRACK_X + 8; x < TRACK_X + TRACK_W; x += 12) g.fillRect(x, TRACK_Y - 1, 1, 3);
     // Good and perfect zones around the hit line
@@ -171,10 +184,10 @@ export class ComboPrompt {
     // The target zone always shows the real window of the next note, so it
     // shrinks (and turns wind-blue) while a gust note is coming in.
     const goodW = Math.round(ref.goodMs * PX_PER_MS), perfW = Math.round(ref.perfectMs * PX_PER_MS);
-    const zoneColor = ref.still ? stillTint(ref) : ref.gust ? 0x9fd8ff : this.color;
-    g.fillStyle(zoneColor, 0.18);
+    const zoneColor = ref.still ? stillTint(ref) : ref.gust ? NOTE_TINT.gust : this.color;
+    g.fillStyle(zoneColor, HIGH_CONTRAST ? 0.3 : 0.18);
     g.fillRect(HIT_X - goodW, TRACK_Y - 7, goodW * 2 + 1, 15);
-    g.fillStyle(zoneColor, this.flash > 0 ? 0.75 : 0.38);
+    g.fillStyle(zoneColor, this.flash > 0 ? 0.75 : HIGH_CONTRAST ? 0.55 : 0.38);
     g.fillRect(HIT_X - perfW, TRACK_Y - 7, perfW * 2 + 1, 15);
     // The hit line glows.
     g.fillStyle(zoneColor, 0.35);
@@ -207,7 +220,7 @@ export class ComboPrompt {
       if (note.gust && !note.result) {
         const gw = Math.round(note.goodMs * PX_PER_MS);
         const bx = Math.max(TRACK_X, Math.round(x - gw)), ex = Math.min(clipR, Math.round(x + gw));
-        if (ex > bx) { g.fillStyle(0x9fd8ff, 0.28); g.fillRect(bx, TRACK_Y - 8, ex - bx, 17); }
+        if (ex > bx) { g.fillStyle(NOTE_TINT.gust, 0.28); g.fillRect(bx, TRACK_Y - 8, ex - bx, 17); }
         if (note.time - now < 1600) gustSoon = true;
       }
       // Hold tails: a bar that must be kept pressed until its end.
@@ -285,7 +298,7 @@ export class ComboPrompt {
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
         if (this.minAlpha && (note.hidden || this.revealMs || this.dark)) alpha = Math.max(alpha, this.minAlpha * (isCur ? 1 : 0.8));
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
-        const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? 0xffa8ec : MIRROR_TINT) : note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : isCur ? 0xf2c14e : 0xf4efe4;
+        const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
         it.big.setTint(tint);
         if (note.chord) {
           // The first arrow already pressed lights up while the other is awaited.
@@ -302,20 +315,20 @@ export class ComboPrompt {
         }
         // A mirrored note carries a little two-headed bar under it.
         if (note.mirror && visible && alpha > 0.1) {
-          g.fillStyle(MIRROR_TINT, alpha);
+          g.fillStyle(NOTE_TINT.mirror, alpha);
           g.fillRect(Math.round(x) - 3, TRACK_Y + 7, 7, 1);
           g.fillRect(Math.round(x) - 3, TRACK_Y + 6, 1, 3);
           g.fillRect(Math.round(x) + 3, TRACK_Y + 6, 1, 3);
         }
         // The next note to hit carries a soft glow.
-        if (isCur && this.glow) this.glow.setVisible(visible && alpha > 0.3).setPosition(Math.round(x), TRACK_Y).setAlpha(0.55 * alpha).setTint(note.thermal ? THERMAL_TINT : note.gust ? 0x9fd8ff : 0xf2c14e);
+        if (isCur && this.glow) this.glow.setVisible(visible && alpha > 0.3).setPosition(Math.round(x), TRACK_Y).setAlpha(0.55 * alpha).setTint(note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : 0xf2c14e);
         // A thermal note trails a small updraft under it.
         if (note.thermal && visible) {
-          g.fillStyle(THERMAL_TINT, 0.6);
+          g.fillStyle(NOTE_TINT.thermal, 0.6);
           for (let k = 0; k < 3; k++) g.fillRect(Math.round(x) - 3 + k * 3, TRACK_Y + 6 - ((Math.floor(t / 90) + k * 2) % 5), 1, 2);
         }
         const bob = isCur ? Math.round(1 + Math.sin(t / 90)) : 0;
-        it.small.setTint(note.still ? stillTint(note) : note.mirror ? MIRROR_TINT : note.thermal ? THERMAL_TINT : isCur ? 0xf2c14e : note.gust ? 0x9fd8ff : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
+        it.small.setTint(note.still ? stillTint(note) : note.mirror ? NOTE_TINT.mirror : note.thermal ? NOTE_TINT.thermal : isCur ? 0xf2c14e : note.gust ? NOTE_TINT.gust : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
         if (it.small2) it.small2.setTint(isCur ? 0xf2c14e : 0xa8a3b8).setY(TRACK_Y - 17 - bob);
       }
       if (it.holdBar) it.holdBar.setVisible(!note.result || note.holding);

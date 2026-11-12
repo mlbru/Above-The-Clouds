@@ -14,7 +14,7 @@ export const SETTING_SECTIONS = [
     id: 'screen', title: 'SCREEN', color: 0xf2c14e,
     rows: [
       { key: 'shake', label: 'SCREEN SHAKE', type: 'choice', text: 'THE CAMERA JOLTS ON MISSES, ROCKS AND DRAGON FIRE.',
-        values: [[true, 'ON', 'THE WORLD SHAKES WHEN SOMETHING HITS HARD.'], [false, 'OFF', 'A STEADY CAMERA, ALWAYS.']] },
+        values: [[true, 'FULL', 'THE WORLD SHAKES WHEN SOMETHING HITS HARD.'], ['low', 'LOW', 'A SOFT NUDGE INSTEAD OF A JOLT. THE DRAGON BARELY RATTLES THE BOX.'], [false, 'OFF', 'A STEADY CAMERA, ALWAYS.']] },
       { key: 'reducedParticles', label: 'PARTICLES', type: 'choice', text: 'SNOW, SPARKS, CHALK AND EMBERS IN THE AIR.',
         values: [[false, 'FULL', 'EVERY PARTICLE THE MOUNTAIN HAS.'], [true, 'REDUCED', 'FEWER PARTICLES, FOR SLOWER DEVICES OR CALMER EYES.']] },
     ],
@@ -42,6 +42,18 @@ export const SETTING_SECTIONS = [
     rows: [
       { key: 'forgiving', label: 'TIMING', type: 'choice', text: 'HOW EXACT YOUR INPUTS MUST BE.',
         values: [[false, 'NORMAL', 'THE TIMING THE MOUNTAIN WAS MADE FOR.'], [true, 'FORGIVING', 'WIDER TIMING WINDOWS. NORMAL MODE ONLY.']] },
+    ],
+  },
+  {
+    id: 'access', title: 'ACCESS', color: 0x6ad8c8,
+    rows: [
+      { key: 'noteColors', label: 'NOTE COLOURS', type: 'choice', text: 'THE COLOURS OF MIRRORED, THERMAL AND GUST NOTES.',
+        values: [['standard', 'STANDARD', 'MAGENTA MIRRORS, ORANGE THERMALS, BLUE GUSTS.'],
+          ['deutan', 'RED-GREEN', 'FOR RED-GREEN COLOUR BLINDNESS: BLUE MIRRORS, YELLOW THERMALS, WHITE GUSTS.'],
+          ['tritan', 'BLUE-YELLOW', 'FOR BLUE-YELLOW COLOUR BLINDNESS: RED MIRRORS, ORANGE THERMALS, GREY GUSTS.']] },
+      { key: 'highContrast', label: 'HIGH CONTRAST', type: 'choice', text: 'HOW THE NOTE TRACK STANDS OUT FROM THE MOUNTAIN.',
+        values: [[false, 'OFF', 'THE TRACK LETS THE MOUNTAIN SHOW THROUGH.'], [true, 'ON', 'A BLACK TRACK, A WHITE LINE AND STRONGER TIMING ZONES.']] },
+      { key: 'latency', label: 'LATENCY', type: 'calibrate', text: 'SOME SCREENS, SPEAKERS AND HEADPHONES RUN LATE. BRAM TAPS HIS POT ON THE BEAT; TAP ALONG AND THE GAME LEARNS YOUR DELAY.' },
     ],
   },
 ];

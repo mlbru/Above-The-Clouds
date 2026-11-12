@@ -30,7 +30,7 @@ export class GripSystem {
     if (result === RESULT.PERFECT) return base * this.mode.perfectCostFactor;
     if (result === RESULT.GOOD) return base * n.goodCostFactor * this.goodFactor;
     const mult = route.hazard === 'loose' ? (this.looseMul ?? this.b.hazards.loose.missMultiplier) : 1;
-    return base + n.missExtraCost * mult * this.mode.costScale;
+    return base + (n.missExtraCost + (this.mode.missExtra || 0)) * mult * this.mode.costScale;
   }
 
   applyNote(route, result) {

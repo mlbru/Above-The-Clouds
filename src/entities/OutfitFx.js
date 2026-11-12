@@ -66,6 +66,8 @@ export class OutfitFx {
     if (this.pack === 'moss') this.drawFlower(front, pts, ctx.streak);
     if (this.acc === 'kite') this.drawKite(back, pts, ctx, dt);
     if (this.acc === 'collar') this.drawCollar(front, pts, ctx);
+    if (!pts.front && this.hat !== 'hood' && (ctx.wind || 0) > 0.3) this.drawHair(back, pts, ctx);
+    if (ctx.tape && !pts.front) this.drawTape(front, ctx.tape);
     if (this.acc === 'aurora') this.drawScarf(front, pts, ctx);
     else if (ctx.cold || ctx.wind > 0.9) this.drawWindScarf(front, back, pts, ctx);
     if (this.jacket === 'bolt' && ctx.streak >= 10) {
@@ -221,6 +223,32 @@ export class OutfitFx {
     // A little fringe on the end.
     const ex = Math.round(ox + dx * len), ey = Math.round(oy + dy * len);
     gBack.fillStyle(CREAM, 1).fillRect(ex, ey, 1, 1).fillRect(ex + Math.round(px * 2), ey + Math.round(py * 2), 1, 1);
+  }
+
+  // Loose hair from under the hat, streaming downwind when it blows.
+  drawHair(g, pts, ctx) {
+    const [x, y] = this.at(pts.head);
+    const w = Math.max(0, Math.min(1.4, ctx.wind || 0));
+    const ang = Math.PI / 2 - (w / 1.4) * 1.3;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    for (const [ox, len, ph] of [[-3, 4, 0], [3, 5, 1.7], [0, 3, 3.1]]) {
+      for (let i = 0; i < len; i++) {
+        const flap = Math.sin(this.t / (95 - w * 35) + ph - i * 0.9) * (i / len) * (0.5 + w);
+        g.fillStyle(i % 3 === 1 ? 0x7a5232 : 0x5a3a22, 1).fillRect(Math.round(x + ox + dx * i - dy * flap), Math.round(y + 2 + dy * i + dx * flap), 1, 1);
+      }
+    }
+  }
+
+  // Taped fingers after a long day on the wall: clean white tape, later worn red.
+  drawTape(g, tape) {
+    const p = POSES[this.climber.pose];
+    if (!p || !p.lh || p.front) return;
+    const c = tape > 1 ? 0xd88a7a : 0xf4f0e6, d = tape > 1 ? 0xa85a50 : 0xc8c4b8;
+    for (const h of [p.lh, p.rh]) {
+      const [x, y] = this.at(h);
+      g.fillStyle(c, 1).fillRect(Math.round(x) - 1, Math.round(y) + 1, 2, 1);
+      g.fillStyle(d, 1).fillRect(Math.round(x) - 1, Math.round(y) + 2, 2, 1);
+    }
   }
 
   onPerfect() {

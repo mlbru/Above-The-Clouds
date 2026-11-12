@@ -142,7 +142,12 @@ export class Effects {
   pebbleFall(x, y, count = 4, tint = 0x8a8478) { this.pebbles.setParticleTint(tint); this.pebbles.explode(this.n(count), x, y); }
   snowBurst(x, y) { this.snowPuff.explode(this.n(8), x, y); }
   flameBurst(x, y, count = 10) { this.flames.explode(this.n(count), x, y); }
-  breathPuff(x, y) { this.breath.setParticleTint(this.lit(0xffffff)); this.breath.explode(1, x, y); }
+  // Breath clouds grow with height (the scene sets breathAlt): more puffs on top of each other.
+  breathPuff(x, y) {
+    this.breath.setParticleTint(this.lit(0xffffff));
+    const alt = this.breathAlt || 0;
+    this.breath.explode(1 + (alt > 700 ? 1 : 0) + (alt > 1500 ? 1 : 0), x, y);
+  }
 
   // A drop of sweat running off the climber's face when the grip is going.
   sweat(x, y) {

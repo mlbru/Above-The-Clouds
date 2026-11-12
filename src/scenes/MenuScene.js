@@ -14,6 +14,8 @@ import { PixelText, COLORS, drawPanel } from '../ui/PixelText.js';
 import { FancyMenu } from '../ui/FancyMenu.js';
 import { CampMenu } from '../ui/CampMenu.js';
 import { forecastLines } from '../data/forecast.js';
+import { bramGreeting } from '../data/bramTalk.js';
+import { mountainMode, activeThinAir } from '../data/thinAir.js';
 import { liftHeight } from '../data/lifts.js';
 import { cleanDares, dareLabel, dareScale } from '../data/dares.js';
 import { CodeEntry } from '../ui/CodeEntry.js';
@@ -116,7 +118,14 @@ export class MenuScene extends Phaser.Scene {
       this.demo.run++;
       this.wall.destroy();
     });
-    this.events.on('resume', () => { if (this.list) this.list.refresh(); else if (this.campMenu && this.campMenu.visible) this.showMain(); });
+    this.events.on('resume', () => {
+      // A new Thin Air tier (or dares that switch it off) means a different mountain.
+      const want = activeThinAir(this.prog.data);
+      const changed = this.registry.get('campChanged');
+      this.registry.set('campChanged', false);
+      if (want !== this.builtTier || changed) { this.buildWorld(); if (this.campMenu && this.campMenu.visible) this.showMain(); return; }
+      if (this.list) this.list.refresh(); else if (this.campMenu && this.campMenu.visible) this.showMain();
+    });
     this.introRunning = false;
     if (!this.registry.get('introShown')) {
       this.registry.set('introShown', true);
@@ -158,24 +167,32 @@ export class MenuScene extends Phaser.Scene {
           wardrobe: () => this.openWardrobe(),
           dares: () => this.showDares(),
           map: () => this.showMap(),
+          thinAir: () => this.showThinAir(),
+          requests: () => this.showRequests(),
         },
         dares: () => {
           const ids = cleanDares(this.prog.settings.dares);
           return ids.length ? `${dareLabel(ids)} X${dareScale(ids).toFixed(2)}` : 'NONE';
         },
         subtitle: () => {
-          const best = Math.floor(this.prog.bestFor(this.mode));
+          const tier = activeThinAir(this.prog.data);
+          const best = Math.floor(tier ? this.prog.thinAirBestFor(tier) : this.prog.bestFor(this.mode));
           const line = best ? `BEST ${best} M` : 'AN ENDLESS CLIMB TO THE BEAT';
           return this.season ? `${SEASONS[this.season].greeting}  •  ${line}` : line;
         },
-        mode: () => ({ text: `< ${BALANCE.modes[this.mode].label} >${cleanDares(this.prog.settings.dares).length ? ' + DARES' : ''}`, color: { normal: COLORS.green, hard: COLORS.gold, summit: COLORS.red }[this.mode] }),
+        mode: () => {
+          const tier = activeThinAir(this.prog.data);
+          if (tier) return { text: `< THIN AIR ${tier} >`, color: '#9fe8ff' };
+          return { text: `< ${BALANCE.modes[this.mode].label} >${cleanDares(this.prog.settings.dares).length ? ' + DARES' : ''}`, color: { normal: COLORS.green, hard: COLORS.gold, summit: COLORS.red }[this.mode] };
+        },
         // Bram's forecast for this mountain (data/forecast.js): only what the seed fixes.
         forecast: () => {
           const lift = this.prog.data.lift;
-          return forecastLines(this.seed, {
+          const hello = bramGreeting(this.prog.data);
+          return [...(hello ? [hello] : []), ...forecastLines(this.seed, {
             startMeters: lift ? liftHeight(lift) : 0,
             boons: this.mode === 'normal' && !cleanDares(this.prog.settings.dares).length,
-          });
+          })];
         },
         onDown: () => this.cycleMode(1),
         onGear: () => this.showOptions(),
@@ -192,7 +209,9 @@ export class MenuScene extends Phaser.Scene {
   // shapes the climb, so switching it rebuilds the camp you look at).
   buildWorld() {
     if (this.wall) this.wall.destroy();
-    this.mountain = new Mountain(this.seed, BALANCE, this.mode);
+    // The camp is the start of the next run: the same mountain, Thin Air included.
+    this.mountain = new Mountain(this.seed, BALANCE, mountainMode(this.prog.data));
+    this.builtTier = activeThinAir(this.prog.data);
     this.mountain.ensureLevel(60);
     this.wall = new WallRenderer(this, this.mountain, this.seed);
     this.camp = this.mountain.getLevel(0).nodes[0];
@@ -217,6 +236,19 @@ export class MenuScene extends Phaser.Scene {
   // Lift tickets and mastery: the mountain map (scenes/MapScene.js).
   showMap() {
     this.scene.launch('Map', { returnTo: 'Menu', mode: this.mode });
+    this.scene.pause();
+  }
+
+  // THIN AIR: Bram's altimeter (scenes/ThinAirScene.js). Its tier shapes the
+  // mountain, so the camp is rebuilt when it comes back changed.
+  showThinAir() {
+    this.scene.launch('ThinAir', { returnTo: 'Menu' });
+    this.scene.pause();
+  }
+
+  // Camp requests: the corkboard (scenes/RequestsScene.js).
+  showRequests() {
+    this.scene.launch('Requests', { returnTo: 'Menu' });
     this.scene.pause();
   }
 

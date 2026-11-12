@@ -704,9 +704,17 @@ function foregroundRock(biome, seed) {
   // A crag right in front of the camera: dark because it is in its own
   // shadow, but still rock. Layered strata, a rim of sky light along the
   // edge that faces the wall, cracks, and moss or snow on every outward step.
+  // The outline tapers to nothing at both ends (it curls back out of view
+  // past the screen edge), so a crag never starts or stops with a flat cut.
   const w = 110, h = 220;
   const g = new PixelGrid(w, h);
   const noise = makeNoise2D(seed);
+  // Where along its height it bulges most, and how blunt its tips are.
+  const peak = 0.35 + (seed % 7) * 0.05, blunt = 0.45 + (seed % 3) * 0.12;
+  const env = (t) => {
+    const u = t < peak ? t / peak : (1 - t) / (1 - peak);
+    return Math.pow(Math.max(0, Math.sin(u * Math.PI / 2)), blunt);
+  };
   const cool = 0x1c2238;
   const shade = [0, 1, 2].map((i) => lerpColor(darken(biome.rock[i], 0.42), cool, 0.25));
   const rimC = lerpColor(darken(biome.rock[3], 0.72), 0xbfd4ff, 0.12);
@@ -714,10 +722,14 @@ function foregroundRock(biome, seed) {
   const edges = [];
   for (let y = 0; y < h; y++) {
     const t = y / h;
-    edges[y] = Math.round(30 + Math.sin(t * Math.PI) * 40 + (noise(y * 0.03, 1) - 0.5) * 40 + (noise(y * 0.15, 4) - 0.5) * 6);
+    const body = 46 + Math.sin(t * Math.PI) * 30 + (noise(y * 0.03, 1) - 0.5) * 36 + (noise(y * 0.15, 4) - 0.5) * 6;
+    edges[y] = Math.max(0, Math.round(body * env(t)));
   }
+  // Chunky steps instead of a smooth lens: hold the outline for a few rows now and then.
+  for (let y = 1; y < h; y++) if (noise(y * 0.09, 12) > 0.62 && edges[y] > 6) edges[y] = Math.max(edges[y], edges[y - 1] - 1);
   for (let y = 0; y < h; y++) {
     const edge = edges[y];
+    if (edge < 2) continue;
     for (let x = 0; x < edge; x++) {
       // Strata: wavy bands, broken up by a coarse noise and dithered softly.
       const band = noise(x * 0.04, y * 0.11 + noise(x * 0.02, y * 0.02) * 2);
@@ -815,7 +827,9 @@ function pumpkinFrames() {
 }
 
 export function buildAllTextures(scene, look) {
-  for (const biome of Object.values(BIOMES)) addGrid(scene, `fg_${biome.id}`, foregroundRock(biome, biome.from + 17));
+  for (const biome of Object.values(BIOMES)) {
+    for (let v = 0; v < 3; v++) addGrid(scene, `fg_${biome.id}_${v}`, foregroundRock(biome, biome.from + 17 + v * 101));
+  }
   buildClimberTexture(scene, look);
   buildHoldTextures(scene);
   particleTextures(scene);

@@ -186,6 +186,20 @@ export class Background {
         if (Math.sin(this.time / 240 + i * 2.3) > 0.2) gl.fillStyle(lerpColor(0xfff4d8, 0xffb060, lowSun), 0.22 * k * (1 - i / 26)).fillRect(Math.round(x - w / 2), Math.round(y), Math.round(w), 1);
       }
     }
+    // At night the towns far below light the clouds from underneath: soft warm
+    // patches deep in the sea that drift with it and breathe slowly.
+    if (seaAlpha > 0 && day.night > 0.3) {
+      const k = seaAlpha * Math.min(1, (day.night - 0.3) / 0.4);
+      const span = GAME_WIDTH + 160;
+      [[30, 22, 1], [150, 34, 0.7], [260, 18, 1.2], [390, 40, 0.8], [520, 26, 0.9]].forEach(([x0, dy, r], i) => {
+        const x = ((x0 - this.cloudSea.tilePositionX * 0.8) % span + span) % span - 80;
+        const y = seaY + dy + 14;
+        const breathe = 0.8 + 0.2 * Math.sin(this.time / 2300 + i * 1.9);
+        for (const [w, h, a] of [[64, 22, 0.05], [40, 14, 0.07], [18, 7, 0.09]]) {
+          gl.fillStyle(i % 2 ? 0xffb070 : 0xffc890, a * k * breathe).fillEllipse(Math.round(x), Math.round(y), w * r, h * r);
+        }
+      });
+    }
     this.cloudSea.tilePositionX += dt * 0.004;
     this.cloudSeaFill.setVisible(seaAlpha > 0).setAlpha(seaAlpha).setY(seaY + 88);
     this.cloudSeaFill.fillColor = multiply(multiply(0xbcc6de, light), sea);

@@ -2,7 +2,7 @@ import { PixelText, COLORS, drawPanel, drawFrame } from './PixelText.js';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameConfig.js';
 import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { toCss } from '../utils/color.js';
-import { THERMAL_TINT } from './ComboPrompt.js';
+import { NOTE_TINT } from './ComboPrompt.js';
 
 // Narrower cards in portrait so three still fit side by side.
 const CARD_W = IS_PORTRAIT ? 94 : 104, CARD_H = 34;
@@ -73,8 +73,8 @@ export class RouteSelector {
       const gem = r.gem ? this.scene.add.image(cx + this.cw - 30, cy + 7, `gem_${r.gem.type}`).setScrollFactor(0).setDepth(DEPTH.hud + 1) : null;
       // Thermal routes: a warm up-arrow on the card and next to the target hold.
       const thermal = r.thermal ? [
-        this.scene.add.image(cx + this.cw - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(THERMAL_TINT).setScrollFactor(0).setDepth(DEPTH.hud + 1),
-        this.scene.add.image(r.target.x + 9, r.target.y - 14, 'arrow_s_U').setTint(THERMAL_TINT).setDepth(DEPTH.routeMarks),
+        this.scene.add.image(cx + this.cw - (r.gem ? 40 : 30), cy + 7, 'arrow_s_U').setTint(NOTE_TINT.thermal).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+        this.scene.add.image(r.target.x + 9, r.target.y - 14, 'arrow_s_U').setTint(NOTE_TINT.thermal).setDepth(DEPTH.routeMarks),
       ] : [];
       // Still beats ahead: a red pause sign on the card and by the hold.
       if ((r.tags || []).includes('STILL')) {

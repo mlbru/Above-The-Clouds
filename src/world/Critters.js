@@ -122,11 +122,16 @@ export class Critters {
       } else {
         // Faces you, looks back over its shoulder when you are close, and
         // leaves the ledge when you arrive on it.
+        if (c.kind === 'follow') { this.follow(c, climber, dt); continue; }
         c.img.setFlipX(dx < 0);
         const near = Math.abs(dy) < 70 && Math.abs(dx) < 120;
         c.img.setFrame(near ? 1 : 0);
         if (near && !c.bleated) { c.bleated = true; Audio.play('bleat'); }
-        if (Math.abs(dy) < 6 && Math.abs(dx) < 34) this.jumpOff(c);
+        if (Math.abs(dy) < 6 && Math.abs(dx) < 34) {
+          // Now and then a curious one tags along for a few holds instead.
+          if (this.roll(c.node, 9) < 0.3) { c.kind = 'follow'; c.hops = 0; c.lastY = climber.y; c.wait = 0; if (this.onFollow) this.onFollow(); }
+          else this.jumpOff(c);
+        }
       }
     }
     // Drop what scrolled far below the view.
@@ -153,6 +158,34 @@ export class Critters {
         targets: img, x: img.x + dir * 140, y: img.y - 110, duration: 1700, ease: 'Quad.easeIn',
         onComplete: () => { flap.remove(); img.destroy(); },
       });
+    });
+  }
+
+  // A goat that followed you up from its ledge: it hops after you, a few
+  // holds behind, then stops, bleats at you and bounds off sideways.
+  follow(c, climber, dt) {
+    if (c.busy) return;
+    c.img.setFlipX(climber.x < c.img.x);
+    if (c.hops >= 3) {
+      c.wait += dt;
+      c.img.setFrame(1);
+      if (!c.bleated2) { c.bleated2 = true; Audio.play('bleat'); }
+      if (c.wait > 1100) this.jumpOff(c);
+      return;
+    }
+    if (c.lastY - climber.y < 28) return;
+    c.busy = true;
+    c.lastY = climber.y;
+    c.hops++;
+    const tx = climber.x + c.side * 18, ty = climber.y + 30;
+    c.img.setFrame(2);
+    this.scene.tweens.add({ targets: c.img, x: tx, duration: 520, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({
+      targets: c.img, y: Math.min(c.img.y, ty) - 18, duration: 260, ease: 'Quad.easeOut',
+      onComplete: () => this.scene.tweens.add({
+        targets: c.img, y: ty, duration: 260, ease: 'Quad.easeIn',
+        onComplete: () => { c.busy = false; if (c.img.active) c.img.setFrame(0); Audio.play('boot', { snow: false }); },
+      }),
     });
   }
 

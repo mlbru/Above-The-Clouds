@@ -210,7 +210,7 @@ export const climbBoons = {
     const h = levelToMeters(node.level);
     if (fx.thermalsEverywhere && !this.routes.some((r) => r.thermal)) addThermal(this.routes, this.mountain, this.runRng, { ...THERMALS, chance: THERMALS.chance * fx.thermalsEverywhere });
     if (fx.gustScale > 1) {
-      const extra = difficultyAt(h, this.mode).gust * (fx.gustScale - 1) * 0.6;
+      const extra = difficultyAt(h, this.thinAir ? this.modeCfg : this.mode).gust * (fx.gustScale - 1) * 0.6;
       for (const r of this.routes) {
         if (r.notes.length < 3 || r.notes.some((n) => n.gust) || !this.runRng.chance(extra)) continue;
         const i = this.runRng.int(1, r.notes.length - 2);

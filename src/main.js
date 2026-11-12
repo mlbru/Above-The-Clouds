@@ -10,6 +10,8 @@ import { ExpeditionScene } from './scenes/ExpeditionScene.js';
 import { LeaderboardScene } from './scenes/LeaderboardScene.js';
 import { SettingsScene } from './scenes/SettingsScene.js';
 import { DaresScene } from './scenes/DaresScene.js';
+import { ThinAirScene } from './scenes/ThinAirScene.js';
+import { RequestsScene } from './scenes/RequestsScene.js';
 import { ShrineScene } from './scenes/ShrineScene.js';
 import { ControlsScene } from './scenes/ControlsScene.js';
 import { MapScene } from './scenes/MapScene.js';
@@ -32,7 +34,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, CollectionScene, ExpeditionScene, LeaderboardScene, SettingsScene, DaresScene, ControlsScene, MapScene, ShrineScene],
+  scene: [BootScene, MenuScene, ClimbScene, PauseScene, ShopScene, CollectionScene, ExpeditionScene, LeaderboardScene, SettingsScene, DaresScene, ThinAirScene, RequestsScene, ControlsScene, MapScene, ShrineScene],
   disableContextMenu: true,
 });
 

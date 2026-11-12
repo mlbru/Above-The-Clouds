@@ -315,9 +315,42 @@ saves as you go. Five of the choices tune the feel per player:
 - **WEATHER ON YOU**: snow piles on the hat, shoulders and pack, storms and waterfalls darken
   and drip the jacket, dragon fire and the volcano leave soot, crystal dust glitters. On a ledge
   the climber shakes it all off (`src/entities/WeatherCoat.js`).
+- **ACCESS**: NOTE COLOURS for red-green or blue-yellow colour blindness, HIGH CONTRAST (a
+  black note track), and LATENCY: Bram taps a pot on the beat, you tap along eight times and
+  the middle of your offsets is taken off every press (← → set it by hand). SCREEN SHAKE also
+  has LOW.
 - **LEDGE LIFE**: LIVELY adds new idles after about 9 seconds on a ledge: a drink from the
   bottle, a look at the map, a wave, warm breath into the hands in the cold, pointing at the
   stars at night. CALM keeps the original fidgets.
+
+## Thin Air
+
+Once you reach the Dragon's Spine in Normal, Bram's brass altimeter hangs on a piton high on
+the wall at base camp (**THIN AIR**). It is a ladder of ten harder versions of Normal: turn the
+bezel (← →) and every tier keeps the rules of the tiers below it and adds one more (hungrier
+grip, tighter timing, an earlier ramp, heavier misses, colder ledges, costlier perfects, no
+streak grip, brittle rock, longer climbs, a faster beat). Tier *n+1* opens when you reach the
+Crystal Heights on tier *n*. Each tier keeps its own record; gear, perks and Trail Boons still
+work, dares do not mix with it, and Thin Air runs are not sent to the leaderboard. A pennant on
+the altimeter shows the highest tier you have climbed (`src/data/thinAir.js`,
+`src/scenes/ThinAirScene.js`).
+
+## Camp requests
+
+A corkboard on a post at base camp (**REQUESTS**) holds three notes, each on the paper of
+whoever wrote it: Bram, and five people at camp (Ines the photographer, Dr Pim the geologist,
+Marta, Noor and Tenzin). Each asks for one thing on a Normal run (a height, a streak, stones, a
+wish on a shooting star, a goat that follows you...). A finished note is announced on the
+mountain; open the board and it gets a red thumbprint, pays its gems and a new note is pinned
+in its place. Story notes are done once, and their writer sits at the campfire from then on
+(`src/data/requests.js`, `src/scenes/RequestsScene.js`).
+
+## Base camp grows
+
+Base camp shows your progress: an extra tent for every 500 m of Normal record, bunting with a
+pennant for every mastered biome, an awning and then lanterns on Bram's stall as you spend
+gems, and friends at the fire (`placeCampGrowth` in `src/world/WallRenderer.js`). Bram's first
+line at camp knows how your last run went (`src/data/bramTalk.js`).
 
 ## Codes
 
