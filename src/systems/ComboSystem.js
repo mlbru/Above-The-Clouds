@@ -6,7 +6,8 @@
 //          mirror (shown the other way round), chord (a second direction
 //          pressed together with dir), roll (taps needed before the tail ends),
 //          still (a beat on which you must NOT press), swarm (a still beat
-//          that is the Amber Hive's swarm), gear (ticks a gear note turns) }.
+//          that is the Amber Hive's swarm), gear (ticks a gear note turns),
+//          vine (a hold whose tail ends on the next note), echo (drawn blank) }.
 export const RESULT = { PERFECT: 'perfect', GOOD: 'good', MISS: 'miss' };
 
 export class ComboSystem {
@@ -25,7 +26,8 @@ export class ComboSystem {
     const list = specs || pattern.map((dir) => ({ dir }));
     let t = startTime + leadInMs;
     this.notes = list.map((spec, i) => {
-      if (i > 0) t += Math.max(minGapMs, (spec.gap ?? 1) * beatMs);
+      // A vine hands straight over: the next note sits on the end of its tail.
+      if (i > 0) t += list[i - 1].vine ? 0 : Math.max(minGapMs, (spec.gap ?? 1) * beatMs);
       const gust = !!spec.gust;
       const note = {
         index: i,
@@ -43,6 +45,10 @@ export class ComboSystem {
         still: !!spec.still,
         swarm: !!spec.swarm,
         gear: spec.gear || 0,
+        // The Moss Cathedral's vines and the Hanging Monastery's echo notes.
+        vine: !!spec.vine,
+        vineEnd: !!spec.vineEnd,
+        echo: !!spec.echo,
         chord: spec.chord || null,
         pressed: null,
         hidden: !!spec.hidden,

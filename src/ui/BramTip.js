@@ -50,6 +50,14 @@ export class BramTip {
     return true;
   }
 
+  // A line that is not a tip (the run's event): said every time, not once per save.
+  say(text) {
+    const id = `!${text}`;
+    if (this.queue.includes(id) || this.current === id) return;
+    this.queue.push(id);
+    if (!this.current) this.next();
+  }
+
   next() {
     const id = this.queue.shift();
     const was = this.current;
@@ -57,7 +65,7 @@ export class BramTip {
     if (!id) { this.fade(0); if (was) this.onClose(); return; }
     if (!was) this.onOpen();
     this.more.setVisible(false);
-    const str = BRAM_TIPS[id];
+    const str = id.startsWith('!') ? id.slice(1) : BRAM_TIPS[id];
     this.fade(1);
     this.text.setText('');
     this.drawBubble();
@@ -78,7 +86,7 @@ export class BramTip {
 
   finishTyping() {
     if (this.typing) { this.typing.remove(); this.typing = null; }
-    this.text.setText(BRAM_TIPS[this.current] || '');
+    this.text.setText((this.current && this.current.startsWith('!') ? this.current.slice(1) : BRAM_TIPS[this.current]) || '');
     this.face.y = COACH.y + COACH.h / 2 + 1;
     if (this.timer) this.timer.remove();
     this.more.setVisible(!this.hidden);

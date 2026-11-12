@@ -13,9 +13,10 @@ const PARALLAX = 1.7;
 const KIND = {
   green: 'bough', stone: 'crag', frozen: 'icicles', aurora: 'icicles', hive: 'comb', obsidian: 'shards',
   crystal: 'shards', clockwork: 'cog', storm: 'crag', bones: 'ribs', dragon: 'spines', volcano: 'spines',
+  cascade: 'fronds', monastery: 'eaves', moss: 'roots',
 };
-const BASE = { bough: 0x1c2a1e, crag: 0x1e1c24, icicles: 0x22304a, comb: 0x3a2410, shards: 0x1a1426, cog: 0x2e2214, ribs: 0x2a2622, spines: 0x2a1410 };
-const RIM = { bough: 0x3a5a34, crag: 0x3a3844, icicles: 0x6a8ab8, comb: 0x7a5420, shards: 0x5a3a8a, cog: 0x6a5228, ribs: 0x5a544a, spines: 0x6a2a1a };
+const BASE = { bough: 0x1c2a1e, crag: 0x1e1c24, icicles: 0x22304a, comb: 0x3a2410, shards: 0x1a1426, cog: 0x2e2214, ribs: 0x2a2622, spines: 0x2a1410, fronds: 0x0e2216, eaves: 0x2a1410, roots: 0x16200e };
+const RIM = { bough: 0x3a5a34, crag: 0x3a3844, icicles: 0x6a8ab8, comb: 0x7a5420, shards: 0x5a3a8a, cog: 0x6a5228, ribs: 0x5a544a, spines: 0x6a2a1a, fronds: 0x3a6a3a, eaves: 0xb8862a, roots: 0x4a6a2a };
 
 function poly(g, pts, c) {
   const ys = pts.map((p) => p[1]);
@@ -99,6 +100,54 @@ function paint(kind, v) {
       for (let i = 0; i < 3; i++) {
         const y0 = 14 + i * 16;
         for (let t = 0; t <= 1; t += 0.03) g.rect(Math.round(t * 30), Math.round(y0 + Math.sin(t * Math.PI) * 8), 1, 3 - Math.round(t * 1.5), c);
+      }
+      break;
+    }
+    case 'fronds': {
+      // Tree-fern fronds arching in from the edge: a curved rib and leaflets
+      // that shorten towards the tip, each one a little droop.
+      for (let f = 0; f < 2; f++) {
+        const y0 = 14 + f * 30 + rng.range(-4, 4), len = 30 + rng.range(0, 8), bend = 0.7 + rng.range(0, 0.5);
+        for (let t = 0; t <= 1; t += 0.02) {
+          const x = t * len, y = y0 - Math.sin(t * Math.PI * 0.8) * 8 * bend + t * t * 14;
+          g.rect(Math.round(x), Math.round(y), 1, 2, c);
+          if (Math.round(t * 50) % 3 === 0 && t > 0.06) {
+            const leaf = (1 - t) * 9 + 2;
+            for (let k = 0; k < leaf; k++) { g.set(x + k * 0.35, y - 1 - k * 0.7, c); g.set(x + k * 0.45, y + 2 + k * 0.55 + k * k * 0.03, c); }
+          }
+        }
+      }
+      break;
+    }
+    case 'eaves': {
+      // The upturned corner of a temple roof: tiled eaves sweeping up to a
+      // dragon-tail tip, a beam end under it, a little bell hanging off it.
+      const y0 = 22 + rng.range(0, 10);
+      for (let x = 0; x < 34; x++) {
+        const lift = Math.pow(x / 34, 3) * 14;
+        const top = y0 - lift, th = 7 - x / 10;
+        g.rect(x, Math.round(top), 1, Math.max(2, Math.round(th)), c);
+        if (x % 4 === 0 && x < 30) g.rect(x, Math.round(top + th), 1, 2, c);
+      }
+      poly(g, [[30, y0 - 12], [37, y0 - 22], [35, y0 - 12]], c);
+      g.rect(0, y0 + 7, 16, 4, c);
+      g.rect(14, y0 + 6, 4, 6, c);
+      g.rect(26, y0 - 4, 1, 8, c);
+      g.ellipse(26.5, y0 + 6, 2.5, 3, c);
+      break;
+    }
+    case 'roots': {
+      // Old roots hanging into view: thick strands that taper and fork,
+      // with tufts of moss caught on them.
+      for (let i = 0; i < 4; i++) {
+        let x = 2 + i * 7 + rng.range(-2, 2), w = 4 - i * 0.6;
+        const end = 40 + rng.range(0, 36);
+        for (let y = 0; y < end; y++) {
+          x += Math.sin(y / 9 + i * 2) * 0.35 + 0.08;
+          const ww = Math.max(1, w * (1 - y / end));
+          g.rect(Math.round(x - ww / 2), y, Math.max(1, Math.round(ww)), 1, c);
+          if (y % 17 === 9) g.ellipse(Math.round(x), y, 2.5, 1.5, c);
+        }
       }
       break;
     }

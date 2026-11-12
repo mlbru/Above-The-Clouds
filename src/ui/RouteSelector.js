@@ -62,8 +62,8 @@ export class RouteSelector {
         tricks = next;
       }
       const crampons = r.hazard === 'icy' && this.scene.gear && this.scene.gear.crampons;
-      const tag = crampons ? 'ICY: CRAMPONS ON' : r.hazard ? HAZ[r.hazard] : r.target.kind === 'jug' ? 'JUG: SHAKE OUT' : tricks ? `${r.inputs} ${tricks}` : r.toLedge ? 'REST AHEAD' : `${r.inputs} MOVES`;
-      const tagColor = crampons ? COLORS.green : r.hazard ? COLORS.red : r.target.kind === 'jug' ? COLORS.green : tricks ? COLORS.blue : COLORS.dim;
+      const tag = r.rescue ? `RESCUE ${r.rescue.name}` : crampons ? 'ICY: CRAMPONS ON' : r.hazard ? HAZ[r.hazard] : r.target.kind === 'jug' ? 'JUG: SHAKE OUT' : tricks ? `${r.inputs} ${tricks}` : r.toLedge ? 'REST AHEAD' : `${r.inputs} MOVES`;
+      const tagColor = r.rescue ? '#ffb0a0' : crampons ? COLORS.green : r.hazard ? COLORS.red : r.target.kind === 'jug' ? COLORS.green : tricks ? COLORS.blue : COLORS.dim;
       const sub = new PixelText(this.scene, cx + 6, cy + 24, tag, { color: tagColor });
       sub.subText = tag; sub.subColor = tagColor;
       [head, gain, sub].forEach((t) => t.setScrollFactor(0).setDepth(DEPTH.hud + 1));

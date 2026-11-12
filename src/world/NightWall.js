@@ -20,6 +20,10 @@ const LOOK = {
   aurora: { c: [0x5af0a0, 0x9a70f0, 0xc8ffe8], d: 0.08, sp: 1 },
   bones: { c: [0xd8f0ff, 0xa8d8c8], d: 0.03, sp: 0.5 },
   dragon: { c: [0xff7a2a, 0xffb040, 0xff4a2a], d: 0.08, sp: 1.4 },
+  // Glow-worms in the wet rock, candles in the shrines, moss that shines.
+  cascade: { c: [0x9ff8ff, 0xd8ffff, 0x6ae0f0], d: 0.07, sp: 0.7 },
+  monastery: { c: [0xffc860, 0xffe8a8, 0xff9a40], d: 0.05, sp: 1.6 },
+  moss: { c: [0xb8ff6a, 0x6affc8, 0xe8ff9a], d: 0.11, sp: 0.5 },
   volcano: { c: [0xff7a2a, 0xffb040], d: 0.08, sp: 1.4 },
   sky: { c: [0xffffff, 0xfff4c8], d: 0.03, sp: 1 },
 };

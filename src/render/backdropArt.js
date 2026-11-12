@@ -765,7 +765,356 @@ function boneRidge({ w, h, seed }) {
   return b.canvas();
 }
 
-const PAINTERS = { hiveTowers, clockTowers, boneRidge, glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils };
+// ---------------------------------------------------------------- the Far Range
+const wrapX = (x, w) => ((Math.round(x) % w) + w) % w;
+
+// The Cascade, far: headlands of green-black rock rising out of a band of
+// mist, fluted by rain into long irregular grooves (lit on the side facing
+// the sun), rainforest along their tops, and long ribbons of waterfall
+// dropping from notches in the rim into the mist.
+function cascadeCliffs({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const n2 = makeNoise2D(seed + 3);
+  const b = layerBuffer(w, h);
+  const mistY = h - 40;
+  const ramp = [0x10201c, 0x1a302a, 0x26443c, 0x36584e, 0x4c7466, 0x6a9484];
+  const rows = [
+    { ridge: smoothRidge(ridgeHeights(rng, w, h * 0.2, 22, 0.5), 3), haze: 0.45 },
+    { ridge: smoothRidge(ridgeHeights(rng, w, h * 0.36, 26, 0.55), 2), haze: 0 },
+  ];
+  const groove = (x, y) => noise(x * 0.11, y * 0.006) * 0.75 + n2(x * 0.3, y * 0.02) * 0.25;
+  for (const row of rows) {
+    for (let x = 0; x < w; x++) {
+      const top = Math.round(row.ridge[x]);
+      for (let y = top; y < h; y++) {
+        const d = y - top;
+        // Light from the left: a groove's left wall faces the sun.
+        const g0 = groove(x, y), g1 = groove(x + 1, y);
+        let k = 2.6 + (g1 - g0) * 26 + (g0 - 0.5) * 1.6 - d * 0.008 + (bayer(x, y) - 0.5) * 0.8;
+        let c = ramp[Math.max(0, Math.min(5, Math.round(k)))];
+        // Rainforest on the rim, spilling down the grooves.
+        const jungle = 5 + noise(x * 0.15, 3) * 8 + (g0 < 0.42 ? 14 * (0.42 - g0) * 6 : 0);
+        if (d < jungle) {
+          const lit = d < 2 || (noise(x * 0.4, y * 0.4) > 0.6 && g1 > g0);
+          c = lit ? 0x6aa85a : (x * 3 + y) % 4 ? 0x2e6234 : 0x3e7a3c;
+        }
+        // Mist rolling along the foot.
+        if (y > mistY - 10) {
+          const mk = Math.min(1, (y - (mistY - 10)) / 18);
+          if (bayer(x, y) < mk * (0.55 + 0.45 * noise(x * 0.05, y * 0.12))) c = 0xdcf2ee;
+        }
+        if (row.haze) c = lerpColor(c, 0xb8d8d4, row.haze);
+        b.set(x, y, c);
+      }
+      // A few tall trees standing proud of the rim.
+      if (noise(x * 0.5, 9) > 0.74) for (let k = 1; k < 6; k++) b.set(x, top - k, row.haze ? lerpColor(0x2e6234, 0xb8d8d4, row.haze) : k > 3 ? 0x4a8a44 : 0x2e6234);
+    }
+    // Waterfalls from notches in this row's rim.
+    for (let i = 0; i < 5; i++) {
+      const fx = rng.int(0, w - 1), top = Math.round(row.ridge[fx]) + 3, wd = rng.chance(0.3) ? 2 : 1;
+      for (let y = top; y < mistY + 2; y++) {
+        const k = (y - top) / Math.max(1, mistY - top);
+        const xx = fx + Math.round(Math.sin(y * 0.05 + fx) * k * 1.2);
+        for (let dx = 0; dx < wd + Math.floor(k * 1.6); dx++) {
+          let c = (y * 2 + dx * 5 + fx) % 9 === 0 ? 0xbcdce4 : 0xf4fcff;
+          if (row.haze) c = lerpColor(c, 0xb8d8d4, row.haze * 0.6);
+          b.set(xx + dx, y, c);
+        }
+      }
+      for (let y = mistY - 8; y < mistY + 4; y++) for (let dx = -5; dx <= 6; dx++) if (bayer(fx + dx, y) < 0.6 - Math.abs(dx) * 0.1) b.set(fx + dx, y, 0xf4fcff);
+    }
+  }
+  return b.canvas();
+}
+
+// The Cascade, near: a ridge of rainforest, big round crowns lit from the
+// upper left over dark rock, and a great waterfall pouring out of a notch in
+// it, dropping in two steps, white spray boiling at its foot.
+function cascadeFalls({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const ridge = smoothRidge(ridgeHeights(rng, w, h * 0.38, 18, 0.5), 4);
+  const fx = rng.int(80, w - 80);
+  // Rock under the forest: dark, wet, grooved.
+  for (let x = 0; x < w; x++) {
+    const top = Math.round(ridge[x]) + 6;
+    for (let y = top; y < h; y++) {
+      const g0 = noise(x * 0.14, y * 0.01), g1 = noise((x + 1) * 0.14, y * 0.01);
+      const k = 1.6 + (g1 - g0) * 22 + (bayer(x, y) - 0.5) * 0.7;
+      b.set(x, y, [0x0c1814, 0x14241e, 0x1e342c, 0x2c4a40][Math.max(0, Math.min(3, Math.round(k)))]);
+    }
+  }
+  // Crowns: overlapping round trees along the ridge and down its face,
+  // painted back to front, each lit on its upper left.
+  const crowns = [];
+  for (let i = 0; i < 150; i++) {
+    const x = rng.range(0, w), base = ridge[Math.floor(x) % w];
+    crowns.push({ x, y: base + rng.range(-4, 40) * rng.range(0.2, 1), r: rng.range(5, 12) });
+  }
+  crowns.sort((a, c) => a.y - c.y);
+  const greens = [0x16301c, 0x1e4024, 0x2a5a2e, 0x3a7a3a, 0x5aa04a, 0x86c45a];
+  for (const t of crowns) {
+    if (Math.abs(t.x - fx) < 16 && t.y > ridge[fx] - 6) continue;
+    for (let dy = -t.r; dy <= t.r; dy++) for (let dx = -t.r; dx <= t.r; dx++) {
+      const bump = 1 + Math.sin(Math.atan2(dy, dx) * 5 + t.x) * 0.08;
+      const d = Math.hypot(dx, dy) / (t.r * bump);
+      if (d > 1) continue;
+      const lit = (-dx * 0.6 - dy * 0.8) / t.r;
+      const k = 2.2 + lit * 2.4 - d * 0.8 + (noise((t.x + dx) * 0.5, (t.y + dy) * 0.5) - 0.5) * 1.4 + (bayer(t.x + dx, t.y + dy) - 0.5) * 0.6;
+      b.set(t.x + dx, Math.round(t.y + dy), greens[Math.max(0, Math.min(5, Math.round(k)))]);
+    }
+  }
+  // The fall: out of the notch, two drops, a ledge of foam between them.
+  const lip = Math.round(ridge[fx]) + 2;
+  const step = lip + Math.round((h - lip) * 0.45);
+  for (let y = lip; y < h; y++) {
+    const second = y > step;
+    const wd = second ? 13 : 8 + Math.round((y - lip) * 0.05);
+    const cx = fx + (second ? 5 : 0);
+    for (let dx = -wd; dx <= wd; dx++) {
+      const x = cx + dx;
+      const edge = Math.abs(dx) >= wd - 1;
+      let c = (Math.floor(y * 0.7) * 3 + dx * 7 + Math.floor(x / 3)) % 13 < 2 ? 0xbcdce4 : 0xf4fcff;
+      if (edge && bayer(x, y) < 0.5) continue;
+      if (Math.abs(y - step) < 3) c = 0xffffff;
+      b.set(x, y, c);
+    }
+    // Spray beside the second drop and at the bottom.
+    if (y > step - 4) for (let dx = -wd - 9; dx <= wd + 9; dx++) {
+      const far = Math.abs(dx) - wd;
+      if (far > 0 && bayer(cx + dx, y) < 0.45 - far * 0.05 + (y > h - 14 ? 0.3 : 0)) b.set(cx + dx, y, 0xe8f6f8);
+    }
+  }
+  return b.canvas();
+}
+
+// The Hanging Monastery, far: sandstone pillars rising out of the clouds,
+// pines on their heads, temples with gold roofs on the tallest, rope bridges
+// and strings of flags between them.
+function monasteryPillars({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const pillars = Array.from({ length: 13 }, (_, i) => ({ x: Math.round((i + rng.range(0.1, 0.9)) * (w / 13)), hw: rng.range(6, 15), top: rng.range(14, 80), lean: rng.range(-0.06, 0.06) }));
+  pillars.sort((a, c) => c.top - a.top);
+  const tops = [];
+  for (const p of pillars) {
+    for (let y = Math.round(p.top); y < h; y++) {
+      const k = (y - p.top) / (h - p.top);
+      const half = p.hw * (0.85 + noise(p.x * 0.1, y * 0.06) * 0.35) * (y - p.top < 6 ? 0.75 + (y - p.top) * 0.04 : 1);
+      const cx = p.x + (y - p.top) * p.lean;
+      for (let dx = -Math.ceil(half); dx <= half; dx++) {
+        const f = dx / half;
+        let c = f < -0.4 ? 0xd8b08a : f < 0.3 ? 0xa8805e : 0x6e5040;
+        // Horizontal bedding lines in the sandstone.
+        if ((y + Math.round(noise(p.x, y * 0.02) * 6)) % 9 === 0 && f > -0.7) c = lerpColor(c, 0x4a3428, 0.4);
+        if (k > 0.75 && bayer(cx + dx, y) < (k - 0.75) * 3) c = lerpColor(c, 0xf4e0d0, 0.5);
+        b.set(cx + dx, y, c);
+      }
+    }
+    // Pines on the head of the pillar.
+    for (let k = 0; k < 5; k++) {
+      const tx = Math.round(p.x + rng.range(-p.hw * 0.7, p.hw * 0.7)), th = rng.int(4, 9);
+      for (let j = 0; j < th; j++) for (let dx = -Math.floor((th - j) / 3); dx <= Math.floor((th - j) / 3); dx++) b.set(tx + dx, Math.round(p.top) - j, j === th - 1 ? 0x5a8a4a : 0x2e4a2e);
+    }
+    tops.push(p);
+  }
+  // Temples on three of the tallest: red walls, gold roofs curling up.
+  const tall = pillars.slice().sort((a, c) => a.top - c.top).slice(0, 4);
+  for (const p of tall.slice(0, 3)) {
+    const y0 = Math.round(p.top) - 3;
+    const tiers = rng.int(2, 3);
+    let ww = Math.round(p.hw * 0.9);
+    for (let t = 0; t < tiers; t++) {
+      const wy = y0 - t * 7;
+      for (let y = wy - 4; y <= wy; y++) for (let dx = -ww + 2; dx <= ww - 2; dx++) b.set(p.x + dx, y, (dx + 50) % 4 === 0 ? 0x6a1812 : 0xb8342a);
+      for (let dx = -ww - 2; dx <= ww + 2; dx++) {
+        const lift = Math.abs(dx) > ww ? 1 : 0;
+        b.set(p.x + dx, wy - 5 - lift, 0xf2c252); b.set(p.x + dx, wy - 6 - lift, dx < 0 ? 0xffe08a : 0xb8862a);
+      }
+      ww = Math.max(3, ww - 3);
+    }
+    b.set(p.x, y0 - tiers * 7 - 4, 0xf2c252); b.set(p.x, y0 - tiers * 7 - 5, 0xffe08a);
+  }
+  // Rope bridges between neighbouring tops, sagging, with prayer flags.
+  const byX = pillars.slice().sort((a, c) => a.x - c.x);
+  const cols = [0x4a8ae8, 0xf0f0e8, 0xe84a3a, 0x5ac86a, 0xf2c252];
+  for (let i = 0; i < byX.length - 1; i++) {
+    if (!rng.chance(0.55)) continue;
+    const a = byX[i], c = byX[i + 1];
+    const x0 = a.x + a.hw * 0.6, x1 = c.x - c.hw * 0.6, y0 = a.top + 4, y1 = c.top + 4;
+    for (let x = Math.round(x0); x <= x1; x++) {
+      const t = (x - x0) / Math.max(1, x1 - x0);
+      const y = Math.round(y0 + (y1 - y0) * t + Math.sin(t * Math.PI) * 8);
+      b.set(x, y, 0x3a2418);
+      if (x % 3 === 0) b.set(x, y + 1, cols[(x / 3) % 5 | 0]);
+    }
+  }
+  // Clouds wrapping the feet of the pillars.
+  for (let x = 0; x < w; x++) {
+    const ct = h - 26 + Math.round(Math.sin(x * 0.05) * 5 + noise(x * 0.04, 9) * 10);
+    for (let y = ct; y < h; y++) if (bayer(x, y) < 0.5 + (y - ct) * 0.06) b.set(x, y, y - ct < 2 ? 0xffffff : 0xf0e4e4);
+  }
+  return b.canvas();
+}
+
+// The Hanging Monastery, near: halls built one above the other into a
+// sandstone cliff, joined by zigzag stairs; red walls on white plaster, dark
+// tiled roofs with gold ridges and upturned eaves, warm windows, flags.
+function monasteryHalls({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const n2 = makeNoise2D(seed + 5);
+  const b = layerBuffer(w, h);
+  const ridge = smoothRidge(ridgeHeights(rng, w, h * 0.3, 24, 0.55), 2);
+  const sand = [0x3a2a22, 0x54402e, 0x6e553e, 0x8a6e52, 0xa88a68, 0xc4a680];
+  for (let x = 0; x < w; x++) {
+    const top = Math.round(ridge[x]);
+    for (let y = top; y < h; y++) {
+      // Vertical joints in the cliff, lit on their left; bedding lines across.
+      const g0 = noise(x * 0.09, y * 0.012) * 0.8 + n2(x * 0.3, y * 0.03) * 0.2;
+      const g1 = noise((x + 1) * 0.09, y * 0.012) * 0.8 + n2((x + 1) * 0.3, y * 0.03) * 0.2;
+      let k = 2.8 + (g1 - g0) * 24 + (g0 - 0.5) * 1.2 + (bayer(x, y) - 0.5) * 0.7 - (y - top) * 0.012;
+      if ((y + Math.round(n2(x * 0.02, 1) * 8)) % 11 === 0) k -= 1.2;
+      let c = sand[Math.max(0, Math.min(5, Math.round(k)))];
+      if (y - top < 2) c = 0x4a7a3a;
+      b.set(x, y, c);
+    }
+    // Pines clinging to the rim.
+    if (noise(x * 0.3, 4) > 0.68) {
+      const th = 4 + Math.round(noise(x, 2) * 6);
+      for (let j = 0; j < th; j++) for (let dx = -Math.floor((th - j) / 3); dx <= Math.floor((th - j) / 3); dx++) b.set(x + dx, Math.round(ridge[x]) - j, j === th - 1 ? 0x6a9a5a : 0x2e4a2e);
+    }
+  }
+  const halls = [];
+  for (let i = 0; i < 9; i++) {
+    const x = rng.int(0, w - 1), y = Math.round(ridge[x]) + rng.int(10, 56), hw = rng.int(9, 18), hh = rng.int(7, 11);
+    halls.push({ x, y, hw, hh });
+  }
+  halls.sort((a, c) => a.y - c.y);
+  for (let i = 0; i < halls.length - 1; i++) {
+    const a = halls[i], c = halls[i + 1];
+    if (Math.abs(a.x - c.x) > 120) continue;
+    let x = a.x, y = a.y + 2;
+    const dir = c.x > a.x ? 1 : -1;
+    while (y < c.y - c.hh && Math.abs(x - c.x) > 1) { b.set(x, y, 0xe8d8c0); b.set(x, y + 1, 0x5a4030); x += dir; if ((x + y) % 2 === 0) y++; }
+  }
+  for (const hl of halls) {
+    const { x, y, hw, hh } = hl;
+    // A shadow on the cliff beside it.
+    for (let yy = y - hh; yy <= y + 6; yy++) for (let dx = hw + 1; dx <= hw + 4; dx++) if (bayer(x + dx, yy) < 0.6) b.set(x + dx, yy, 0x2a1e18);
+    for (let yy = y - hh; yy <= y + 3; yy++) for (let dx = -hw; dx <= hw; dx++) {
+      let c = yy > y ? (dx < -hw + 3 ? 0xfff4e0 : 0xe0d2bc) : dx < -hw + 2 ? 0xd84a36 : 0xb8342a;
+      if (yy <= y && (dx + hw) % 6 >= 2 && (dx + hw) % 6 <= 3 && yy > y - hh + 2 && yy < y - 1) c = (x + dx * 7 + yy) % 3 ? 0xffc860 : 0x2a1210;
+      if (dx === hw) c = 0x6a1812;
+      b.set(x + dx, yy, c);
+    }
+    for (let t = 0; t < 2; t++) {
+      const ry = y - hh - 1 - t * 5, rw = hw + 4 - t * 4;
+      for (let k = 0; k < 4; k++) for (let dx = -rw + k; dx <= rw - k; dx++) b.set(x + dx, ry - k, k === 3 ? 0xf2c252 : k === 0 ? 0x1a0e0c : (dx + k) % 2 ? 0x2a1a18 : 0x3e2a24);
+      b.set(x - rw - 1, ry - 1, 0xf2c252); b.set(x + rw + 1, ry - 1, 0xf2c252);
+      b.set(x - rw - 2, ry - 2, 0xffe08a); b.set(x + rw + 2, ry - 2, 0xb8862a);
+    }
+    for (let k = 0; k < 10; k++) b.set(x + hw + 3 + k, y - hh - 2 + Math.round(Math.sin(k / 9 * Math.PI) * 3), [0x4a8ae8, 0xf0f0e8, 0xe84a3a, 0x5ac86a, 0xf2c252][k % 5]);
+  }
+  return b.canvas();
+}
+
+// The Moss Cathedral, far: a nave of colossal roots. Pairs of trunks rise and
+// lean together into pointed arches, one behind the other, moss on every
+// back, the sky showing through the gaps.
+function mossArches({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const arches = Array.from({ length: 6 }, (_, i) => ({ x: Math.round((i + 0.5) * (w / 6) + rng.range(-12, 12)), span: rng.range(30, 46), top: rng.range(8, 30) }));
+  for (const a of arches) {
+    for (const side of [-1, 1]) {
+      // A trunk from the ground up and over to the apex of the arch.
+      for (let y = Math.round(a.top); y < h; y++) {
+        const k = (y - a.top) / (h - a.top);
+        const off = side * a.span * Math.pow(Math.min(1, k * 1.8), 0.55);
+        const th = 5 + k * 9 + noise(a.x + side, y * 0.05) * 3;
+        const cx = a.x + off;
+        for (let dx = -Math.ceil(th); dx <= th; dx++) {
+          const f = dx / th;
+          let c = f < -0.3 ? 0x4a5a2c : f < 0.4 ? 0x2e3c1e : 0x1c2614;
+          // Moss on the upper side of the curve and along the back.
+          if ((side < 0 ? f > 0.2 : f < -0.2) && k < 0.5 && noise(cx + dx, y * 0.2) > 0.4) c = 0x5a8a2e;
+          if (Math.abs(f) > 0.92) c = 0x121a0c;
+          // Bark: long furrows.
+          if ((Math.round(cx + dx) + Math.round(y * 0.3)) % 5 === 0 && Math.abs(f) < 0.8) c = lerpColor(c, 0x10160a, 0.5);
+          b.set(cx + dx, y, c);
+        }
+      }
+    }
+    // Hanging roots from the apex.
+    for (let k = 0; k < 9; k++) {
+      const rx = a.x + rng.range(-a.span * 0.6, a.span * 0.6), len = rng.int(8, 40);
+      for (let y = 0; y < len; y++) b.set(rx + Math.sin(y * 0.2 + k) * 0.8, Math.round(a.top + 8 + y + Math.abs(rx - a.x) * 0.8), y > len - 3 ? 0x8a9a6a : 0x2a3a1a);
+    }
+  }
+  // A canopy across the top: dark leaves, lit at their upper edge.
+  for (let x = 0; x < w; x++) {
+    const cd = 6 + noise(x * 0.06, 1) * 14;
+    for (let y = 0; y < cd; y++) b.set(x, y, y > cd - 2 ? 0x4a7a2a : (x + y) % 3 ? 0x1e3214 : 0x2a4a1c);
+  }
+  return b.canvas();
+}
+
+// The Moss Cathedral, near: buttress roots as big as towers come down out of
+// the gloom, forking as they go, bark lit on the left and moss thick on
+// their backs, glowing caps along them, fine roots trailing, ferns below.
+function mossRoots({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const bark = [0x10160a, 0x1c2412, 0x2c361c, 0x404a28, 0x5a6236];
+  const draw = (x, y, ang, th, depth) => {
+    let len = 0;
+    const maxLen = 30 + rng.range(0, 60);
+    while (y < h + 4 && th > 1.2 && len < maxLen) {
+      for (let dx = -Math.ceil(th); dx <= th; dx++) {
+        const f = dx / th;
+        let k = 2.2 - f * 1.6 + (noise((x + dx) * 0.4, y * 0.08) - 0.5) * 1.2 + (bayer(Math.round(x + dx), y) - 0.5) * 0.6;
+        let c = bark[Math.max(0, Math.min(4, Math.round(k)))];
+        // Bark furrows running down the root.
+        if (Math.round((x + dx) * 1.3 + Math.sin(y * 0.1) * 2) % 4 === 0 && Math.abs(f) < 0.8) c = bark[0];
+        // Moss on the back (lit) side.
+        const m = noise((x + dx) * 0.2, y * 0.12);
+        if (f < 0.1 && m > 0.48) c = m > 0.62 && f < -0.4 ? 0x9ad65a : 0x4a8a2a;
+        if (Math.abs(f) > 0.94) c = 0x0a0e06;
+        b.set(Math.round(x + dx), y, c);
+      }
+      if (noise(x * 2, y * 0.5) > 0.82 && y % 5 === 0) { b.set(Math.round(x + th + 1), y, 0x9affd8); b.set(Math.round(x + th + 2), y, 0x5ad8b0); }
+      x += Math.sin(ang) * 1.0;
+      ang += (noise(x * 0.05, y * 0.05) - 0.5) * 0.12;
+      y++; len++;
+      th *= 0.996;
+    }
+    if (y < h && depth < 3) {
+      draw(x, y, ang - rng.range(0.25, 0.5), th * 0.72, depth + 1);
+      draw(x, y, ang + rng.range(0.25, 0.5), th * 0.6, depth + 1);
+    } else if (y < h) {
+      // Fine roots trailing from the tip.
+      for (let k = 0; k < 4; k++) { let fx = x + k * 2 - 3; for (let j = 0; j < 14; j++) { fx += Math.sin(j * 0.6 + k) * 0.4; b.set(Math.round(fx), y + j, j > 10 ? 0x8a9a6a : 0x2c361c); } }
+    }
+  };
+  for (let i = 0; i < 6; i++) draw(rng.range(0, w), -2, rng.range(-0.3, 0.3), rng.range(9, 15), 0);
+  // Ferns at the foot.
+  for (let x = 0; x < w; x++) {
+    const fh = Math.round(8 + noise(x * 0.08, 7) * 16);
+    for (let y = h - fh; y < h; y++) {
+      const k = (y - (h - fh)) / fh;
+      if (bayer(x, y) < 0.25 + k) b.set(x, y, k < 0.2 ? 0x6ab84a : (x * 3 + y) % 5 ? 0x1e4018 : 0x2e6a22);
+    }
+  }
+  return b.canvas();
+}
+
+const PAINTERS = { hiveTowers, clockTowers, boneRidge, glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils, cascadeCliffs, cascadeFalls, monasteryPillars, monasteryHalls, mossArches, mossRoots };
 
 export function buildBackdropTextures(scene, biomes) {
   for (const biome of Object.values(biomes)) {

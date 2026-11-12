@@ -63,7 +63,7 @@ export const STAMPS = [
   { id: 'summit-fever', page: 'daring', name: 'SUMMIT FEVER', text: `REACH ${BIOMES.obsidian.from} M IN SUMMIT MODE.`, gems: 60, goal: BIOMES.obsidian.from, unit: 'M', ...height((r) => r.mode === 'summit') },
   { id: 'brams-summit', page: 'daring', name: 'FOR BRAM', text: "STAND ON THE SUMMIT OF BRAM'S ROUTE.", gems: 30, goal: 1, ...counter('summits') },
   // Bram's dares (data/dares.js): one stamp each for reaching 500 m with it on.
-  ...[['mirror', 'LOOKING GLASS'], ['night', 'NIGHT OWL'], ['quick', 'QUICKSTEP'], ['light', 'TRAVELLING LIGHT'], ['blind', 'EYES CLOSED']].map(([id, name]) => ({
+  ...[['mirror', 'LOOKING GLASS'], ['night', 'NIGHT OWL'], ['quick', 'QUICKSTEP'], ['light', 'TRAVELLING LIGHT'], ['blind', 'EYES CLOSED'], ['shortsight', 'NEAR AND DEAR'], ['fragile', 'LIGHT TOUCH'], ['pacifist', 'STARING CONTEST'], ['tourist', 'SIGHTSEER'], ['onerope', 'ONE CHANCE']].map(([id, name]) => ({
     id: `dare-${id}`, page: 'daring', name, text: `REACH ${DARE.stampAt} M WITH THE ${DARE_BY_ID[id].name} DARE.`, gems: 30, goal: DARE.stampAt, unit: 'M',
     ...height((r) => (r.dares || []).includes(id)),
   })),

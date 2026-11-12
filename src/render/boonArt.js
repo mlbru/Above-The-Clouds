@@ -155,6 +155,59 @@ const ICONS = {
   },
 };
 
+// The new gifts (idea sheet 1.13).
+Object.assign(ICONS, {
+  // A brass metronome, its pendulum swung over, a flash at the end of the swing.
+  metronome: (g) => {
+    for (let y = 3; y <= 12; y++) { const half = Math.round(1 + (y - 3) * 0.45); g.rect(7 - half, y, half * 2 + 1, 1, y > 10 ? 0x6a4428 : 0xa8743e); }
+    g.rect(6, 6, 3, 5, 0x5a3a20);
+    g.line(7, 11, 11, 2, 0xf2c14e);
+    g.rect(9, 5, 2, 2, 0xffd870);
+    g.set(12, 1, 0xffffff); g.set(13, 2, 0xfff1a0); g.set(11, 0, 0xfff1a0);
+  },
+  // A rope hand reaching down to catch a slipping glove.
+  sherpa: (g) => {
+    g.line(3, 1, 3, 6, 0xe0503a); g.line(4, 1, 4, 6, 0xf4efe4);
+    g.rect(2, 6, 4, 3, 0xe8b48a); g.rect(2, 9, 4, 2, 0x8a5a36);
+    g.rect(8, 7, 4, 3, 0xe8b48a); g.rect(8, 10, 4, 2, 0x4f86f0);
+    g.line(5, 8, 8, 8, 0xf2c14e);
+    g.set(10, 6, 0xffffff); g.set(12, 6, 0xffffff);
+  },
+  // A thundercloud with a bolt, a green spark of grip where it lands.
+  stormcaller: (g) => {
+    g.ellipse(5, 4, 3, 2.4, 0x6a7a98); g.ellipse(9, 3.6, 3.4, 2.6, 0x8a98b8); g.ellipse(7, 5, 4.6, 2, 0x5a6684);
+    g.rect(7, 6, 2, 2, 0xffe45a); g.rect(6, 8, 2, 2, 0xffe45a); g.rect(7, 10, 2, 1, 0xffe45a); g.set(8, 11, 0xffffff);
+    g.set(10, 11, 0x8fd16a); g.set(11, 10, 0x8fd16a); g.set(11, 12, 0x8fd16a); g.set(12, 11, 0xd8ff8a);
+  },
+  // A mountain goat's head: curled horns, pale face, a little beard, on a ledge.
+  goathooves: (g) => {
+    for (const sx of [-1, 1]) for (let a = 0; a < 3.6; a += 0.18) g.set(7 + sx * (2 + Math.sin(a) * 2.6 + a * 0.4), 3 + Math.cos(a) * 2.4, 0xc8b48a);
+    g.ellipse(7, 7, 2.6, 3.2, 0xf4efe4);
+    g.rect(5, 9, 5, 2, 0xe0d8c8);
+    g.set(3, 6, 0xf4efe4); g.set(11, 6, 0xf4efe4);
+    g.set(6, 6, 0x2a2436); g.set(8, 6, 0x2a2436);
+    g.rect(6, 11, 3, 1, 0xd8d0c0); g.set(7, 12, 0xd8d0c0);
+    g.rect(1, 13, 12, 1, 0x8a8478);
+  },
+  // A black crow with a gem in its beak, one bright eye.
+  crow: (g) => {
+    g.ellipse(6, 8, 4, 3, 0x2a2436); g.ellipse(9, 5, 2.4, 2.2, 0x2a2436);
+    g.line(2, 9, 0, 12, 0x2a2436); g.line(3, 10, 1, 13, 0x2a2436);
+    g.rect(5, 7, 3, 1, 0x4a4060);
+    g.rect(11, 5, 2, 1, 0xd8a040);
+    g.set(9, 4, 0xffffff);
+    g.ellipse(12.5, 7, 1.3, 1.3, 0x6ad8ff); g.set(12, 6, 0xffffff);
+    g.line(6, 11, 5, 13, 0xd8a040); g.line(8, 11, 8, 13, 0xd8a040);
+  },
+  // A candle burnt to a stub, still lit: a golden halo round the flame.
+  lastlight: (g) => {
+    for (let a = 0; a < Math.PI * 2; a += 0.2) g.set(7 + Math.cos(a) * 5, 5 + Math.sin(a) * 4.4, 0xffd24a);
+    g.ellipse(7, 5, 1.4, 2.4, 0xff9a3c); g.ellipse(7, 5.6, 0.8, 1.2, 0xfff1a0);
+    g.rect(5, 8, 5, 4, 0xf4efe4); g.rect(5, 8, 1, 4, 0xffffff); g.rect(9, 8, 1, 4, 0xc8c0b0);
+    g.rect(4, 12, 7, 1, 0xa8743e); g.set(7, 7, 0x3a3046);
+  },
+});
+
 // A souvenir: a little tied pouch glowing with the biome's own stone.
 function souvenirIcon(g, gemColor) {
   g.ellipse(7, 8.5, 4.5, 3.8, 0x8a6a4a);

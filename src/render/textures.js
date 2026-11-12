@@ -1,6 +1,7 @@
 // Procedural pixel-art texture factory. Everything is generated at boot so the
 // game has no external art dependencies; hand-made sheets can replace any key.
 import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { buildFarTextures } from './farArt.js';
 import { darken, lighten, lerpColor, bayer, rgb } from '../utils/color.js';
 import { SeededRandom, makeNoise2D } from '../utils/seededRandom.js';
 import { drawClimberSheet, FRAME_NAMES, FRAME_W, FRAME_H, POSES } from './climberArt.js';
@@ -125,6 +126,26 @@ function specialHoldGrid(biome, kind, hazard, variant = 0) {
       g.set(cx + 4, h + 1, shade); g.set(cx - 4, h + 2, shade);
     } else if (variant === 3) g.set(cx, cy, 0x3a3028);
     else { g.set(cx - 2, cy, 0xf6f3ea); g.set(cx + 1, cy - 1, 0xf6f3ea); }
+  } else if (biome.id === 'monastery' && !hazard) {
+    // The Hanging Monastery: a red-lacquered wooden peg driven into a carved
+    // stone socket, a gold band round its end. A jug is a short plank step.
+    const red = 0xb8342a, redL = 0xe8604a, redD = 0x6a1812, gold = 0xf2c252, stone = 0x7a5a40;
+    if (jug) {
+      g.rect(1, cy - 1, w, 4, 0x8a5a34);
+      g.rect(1, cy - 1, w, 1, 0xd8a868);
+      g.rect(1, cy + 2, w, 1, 0x4a2a16);
+      for (const bx of [3, w - 2]) { g.set(bx, cy, gold); g.set(bx, cy + 3, 0x5a3a20); g.set(bx, cy + 4, 0x5a3a20); }
+      g.set(cx, cy - 1, 0xfff0c8);
+    } else {
+      g.ellipse(cx, cy + 1, 5, 3.2, stone);
+      g.ellipse(cx, cy + 1, 3.4, 2, 0x3a2418);
+      g.rect(cx - 2, cy - 2, 5, 4, red);
+      g.rect(cx - 2, cy - 2, 5, 1, redL);
+      g.rect(cx + 2, cy - 1, 1, 3, redD);
+      g.rect(cx - 2, cy + 1, 5, 1, gold);
+      g.set(cx - 1, cy - 2, 0xffd8c8);
+      g.set(cx - 4, cy, 0xa88464); g.set(cx + 4, cy + 2, 0x4a3020);
+    }
   } else return null;
   g.outline(OUT);
   return g;
@@ -841,6 +862,7 @@ export function buildAllTextures(scene, look) {
   for (const [k, g] of Object.entries(decor)) addGrid(scene, `decor_${k}`, g);
   addFramesFromGrids(scene, 'decor_flags', flagsFrames());
   buildCampTextures(scene);
+  buildFarTextures(scene);
   addFramesFromGrids(scene, 'bird', birdFrames(false));
   addFramesFromGrids(scene, 'eagle', birdFrames(true));
   addFramesFromGrids(scene, 'critter_bird', perchFrames());

@@ -25,6 +25,8 @@ export class HUD {
     this.icon = add(scene.add.image(8, 7, 'icon_mtn').setOrigin(0, 0));
     this.height = add(new PixelText(scene, 20, 6, '0 M').setScale(2));
     this.best = add(new PixelText(scene, 20, 13, '', { color: COLORS.dim }));
+    // On the Far Range: the old mountain's metres plus the new one's.
+    this.farText = add(new PixelText(scene, 20, 5, '', { color: '#9fe8d0' }));
     this.biome = add(new PixelText(scene, 8, 23, '', { color: COLORS.text }));
     // How far to the next area ("FROZEN REACH IN 80 M").
     this.next = add(new PixelText(scene, 8, 32, '', { color: COLORS.faint }));
@@ -56,11 +58,12 @@ export class HUD {
     this.blink = 0;
   }
 
-  update(dt, { heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripMax = 100, gripLow, gripCritical, modeLabel = '', accent = 0xf2c14e, slip = null }) {
+  update(dt, { far = null, heightM, best, biomeName, nextLine = '', nextColor = COLORS.faint, grip, gripMax = 100, gripLow, gripCritical, modeLabel = '', accent = 0xf2c14e, slip = null }) {
     this.next.setText(nextLine).setColor(nextColor);
     this.height.setText(`${Math.max(0, heightM).toFixed(0)} M`);
     this.best.setText(`BEST ${best.toFixed(0)} M${modeLabel ? '  ' + modeLabel : ''}`);
     this.best.setX(20 + this.height.width * 2 + 6);
+    this.farText.setText(far ? `${far.base} + ${far.far} FAR` : '').setX(this.best.x);
     this.biome.setText(biomeName);
     this.blink += dt;
     this.drawPlates(accent, slip);

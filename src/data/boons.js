@@ -2,7 +2,7 @@
 // take one of three gifts for the rest of the run. Every gift has a price.
 // Everything here is pure and seeded, so the balance sim and tests use it too
 // and a Daily Climb can hand everyone the same shrines and offers.
-import { BIOMES, SEQUENCE, LOOP_START } from './biomes.js';
+import { BIOMES, SEQUENCE, LOOP_START, LOOP, LOOP_SPAN } from './biomes.js';
 import { SeededRandom, hashInts } from '../utils/seededRandom.js';
 
 // group: grip | rhythm | route | carry | legendary
@@ -21,6 +21,13 @@ export const BOONS = [
   { id: 'warmlungs', name: 'WARM LUNGS', group: 'carry', gift: 'THERMALS RISE IN EVERY BIOME.', price: 'MISSING A THERMAL NOTE COSTS 4 GRIP.', bram: 'YOU BREATHE OUT, THE MOUNTAIN BREATHES IN.' },
   { id: 'catseyes', name: "CAT'S EYES", group: 'carry', gift: 'BLIND AND DARK NOTES NEVER FADE ALL THE WAY.', price: 'NIGHTS LAST TWICE AS LONG.', bram: 'THE NIGHT WILL WANT TO STAY AND WATCH.' },
   { id: 'icefingers', name: 'ICE FINGERS', group: 'carry', gift: 'ICY HOLDS ARE EASY, AND COUNT DOUBLE FOR YOUR STREAK.', price: 'A MISS ON LOOSE ROCK COSTS EVEN MORE.', bram: 'COLD HANDS, WARM HEART, LOOSE ROCK.' },
+  // Idea sheet 1.13 (the ones that were about sound are made to be seen).
+  { id: 'metronome', name: 'METRONOME', group: 'rhythm', gift: 'A PENDULUM SWINGS OVER THE TRACK AND FLASHES ON EVERY BEAT.', price: 'THE BEAT IS 5% FASTER.', bram: 'WATCH IT SWING. YOUR HANDS WILL FOLLOW.' },
+  { id: 'sherpa', name: 'SHERPA', group: 'grip', gift: 'ONCE PER BIOME A MISSED NOTE IS CAUGHT FOR YOU.', price: 'GEMS ARE WORTH 30% LESS.', bram: 'A FRIEND ON THE ROPE. FRIENDS TAKE A CUT.' },
+  { id: 'stormcaller', name: 'STORMCALLER', group: 'carry', gift: 'EVERY BOLT OF LIGHTNING GIVES YOU +10 GRIP.', price: 'STORMS COME IN EVERY BIOME.', bram: 'DANCE WITH THE STORM. IT LEADS.' },
+  { id: 'goathooves', name: 'GOAT HOOVES', group: 'route', gift: 'LEDGES ARE TWICE AS COMMON.', price: 'LEDGES ONLY FILL YOUR GRIP TO 60.', bram: 'A GOAT NEVER CLIMBS FAR WITHOUT A PLACE TO STAND.' },
+  { id: 'crow', name: 'OLD CROW', group: 'route', gift: 'AFTER EVERY LEDGE A CROW LEAVES A GEM ON ONE OF YOUR ROUTES.', price: 'IT STEALS ONE GEM BACK IN EVERY BIOME.', bram: 'IT KNOWS WHERE THE SHINY THINGS ARE. YOURS TOO.' },
+  { id: 'lastlight', name: 'LAST LIGHT', group: 'legendary', gift: 'WHEN YOUR GRIP RUNS OUT, TIME STOPS FOR A BEAT AND YOU HOLD ON. ONCE PER BIOME.', price: 'ONLY ONE SLIP IN THE WHOLE RUN.', bram: 'THE LAST LIGHT OF THE DAY LASTS LONGEST.' },
   { id: 'phoenix', name: 'PHOENIX', group: 'legendary', gift: 'THE FALL THAT ENDS YOUR RUN LIFTS YOU BACK TO YOUR LEDGE. ONCE.', price: 'YOU LOSE EVERY OTHER GIFT.', bram: 'FROM THE ASHES. ALONE.' },
   { id: 'secondrope', name: 'SECOND ROPE', group: 'legendary', gift: 'ONE EXTRA SLIP IN EVERY STRETCH OF THREE BIOMES.', price: 'ALL GEMS ARE WORTH 25% LESS.', bram: 'A SPARE LIFE. IT COSTS A FORTUNE.' },
   { id: 'wildroute', name: 'WILD ROUTE', group: 'legendary', gift: 'A FOURTH ROUTE CLIMBS TWICE AS HIGH.', price: 'MISSES ON IT COST DOUBLE GRIP.', bram: 'NOBODY KNOWS WHERE IT GOES. THAT IS THE POINT.' },
@@ -56,6 +63,7 @@ export const SYNERGIES = [
   { id: 'tailwind', name: 'TAILWIND', pair: ['warmlungs', 'featherweight'], text: 'A THERMAL RIDE COUNTS TWICE TOWARDS THE 3 CLEAN CLIMBS.' },
   { id: 'moonsong', name: 'MOON SONG', pair: ['catseyes', 'songbird'], text: 'AT NIGHT THE SONGBIRD SHOWS NOTES AS EARLY AS EVER.' },
   { id: 'secondwind', name: 'SECOND WIND', pair: ['flask', 'deepbreath'], text: 'THE FLASK FILLS YOUR GRIP RIGHT UP.' },
+  { id: 'nightshift', name: 'NIGHT SHIFT', pair: ['catseyes', 'stormcaller'], text: 'STORMS ONLY COME AT NIGHT, AND LIGHTNING LIGHTS UP EVERY NOTE ON THE TRACK.' },
 ];
 
 export const SHRINE = {
@@ -84,9 +92,8 @@ export function boonCard(id) {
 // The biome id of the k-th biome stretch (0 = the Green Rise) and where it starts.
 export function stretchAt(k) {
   if (k < SEQUENCE.length) return { biome: SEQUENCE[k], from: BIOMES[SEQUENCE[k]].from };
-  const loop = ['hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
   const j = k - SEQUENCE.length;
-  return { biome: loop[j % loop.length], from: LOOP_START + j * 173 };
+  return { biome: LOOP[j % LOOP.length], from: LOOP_START + j * LOOP_SPAN };
 }
 
 // Index of the stretch that starts at `fromMeters` (or holds it).
@@ -148,6 +155,7 @@ export function boonEffects(held = []) {
   let ledgeFill = 1;
   if (has('steadypace')) ledgeFill = Math.min(ledgeFill, 0.75);
   if (has('flask')) ledgeFill = Math.min(ledgeFill, 0.9);
+  if (has('goathooves')) ledgeFill = Math.min(ledgeFill, 0.6);
   return {
     maxGrip: has('deepbreath') ? 120 : 100,
     // Share of the normal grip (100) a ledge fills, before DEEP BREATH raises the cap.
@@ -160,7 +168,17 @@ export function boonEffects(held = []) {
     noFlawlessBonus: has('ironnerve'),
     streakPerPerfect: has('echo') ? 2 : 1,
     missExtraCost: has('echo') ? 2 : 0,
-    beatScale: has('steadypace') ? 1.05 : 1,
+    beatScale: (has('steadypace') ? 1.05 : 1) * (has('metronome') ? 0.95 : 1),
+    metronome: has('metronome'),
+    sherpa: has('sherpa'),
+    lightningGrip: has('stormcaller') ? 10 : 0,
+    // Biome rules carried everywhere (biome ids, like the souvenirs).
+    carry: has('stormcaller') ? ['storm'] : [],
+    restScale: has('goathooves') ? 0.5 : 1,
+    crow: has('crow'),
+    lastLight: has('lastlight'),
+    oneSlip: has('lastlight'),
+    nightShift: syn.has('nightshift'),
     songbird: has('songbird'),
     lateReveal: has('songbird') ? 0.7 : 1,
     noSafe: has('gambler'),
@@ -180,7 +198,7 @@ export function boonEffects(held = []) {
     phoenix: has('phoenix'),
     secondRope: has('secondrope'),
     wildRoute: has('wildroute'),
-    gemScale: (has('secondrope') ? 0.75 : 1) * (1 + 0.5 * souvenirs.length),
+    gemScale: (has('secondrope') ? 0.75 : 1) * (has('sherpa') ? 0.7 : 1) * (1 + 0.5 * souvenirs.length),
     souvenirs: souvenirs.map((id) => SOUVENIR_MECHANICS[souvenirBiome(id)].mechanic),
     hoardSong: syn.has('hoardsong'),
     highRoller: syn.has('highroller'),

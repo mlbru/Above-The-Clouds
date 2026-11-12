@@ -186,6 +186,136 @@ export const WALL_OVERLAYS = {
     if (p.lit && p.ov > 0.5 && bayer(p.x, p.wy) < (p.ov - 0.5) * 3) p.c = lerpColor(p.c, 0xc8c0b8, 0.45);
     if ((hashInts(p.x, p.wy, 67) & 4095) < 2) p.c = pal.accentC;
   },
+  // The Cascade: the basalt is always wet. Water runs down it in sheets
+  // that shine where the light hits, dark streaks where it has soaked in,
+  // and beads of water glinting on the lit faces. The rock stands in
+  // columns of uneven width, broken across here and there.
+  slick(p) {
+    const { pal } = p;
+    if (p.dEdge < 2) return;
+    const u = p.x + (p.painter.ice(p.wy * 0.008, 3.1) - 0.5) * 18;
+    const col = Math.floor(u / 13), cu = ((u % 13) + 13) % 13;
+    const break_ = (p.wy + (hashInts(col, 0, 97) % 53)) % 53;
+    if (p.dn > 0.3 && !p.seam) {
+      if (cu < 1) p.c = lerpColor(p.c, pal.rock[0], 0.55);
+      else if (cu < 2 && p.lit) p.c = lerpColor(p.c, pal.rock[4], 0.3);
+      else if (break_ === 0 && hashInts(col, Math.floor((p.wy + (hashInts(col, 0, 97) % 53)) / 53), 5) % 3 === 0) p.c = lerpColor(p.c, pal.rock[0], 0.6);
+    }
+    const run = p.painter.ice(p.x * 0.35, p.wy * 0.012);
+    if (hashInts(Math.floor(p.x / 3), 0, 71) % 5 < 2 && run > 0.62) {
+      // A film of running water: dark and glassy, a bright line along one side.
+      p.c = lerpColor(p.c, 0x061014, 0.4);
+      if (p.lit && p.x % 3 === 0) p.c = lerpColor(p.c, 0xc8f0f8, 0.5);
+      if ((p.wy + p.x * 7) % 23 === 0) p.c = 0xe8fcff;
+    }
+    if (p.lit && (hashInts(p.x, p.wy, 73) & 511) < 2) p.c = 0xffffff;
+  },
+  // Moss and ferns in the damp: soft moss in the hollows, and here and there
+  // a fern, its fronds fanning out from a dark heart, lit along the top.
+  ferns(p) {
+    const { pal } = p;
+    if (p.seam || p.dEdge < 3) return;
+    if (p.ov > 0.62 && !p.lit && bayer(p.x, p.wy) < (p.ov - 0.62) * 6) p.c = lerpColor(p.c, pal.accentA, 0.55);
+    const C = 26, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    for (let oy = 0; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const cx0 = gx + ox, cy0 = gy + oy;
+      const hsh = hashInts(cx0, cy0, 101);
+      if (hsh % 3) continue;
+      const fx = cx0 * C + 4 + (hsh >> 4) % (C - 8), fy = cy0 * C + 4 + (hsh >> 9) % (C - 8);
+      const dx = p.x - fx, dy = p.wy - fy;
+      const d = Math.hypot(dx, dy);
+      const R = 6 + (hsh >> 13) % 5;
+      if (d > R || dy > 2) continue;
+      const a = Math.atan2(dy, dx);
+      // Five fronds fanning up and out, arching down at their tips.
+      const fronds = [-2.6, -2.1, -1.57, -1.05, -0.55];
+      for (const fa of fronds) {
+        const droop = fa + (d / R) * 0.5 * Math.sign(Math.cos(fa));
+        if (Math.abs(a - droop) < 0.32 - d * 0.02) {
+          p.c = d > R * 0.55 && a < -1.2 ? pal.accentB : d < 2 ? lerpColor(pal.accentA, pal.rock[0], 0.5) : pal.accentA;
+          if (Math.abs(a - droop) < 0.06 && d > 2) p.c = lerpColor(pal.accentA, pal.rock[0], 0.35);
+          return;
+        }
+      }
+    }
+  },
+  // The Hanging Monastery: little arched niches cut into the rock, each with
+  // a carved figure or a candle, and rows of carved marks under the ledges.
+  niches(p) {
+    const { pal } = p;
+    if (p.dEdge < 6 || p.seam) return;
+    const CW = 46, CH = 58;
+    const gx = Math.floor(p.x / CW), gy = Math.floor(p.wy / CH);
+    const hsh = hashInts(gx, gy, 79);
+    if (hsh % 4) return;
+    const cx = gx * CW + 12 + (hsh >> 3) % 22, cy = gy * CH + 14 + (hsh >> 7) % 26;
+    const dx = p.x - cx, dy = p.wy - cy;
+    const w = 5, h = 9;
+    // An arch: straight sides, a round top.
+    const inArch = Math.abs(dx) <= w && dy <= h && (dy >= 0 || dx * dx + dy * dy <= w * w);
+    const onRim = Math.abs(dx) <= w + 1 && dy <= h + 1 && (dy >= 0 || dx * dx + dy * dy <= (w + 1) * (w + 1));
+    if (inArch) {
+      p.c = lerpColor(pal.rock[0], 0x0a0604, 0.3);
+      // A candle and its glow, or a small seated figure.
+      if ((hsh >> 11) % 2) {
+        if (dx === 0 && dy >= h - 3 && dy < h) p.c = 0xf4ead8;
+        else if (dx === 0 && dy === h - 4) p.c = 0xffd060;
+        else if (Math.abs(dx) <= 2 && dy >= h - 6 && dy < h) p.c = lerpColor(p.c, 0xb86a2a, 0.35);
+      } else {
+        const fd = dx * dx / 9 + (dy - 5) * (dy - 5) / 12;
+        if (fd < 1) p.c = dy < 3 ? lerpColor(pal.accentB, pal.rock[2], 0.4) : lerpColor(pal.accentB, pal.rock[1], 0.55);
+        if (dx * dx + (dy - 1) * (dy - 1) <= 2) p.c = lerpColor(pal.accentB, pal.rock[3], 0.3);
+      }
+    } else if (onRim) p.c = dy < 0 || dx < 0 ? pal.rock[4] : pal.rock[1];
+    else if (dy === h + 2 && Math.abs(dx) <= w + 2) p.c = pal.rock[1];
+  },
+  // Painted panels on the rock where a shrine once stood: whitewash framed
+  // in red with a gold line, the paint flaking at the edges.
+  stucco(p) {
+    const { pal } = p;
+    if (p.dEdge < 5 || p.seam) return;
+    const CW = 52, CH = 40;
+    const gx = Math.floor(p.x / CW), gy = Math.floor(p.wy / CH);
+    const hsh = hashInts(gx, gy, 113);
+    if (hsh % 5) return;
+    const w = 14 + (hsh >> 3) % 16, h = 10 + (hsh >> 8) % 12;
+    const x0 = gx * CW + 4 + (hsh >> 12) % (CW - w - 6), y0 = gy * CH + 4 + (hsh >> 16) % (CH - h - 6);
+    const dx = p.x - x0, dy = p.wy - y0;
+    const flake = (p.painter.ice(p.x * 0.4, p.wy * 0.4) - 0.5) * 3;
+    if (dx < flake || dy < flake * 0.6 || dx > w - flake || dy > h - flake * 0.6) return;
+    if (dx < 2 || dy < 2 || dx > w - 2 || dy > h - 2) p.c = lerpColor(pal.accentA, pal.rock[1], 0.25);
+    else if (dx === 2 || dy === 2 || dx === w - 2 || dy === h - 2) p.c = lerpColor(pal.accentB, pal.rock[2], 0.3);
+    else p.c = lerpColor(0xe8dcc4, pal.rock[3], 0.25 + (bayer(p.x, p.wy) < 0.25 ? 0.15 : 0));
+    // A faded painted mark in the middle of some panels.
+    if ((hsh >> 20) % 2 && Math.abs(dx - w / 2) < 2 && Math.abs(dy - h / 2) < 3) p.c = lerpColor(pal.accentA, 0xe8dcc4, 0.35);
+  },
+  // The Moss Cathedral: a deep cushion of moss over the old stone, bright
+  // on top of every bump, with tiny glowing sporecaps here and there.
+  cushion(p) {
+    const { pal } = p;
+    if (p.dEdge < 2) return;
+    const m = p.ov * 0.7 + p.painter.ice(p.x * 0.12, p.wy * 0.12) * 0.3;
+    if (m > 0.5) {
+      const k = Math.min(1, (m - 0.5) * 4);
+      p.c = p.lit ? lerpColor(pal.accentA, pal.accentB, k * 0.7) : p.idx <= 1 ? lerpColor(pal.rock[1], pal.accentA, 0.5) : lerpColor(pal.accentA, pal.rock[2], 0.35);
+      if (p.lit && bayer(p.x, p.wy) < k * 0.25) p.c = pal.accentC;
+    } else if (m > 0.46 && bayer(p.x, p.wy) < (m - 0.46) * 25) p.c = lerpColor(p.c, pal.accentA, 0.5);
+    if ((hashInts(p.x, p.wy, 83) & 1023) < 2) p.c = 0xd8ffa8;
+  },
+  // Roots creeping down through the moss and into the cracks, bark-brown
+  // with a lit edge, splitting as they go.
+  rootveins(p) {
+    const { pal } = p;
+    if (p.dEdge < 4) return;
+    const wob = p.painter.ice(p.wy * 0.025, Math.floor(p.x / 38) * 3.7) * 22;
+    const cx = Math.floor(p.x / 38) * 38 + 19 + wob - 11;
+    const d = Math.abs(p.x - cx);
+    const on = hashInts(Math.floor(p.x / 38), Math.floor(p.wy / 140), 89) % 3 !== 0;
+    if (!on) return;
+    const w = 1.5 + p.painter.ice(p.x * 0.01, p.wy * 0.01) * 2.5;
+    if (d < w) p.c = d < w - 1 ? (p.x < cx ? 0x8a6a40 : 0x4a3220) : 0x2a1c10;
+    else if (d < w + 1) p.c = lerpColor(p.c, pal.rock[0], 0.5);
+  },
   // Glowing mineral veins and scattered glints.
   veins(p) {
     const { pal } = p;

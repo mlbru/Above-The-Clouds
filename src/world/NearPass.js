@@ -13,6 +13,7 @@ const KIND = {
   green: ['crane', 'leaves'], stone: ['crane'], frozen: ['snow'], clouds: ['cloud', 'crane'], hive: ['bees'],
   obsidian: ['bats'], crystal: ['shards', 'cloud'], clockwork: ['steam'], storm: ['cloud'], aurora: ['snow', 'cloud'],
   bones: ['embers'], dragon: ['embers'], volcano: ['embers'], sky: ['cloud'],
+  cascade: ['spray', 'crane'], monastery: ['lanterns', 'petals'], moss: ['spores', 'leaves'],
 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -68,6 +69,10 @@ export class NearPass {
     }
     if (kind === 'bees') { c.ms = 2400; c.bits = Array.from({ length: 34 }, (_, i) => ({ o: i * 0.035 + rnd(0, 0.02), dy: rnd(-12, 12), ph: rnd(0, 6) })); }
     if (kind === 'bats') { c.ms = 2000; c.bits = Array.from({ length: 5 }, (_, i) => ({ o: i * 0.07, dy: rnd(-26, 26), ph: rnd(0, 6), s: rnd(0.8, 1.3) })); }
+    if (kind === 'spray') { c.ms = 2200; c.bits = Array.from({ length: 70 }, () => ({ x: rnd(-80, W + 80), y: rnd(-20, H * 0.6), s: rnd(1, 3), v: rnd(0.7, 1.5), ph: rnd(0, 6) })); }
+    if (kind === 'petals') { c.ms = 2600; c.bits = Array.from({ length: 22 }, () => ({ x: rnd(-60, W + 60), y: rnd(-20, H * 0.55), s: rnd(2, 4), v: rnd(0.7, 1.3), ph: rnd(0, 6) })); }
+    if (kind === 'spores') { c.ms = 4200; c.bits = Array.from({ length: 30 }, () => ({ x: rnd(0, W), y: rnd(H * 0.1, H * 0.7), s: rnd(1, 3), v: rnd(0.5, 1.2), ph: rnd(0, 6) })); }
+    if (kind === 'lanterns') { c.ms = 5200; c.bits = Array.from({ length: 4 }, (_, i) => ({ x: rnd(30, W - 30), y0: H * 0.72 + i * 34 + rnd(0, 20), s: rnd(0.8, 1.4), ph: rnd(0, 6) })); }
     if (kind === 'steam') { c.ms = 2600; c.bits = Array.from({ length: 7 }, (_, i) => ({ o: i * 0.06, dy: rnd(-14, 14), r: rnd(16, 34) })); }
     this.cur = c;
   }
@@ -177,6 +182,70 @@ export class NearPass {
       const x = Math.round(b.x), y = Math.round(b.y), s = Math.round(b.s);
       a.fillStyle(0xff6a1a, 0.25 * fade * fl).fillCircle(x, y, s * 2);
       g.fillStyle(fl > 0.8 ? 0xffe080 : 0xff9a3c, fade).fillRect(x - Math.floor(s / 2), y - Math.floor(s / 2), s, s);
+    }
+  }
+
+  // A sheet of spray off a waterfall, blown right across the lens, with a
+  // little rainbow where the sun shines through it.
+  spray(g, a, c, k, dt) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 1.8);
+    g.fillStyle(0xf4fcff, 0.14 * fade).fillRect(0, 0, W, Math.round(H * 0.66));
+    for (const b of c.bits) {
+      b.x += c.dir * b.v * dt * 0.5;
+      b.y += dt * 0.05 * b.v;
+      if (b.y > H * 0.66) continue;
+      g.fillStyle(0xffffff, 0.75 * fade).fillRect(Math.round(b.x), Math.round(b.y), b.s > 2 ? 2 : 1, Math.round(b.s));
+    }
+    if (c.night < 0.5) {
+      const cx = W / 2 + Math.sin(k * 3) * 40, cy = H * 0.62;
+      [0xff5a5a, 0xffb040, 0xfff070, 0x6ae070, 0x5aa8ff, 0x9a70f0].forEach((col, i) => {
+        a.lineStyle(3, col, 0.16 * fade * (1 - c.night * 2));
+        a.beginPath(); a.arc(cx, cy, 150 - i * 3, Math.PI * 1.1, Math.PI * 1.9); a.strokePath();
+      });
+    }
+  }
+
+  // Red and pink petals from the shrine trees, tumbling past.
+  petals(g, a, c, k, dt) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 2);
+    for (const b of c.bits) {
+      b.x += c.dir * b.v * dt * 0.22;
+      b.y += dt * 0.035 * b.v + Math.sin(c.t / 300 + b.ph) * 0.4;
+      if (b.y > H * 0.66) continue;
+      const turn = Math.abs(Math.sin(c.t / 160 + b.ph));
+      const x = Math.round(b.x), y = Math.round(b.y), s = Math.round(b.s);
+      g.fillStyle(0xe8604a, fade).fillRect(x, y, Math.max(1, Math.round(s * 1.4 * turn)), s);
+      g.fillStyle(0xffc0b0, fade).fillRect(x, y, Math.max(1, Math.round(s * 0.6 * turn)), 1);
+    }
+  }
+
+  // Sky lanterns let go from the monastery, rising slowly right past you:
+  // paper glowing gold, a flame inside, a halo around each.
+  lanterns(g, a, c, k) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 2.5);
+    for (const b of c.bits) {
+      const y = Math.round(b.y0 - k * (H * 0.95) * b.s), x = Math.round(b.x + Math.sin(c.t / 900 + b.ph) * 10);
+      if (y > H * 0.7 || y < -40) continue;
+      const s = b.s, w = Math.round(9 * s), h = Math.round(12 * s);
+      a.fillStyle(0xffa040, 0.16 * fade).fillCircle(x, y, 20 * s);
+      a.fillStyle(0xffd080, 0.12 * fade).fillCircle(x, y, 11 * s);
+      g.fillStyle(0xd8402a, fade).fillRect(x - Math.round(w / 2), y - Math.round(h / 2), w, h);
+      g.fillStyle(0xffb050, fade).fillRect(x - Math.round(w / 2) + 1, y - Math.round(h / 2) + 1, w - 2, h - 3);
+      g.fillStyle(0xfff0b0, fade).fillRect(x - 1, y + Math.round(h / 2) - 4, 3, 2);
+      g.fillStyle(0x6a1a10, fade).fillRect(x - Math.round(w / 2), y - Math.round(h / 2), w, 1).fillRect(x - Math.round(w / 2), y + Math.round(h / 2) - 1, w, 1);
+    }
+  }
+
+  // Spores drifting up past the lens, big, soft and glowing.
+  spores(g, a, c, k, dt) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 1.6);
+    for (const b of c.bits) {
+      b.y -= dt * 0.02 * b.v;
+      b.x += Math.sin(c.t / 700 + b.ph) * 0.25;
+      if (b.y > H * 0.7) continue;
+      const tw = 0.6 + 0.4 * Math.sin(c.t / 250 + b.ph), x = Math.round(b.x), y = Math.round(b.y);
+      a.fillStyle(0xb8ff6a, 0.12 * fade * tw).fillCircle(x, y, b.s * 4);
+      a.fillStyle(0xe8ffb0, 0.7 * fade * tw).fillRect(x - Math.floor(b.s / 2), y - Math.floor(b.s / 2), Math.ceil(b.s), Math.ceil(b.s));
     }
   }
 

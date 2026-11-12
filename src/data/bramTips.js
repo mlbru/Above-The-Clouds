@@ -33,7 +33,12 @@ export const BRAM_TIPS = {
   double: 'TWO ARROWS STACKED? PRESS BOTH AT\nONCE, ONE WITH EACH HAND.',
   roll: 'A DOTTED TAIL: TAP THAT ARROW AGAIN AND\nAGAIN UNTIL ALL THE DOTS ARE GONE!',
   roped: 'TWO ARROWS ON A ROPE COME IN SWAPPED.\nWATCH THEM HOP, THEN PRESS THE NEW ORDER.',
+  spray: 'SPRAY! READ THE NOTES THROUGH THE WATER.\nPERFECTS IN IT PAINT A RAINBOW: FILL IT, CLIMB FREE.',
+  bells: 'WATCH THE BELLS LIGHT THE ARROWS UP, THEN\nCLIMB THE BLANK BELLS FROM MEMORY.',
+  vines: 'A VINE: HOLD THE ARROW ALONG IT AND PRESS\nTHE NEXT ONE WHERE IT BENDS. DON\'T LET GO EARLY!',
+  tea: 'THE MONK POURS YOU TEA. YOUR NEXT CLIMB\nCOSTS NO GRIP.',
+  rescue: 'SOMEONE IS STUCK! TAKE THEIR ROUTE AND THEY\nFOLLOW YOU. EVERY MISS YOU MAKE, THEY MAKE TOO.',
 };
 
 // Route tags (from the segment generator) that have their own tip.
-export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', ROPED: 'roped', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears' };
+export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', ROPED: 'roped', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears', SPRAY: 'spray', BELLS: 'bells', VINES: 'vines', RESCUE: 'rescue' };

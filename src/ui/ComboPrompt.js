@@ -7,6 +7,7 @@ import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { darkAlpha } from '../systems/mechanics/Darkness.js';
 import { gearTicks } from '../systems/mechanics/Gears.js';
 import { Audio } from '../systems/AudioSystem.js';
+import { BELLS } from '../systems/mechanics/Bells.js';
 
 const PX_PER_MS = 0.085;
 // Note colours, by the NOTE COLOURS setting (applyNotePalette). Mirrored
@@ -34,8 +35,12 @@ export const SWARM_TINT = 0xffb840;
 // Gear notes (the Clockwork Bastion) sit on a brass cog.
 export const GEAR_TINT = 0xf0c870;
 const stillTint = (note) => (note.swarm ? SWARM_TINT : STILL_TINT);
-const bigKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm' : note.still ? 'icon_still' : `arrow_${dir}`);
+const bigKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm' : note.still ? 'icon_still' : note.echo ? 'icon_bell' : `arrow_${dir}`);
 const smallKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm_s' : note.still ? 'icon_still_s' : `arrow_s_${dir}`);
+// The Hanging Monastery's bells: echo notes are gold bells, the call lights
+// the row of arrows one by one. The Moss Cathedral's vines are green.
+export const BELL_TINT = 0xf2c252;
+const VINE = 0x5ab83a, VINE_LIT = 0xb8ff6a, VINE_DARK = 0x2a5a18;
 const TRACK_W = 200;
 const TRACK_X = Math.round(GAME_WIDTH / 2 - TRACK_W / 2);
 export const HIT_X = TRACK_X + 30;
@@ -121,15 +126,20 @@ export class ComboPrompt {
     // Trail Boons: SONGBIRD lets notes in later, CAT'S EYES keeps faded notes faintly lit.
     const boon = (this.scene.boonView && this.scene.boonView()) || {};
     this.minAlpha = boon.minAlpha || 0;
+    this.metronome = !!boon.metronome;
     if (boon.lateReveal && boon.lateReveal < 1) {
       const late = Math.round(((TRACK_X + TRACK_W - HIT_X) / PX_PER_MS) * boon.lateReveal);
       if (!this.revealMs || late < this.revealMs) this.revealMs = late;
     }
+    // The Cascade's spray curtain and the Monastery's bell call (see update).
+    this.spray = route.spray || null;
+    this.sprayT0 = null;
+    this.echo = route.echo ? { t0: null, step: Math.round(BELLS.stepBeats * combo.beatMs), lit: -1, rings: [] } : null;
     const n = combo.notes.length;
     const seqX = Math.round(GAME_WIDTH / 2 - (n * 10) / 2);
     combo.notes.forEach((note, i) => {
       const big = this.add.image(0, TRACK_Y, bigKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 2);
-      const small = this.add.image(seqX + i * 10 + 4, TRACK_Y - 20, smallKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 2);
+      const small = this.add.image(seqX + i * 10 + 4, TRACK_Y - 20, note.echo ? 'icon_bell_s' : smallKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 2);
       // A double note stacks its two arrows, a little smaller.
       let big2 = null, small2 = null;
       if (note.chord) {
@@ -140,7 +150,7 @@ export class ComboPrompt {
       }
       // A short bar under the small arrow marks a hold note in the sequence
       // (dotted for a roll).
-      const holdBar = note.holdMs ? this.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, 7, 1, 0xf2c14e).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2)
+      const holdBar = note.holdMs ? this.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, note.vine ? 10 : 7, 1, note.vine ? VINE : 0xf2c14e).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2)
         : note.rollMs ? this.add.rectangle(seqX + i * 10 + 1, TRACK_Y - 15, 7, 1, 0x9fffd0).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2) : null;
       // A gear note's cog turns behind it, on the track and in the sequence row.
       const cog = note.gear ? this.add.image(0, TRACK_Y, 'icon_cog').setScrollFactor(0).setDepth(DEPTH.hud + 1.9).setTint(GEAR_TINT) : null;
@@ -194,6 +204,9 @@ export class ComboPrompt {
     g.fillRect(HIT_X - 1, TRACK_Y - 8, 3, 17);
     g.fillStyle(0xffffff, 1);
     g.fillRect(HIT_X, TRACK_Y - 9, 1, 19);
+    // Boons can change from beat to beat (NIGHT SHIFT's lightning).
+    if (this.scene.boonView) this.minAlpha = this.scene.boonView().minAlpha || 0;
+    if (this.metronome) this.drawMetronome(g, now);
     // Whiteout: a wall of snow on the track that notes come out of.
     if (this.revealMs) {
       const fx = Math.round(HIT_X + this.revealMs * PX_PER_MS);
@@ -212,6 +225,8 @@ export class ComboPrompt {
     const t = this.scene.time.now;
     const clipR = TRACK_X + TRACK_W - 4;
     let gustSoon = false;
+    const curtain = this.spray ? this.drawSpray(g, now, t) : null;
+    if (this.echo) this.updateCall(g, now, t);
     this.items.forEach((it) => {
       const note = it.note;
       const isCur = note === c.current;
@@ -262,7 +277,8 @@ export class ComboPrompt {
         if (note.time - now < 1600) gustSoon = true;
       }
       // Hold tails: a bar that must be kept pressed until its end.
-      if (note.holdMs && (!note.result || note.holding)) {
+      if (note.vine && (!note.result || note.holding)) this.drawVine(g, note, x, clipR, t);
+      else if (note.holdMs && (!note.result || note.holding)) {
         const x0 = Math.max(note.holding ? HIT_X : TRACK_X, Math.round(x));
         const x1 = Math.min(clipR, Math.round(x + note.holdMs * PX_PER_MS));
         if (x1 > x0) {
@@ -335,10 +351,20 @@ export class ComboPrompt {
         // Darkness: every note is a faint shape that flashes up on the beat.
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
         if (this.minAlpha && (note.hidden || this.revealMs || this.dark)) alpha = Math.max(alpha, this.minAlpha * (isCur ? 1 : 0.8));
-        it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
-        if (note.swap) it.big.setY(TRACK_Y + swapY);
-        const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
+        // Behind the spray curtain a note ripples: it bobs and shimmers.
+        let wet = 0;
+        if (curtain && Math.abs(x - curtain.x) < curtain.w / 2) {
+          wet = 1 - Math.abs(x - curtain.x) / (curtain.w / 2);
+          alpha *= 0.75 + 0.25 * Math.sin(t / 70 + note.index * 2.1);
+        }
+        const wobX = wet ? Math.round(Math.sin(t / 95 + note.index * 1.7) * 1.5 * wet) : 0;
+        it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x) + wobX).setAlpha(alpha);
+        it.big.setY(TRACK_Y + (note.swap ? swapY : 0) + (wet ? Math.round(Math.sin(t / 80 + note.index * 2.3) * 3 * wet) : 0));
+        let tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.echo ? (isCur ? 0xfff0a8 : BELL_TINT) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
+        if (wet) tint = lerpColor(tint, 0xd8f8ff, 0.35 * wet);
         it.big.setTint(tint);
+        // A vine's next note sits in a ring of leaves.
+        if (visible && alpha > 0.1 && note.index > 0 && c.notes[note.index - 1].vine) this.drawLeaves(g, Math.round(x), TRACK_Y, t, note.index);
         if (note.chord) {
           // The first arrow already pressed lights up while the other is awaited.
           const p = note.pressed && note.pressed.dir;
@@ -367,13 +393,162 @@ export class ComboPrompt {
           for (let k = 0; k < 3; k++) g.fillRect(Math.round(x) - 3 + k * 3, TRACK_Y + 6 - ((Math.floor(t / 90) + k * 2) % 5), 1, 2);
         }
         const bob = isCur ? Math.round(1 + Math.sin(t / 90)) : 0;
-        it.small.setTint(note.still ? stillTint(note) : note.mirror ? NOTE_TINT.mirror : note.thermal ? NOTE_TINT.thermal : isCur ? 0xf2c14e : note.gust ? NOTE_TINT.gust : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
+        if (note.echo) it.small.setTint(this.echo && it.callLit ? 0xffffff : isCur ? 0xf2c14e : 0xb8862a).setY(TRACK_Y - 20 - bob);
+        else it.small.setTint(note.still ? stillTint(note) : note.mirror ? NOTE_TINT.mirror : note.thermal ? NOTE_TINT.thermal : isCur ? 0xf2c14e : note.gust ? NOTE_TINT.gust : 0xa8a3b8).setY((note.chord ? TRACK_Y - 22 : TRACK_Y - 20) - bob);
         if (it.small2) it.small2.setTint(isCur ? 0xf2c14e : 0xa8a3b8).setY(TRACK_Y - 17 - bob);
       }
       if (it.holdBar) it.holdBar.setVisible(!note.result || note.holding);
     });
     if (this.gustIcon) this.gustIcon.setVisible(gustSoon && Math.floor(t / 200) % 2 === 0);
     if (this.glow && !c.current) this.glow.setVisible(false);
+  }
+
+  // METRONOME (a gift): a little brass metronome left of the track, its arm
+  // swinging from side to side and reaching the end of each swing on the
+  // beat, when the hit line flashes gold.
+  drawMetronome(g, now) {
+    const c = this.combo;
+    const t0 = c.notes[0].time, b = c.beatMs;
+    const ph = (now - t0) / b;
+    const frac = ((ph % 1) + 1) % 1;
+    const tick = Math.max(0, 1 - Math.min(frac, 1 - frac) * b / 110);
+    const x = TRACK_X - 16, y = TRACK_Y + 9;
+    // The body: a wooden pyramid with a brass face.
+    for (let k = 0; k < 20; k++) {
+      const half = Math.round(2 + k * 0.32);
+      g.fillStyle(k === 19 ? 0x16141f : 0x6a4428, 1).fillRect(x - half - 1, y - k, half * 2 + 3, 1);
+      g.fillStyle(k > 17 ? 0x3a2414 : 0x9a6a3a, 1).fillRect(x - half, y - k, half * 2 + 1, 1);
+    }
+    g.fillStyle(0xd8a040, 1).fillRect(x - 1, y - 16, 3, 12);
+    // The arm: a cosine swing, at an end on every beat.
+    const ang = Math.cos(ph * Math.PI) * 0.55;
+    const ax = x + Math.sin(ang) * 22, ay = y - 3 - Math.cos(ang) * 22;
+    g.lineStyle(1, 0xf2c14e, 1).lineBetween(x, y - 3, ax, ay);
+    g.fillStyle(0xffd870, 1).fillRect(Math.round(x + Math.sin(ang) * 14) - 1, Math.round(y - 3 - Math.cos(ang) * 14) - 1, 3, 3);
+    if (tick > 0) {
+      g.fillStyle(0xffffff, tick).fillRect(Math.round(ax) - 1, Math.round(ay) - 1, 3, 3);
+      g.fillStyle(0xffd870, 0.55 * tick).fillRect(HIT_X - 2, TRACK_Y - 10, 5, 21);
+    }
+  }
+
+  // ---- The Cascade: a curtain of spray sweeping across the track. Returns
+  // { x, w } (track coordinates) so the notes behind it can ripple.
+  drawSpray(g, now, t) {
+    const sp = this.spray, c = this.combo;
+    if (this.sprayT0 === null) this.sprayT0 = now;
+    // The curtain swings to and fro across the track like the waterfall it
+    // comes from: one full swing every sweepBeats.
+    const ph = ((now - this.sprayT0) / (sp.sweepBeats * c.beatMs)) * Math.PI * 2 + (sp.fromLeft ? -Math.PI / 2 : Math.PI / 2);
+    const cx = TRACK_X + TRACK_W / 2 + Math.sin(ph) * (TRACK_W / 2 + 8);
+    const half = sp.width / 2;
+    const x0 = Math.max(TRACK_X - 4, Math.round(cx - half)), x1 = Math.min(TRACK_X + TRACK_W + 4, Math.round(cx + half));
+    if (x1 > x0) {
+      for (let x = x0; x < x1; x++) {
+        const k = 1 - Math.abs(x - cx) / half;
+        g.fillStyle(0xe8faff, 0.12 + 0.28 * k).fillRect(x, TRACK_Y - 10, 1, 21);
+        // Threads of falling water, each running down at its own speed.
+        if (x % 2 === 0) {
+          const sp2 = 0.06 + ((x * 7) % 5) * 0.014;
+          const y = TRACK_Y - 10 + Math.floor((t * sp2 + x * 13) % 24);
+          if (y < TRACK_Y + 10) g.fillStyle(0xffffff, 0.5 + 0.5 * k).fillRect(x, y, 1, 4);
+        }
+      }
+      // Pale edges, and drops spattering off the top of the frame.
+      g.fillStyle(0xffffff, 0.35).fillRect(x0, TRACK_Y - 10, 1, 21).fillRect(x1 - 1, TRACK_Y - 10, 1, 21);
+      for (let i = 0; i < 8; i++) {
+        const dx = ((i * 37 + Math.floor(t / 50)) % sp.width) - half;
+        const hop = Math.abs(Math.sin(t / 130 + i)) * 6;
+        if (cx + dx > TRACK_X && cx + dx < TRACK_X + TRACK_W) g.fillStyle(0xffffff, 0.9).fillRect(Math.round(cx + dx), Math.round(TRACK_Y - 12 - hop), 1, 2);
+      }
+    }
+    // The rainbow it is painting: one band per perfect in the spray, a small
+    // arc above the right end of the track.
+    const spray = this.scene.mechanics && this.scene.mechanics.get('spray');
+    if (spray) this.drawRainbowMeter(g, TRACK_X + TRACK_W - 16, TRACK_Y - 13, spray.rainbow, spray.cfg.rainbowNeed, t);
+    return { x: cx, w: sp.width };
+  }
+
+  drawRainbowMeter(g, cx, cy, filled, need, t) {
+    const bands = [0xff5a5a, 0xffa040, 0xfff070, 0x6ae070, 0x5aa8ff, 0x9a70f0];
+    // A dark backing so it reads over any rock.
+    g.fillStyle(0x16141f, 0.85).fillRect(cx - 14, cy - 13, 29, 14);
+    for (let i = 0; i < need; i++) {
+      const r = 12 - i * 1.6, on = i < filled;
+      const col = bands[i % bands.length];
+      for (let a = 0; a <= 24; a++) {
+        const ang = Math.PI + (a / 24) * Math.PI;
+        g.fillStyle(on ? col : 0x4a4460, on ? 1 : 0.8).fillRect(Math.round(cx + Math.cos(ang) * r), Math.round(cy + Math.sin(ang) * r * 0.85), 1, 1);
+      }
+    }
+    if (filled === need - 1 && Math.floor(t / 200) % 2) g.fillStyle(0xffffff, 0.9).fillRect(cx - 1, cy - 12, 3, 1);
+  }
+
+  // ---- The Hanging Monastery: the call. The monk's strikes light the
+  // row's arrows one by one; when the phrase is done they turn back into
+  // blank bells, before the first note reaches the line.
+  updateCall(g, now, t) {
+    const e = this.echo, c = this.combo;
+    if (e.t0 === null) e.t0 = now + 200;
+    const k = Math.floor((now - e.t0) / e.step);
+    const n = c.notes.length;
+    const calling = now >= e.t0 && k < n;
+    if (calling && k !== e.lit) {
+      e.lit = k;
+      const it = this.items[k];
+      if (it) e.rings.push({ x: it.sx, t });
+      if (this.scene.onBellStrike) this.scene.onBellStrike(k, n);
+    }
+    this.items.forEach((it, i) => {
+      if (!it.note.echo || it.note.result) return;
+      const show = calling && i <= k;
+      it.callLit = calling && i === k;
+      it.small.setTexture(show ? `arrow_s_${it.note.dir}` : 'icon_bell_s');
+    });
+    // Rings of light out from the lit arrow (the bell's note, seen).
+    e.rings = e.rings.filter((r) => t - r.t < 520);
+    for (const r of e.rings) {
+      const a = (t - r.t) / 520, rr = 4 + a * 9;
+      g.lineStyle(1, 0xfff0a8, 0.8 * (1 - a)).strokeCircle(r.x, TRACK_Y - 20, rr);
+    }
+    // A little bell at the left end of the row, swinging while it rings.
+    const bx = this.items.length ? this.items[0].sx - 12 : HIT_X, by = TRACK_Y - 22;
+    const swing = calling ? Math.sin((now - e.t0) / e.step * Math.PI * 2) * 2 : 0;
+    g.fillStyle(0x16141f, 1).fillRect(bx - 3 + Math.round(swing), by - 1, 7, 7);
+    g.fillStyle(calling ? 0xfff0a8 : 0xb8862a, 1).fillRect(bx - 2 + Math.round(swing), by + 1, 5, 4).fillRect(bx - 1 + Math.round(swing), by, 3, 1);
+    g.fillStyle(0x16141f, 1).fillRect(bx + Math.round(swing * 1.5), by + 5, 1, 1);
+  }
+
+  // ---- The Moss Cathedral: a vine from a held note to the next one. A stem
+  // that wanders up and down with leaves along it; the part you are holding
+  // glows, and it curls up into the next arrow where it bends.
+  drawVine(g, note, x, clipR, t) {
+    const x0 = Math.max(note.holding ? HIT_X : TRACK_X, Math.round(x));
+    const x1 = Math.min(clipR, Math.round(x + note.holdMs * PX_PER_MS));
+    if (x1 <= x0) return;
+    const lit = note.holding;
+    for (let px = x0; px <= x1; px++) {
+      const u = (px - x) / Math.max(1, note.holdMs * PX_PER_MS);
+      const y = TRACK_Y + Math.round(Math.sin(u * Math.PI * 2 + note.index) * 2.5 - Math.max(0, u - 0.85) * 18);
+      g.fillStyle(lit ? VINE_LIT : VINE, 1).fillRect(px, y, 1, 2);
+      g.fillStyle(VINE_DARK, 1).fillRect(px, y + 2, 1, 1);
+      // Leaves every few pixels, alternating sides, nodding.
+      const step = Math.round(px - x);
+      if (step % 7 === 3 && u < 0.92) {
+        const up = (step / 7) % 2 < 1 ? -1 : 1;
+        const nod = lit ? Math.round(Math.sin(t / 120 + px) * 1) : 0;
+        g.fillStyle(lit ? VINE_LIT : VINE, 1).fillRect(px - 1, y + up * 2 + nod, 3, 1).fillRect(px, y + up * 3 + nod, 2, 1);
+      }
+    }
+    // A knot where the vine ends, the bend.
+    g.fillStyle(VINE_DARK, 1).fillRect(x1 - 1, TRACK_Y - 3, 3, 3);
+  }
+
+  drawLeaves(g, x, y, t, i) {
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + t / 900 + i;
+      const lx = Math.round(x + Math.cos(a) * 9), ly = Math.round(y + Math.sin(a) * 7);
+      g.fillStyle(k % 2 ? VINE : VINE_LIT, 0.9).fillRect(lx - 1, ly, 3, 1).fillRect(lx, ly - 1, 1, 1);
+    }
   }
 
   updateRecovery(now) {
@@ -406,8 +581,10 @@ export class ComboPrompt {
       if (it.mark) it.mark.destroy();
       const icon = note.result === 'miss' ? 'icon_cross' : 'icon_check';
       it.mark = this.add.image(it.small.x, it.small.y, icon).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
+      // An echo note shows the arrow it was, once judged.
+      if (note.echo) it.small.setTexture(`arrow_s_${note.dir}`);
       it.small.setAlpha(0.25);
-      const pop = this.add.image(HIT_X, TRACK_Y, bigKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
+      const pop = this.add.image(HIT_X, TRACK_Y, note.echo ? `arrow_${note.dir}` : bigKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
       this.scene.tweens.add({ targets: pop, scale: 1.8, alpha: 0, duration: 260, onComplete: () => pop.destroy() });
     } else {
       it.big.setTint(style.tint);

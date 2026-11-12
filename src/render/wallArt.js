@@ -31,6 +31,9 @@ const FACET = {
   aurora: { cw: 48, ch: 36, jit: 0.95, cut: 0.5 },
   bones: { cw: 30, ch: 24, jit: 0.9, cut: 0.5 },
   dragon: { cw: 26, ch: 20, jit: 0.6, stagger: true, cut: 0.8 },
+  cascade: { cw: 16, ch: 56, jit: 0.4, stagger: true, cut: 0.7 },
+  monastery: { cw: 34, ch: 22, jit: 0.3, stagger: true, cut: 0.8 },
+  moss: { cw: 50, ch: 40, jit: 0.95, cut: 0.35 },
 };
 const hash2 = (x, y, s) => {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 2147483647)) | 0;
@@ -546,6 +549,60 @@ export class WallPainter {
           set(dx, k === 0 ? 0xfff6e0 : k === L ? 0xa89878 : k < L / 2 ? 0xf0e4c8 : 0xd0c0a0);
         }
         set(Math.min(end, Math.max(a, b) + thick) + 1, broken && Math.max(a, b) > end ? 0x8a7a64 : pal.outline);
+      } else if (style === 'falls') {
+        // The Cascade: thin threads of water spill off the edge, a bright
+        // lip where they leave the rock, falling a long way in a slight arc.
+        const P = 40, off = side < 0 ? 0 : 20, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 19);
+        if (hsh % 3 === 0) continue;
+        if (k === 0) { set(1, pal.accentC); set(2, 0xffffff); set(3, pal.outline); continue; }
+        const dx = 2 + Math.min(4, Math.floor(Math.sqrt(k) * 0.9));
+        set(dx, (k + (hsh >> 4)) % 5 === 0 ? 0xffffff : pal.accentC);
+        if ((hsh >> 6) % 2 && k > 8) set(dx + 2, (k + (hsh >> 4)) % 3 === 0 ? 0xc8e8f0 : null);
+        if (k % 9 === 4) set(dx - 1, 0x9ad0e0);
+      } else if (style === 'eaves') {
+        // The Hanging Monastery: a little temple roof built out from the edge
+        // now and then, red posts under gold-tipped, upturned eaves.
+        const P = 64, off = side < 0 ? 0 : 32, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 23);
+        if (hsh % 2) {
+          // Prayer flags strung out from the rock instead.
+          if (k < 2) for (let dx = 1; dx <= 9; dx++) set(dx, k === 0 ? 0x3a2418 : null);
+          else if (k < 6) { const cols = [0x4a8ae8, 0xf0f0e8, 0xe84a3a, 0x5ac86a, 0xf2c252]; for (let dx = 2; dx <= 9; dx += 2) set(dx, cols[(dx / 2 + (hsh >> 3)) % 5]); }
+          continue;
+        }
+        const len = 12;
+        if (k === 0) { set(len + 1, pal.accentB); continue; }
+        if (k < 4) {
+          // The roof: dark tiles, sweeping up at the tip.
+          for (let dx = 1; dx <= len - (k === 1 ? 0 : k); dx++) set(dx, k === 1 ? 0x5a2a1c : dx % 2 ? 0x3a1a12 : 0x2a120c);
+          if (k === 1) set(len, pal.accentB);
+          set(len + 1 - (k === 1 ? 0 : k), pal.outline);
+          continue;
+        }
+        if (k < 18) {
+          // Under the eaves: a red beam end, then the post.
+          if (k === 4) { for (let dx = 1; dx <= 9; dx++) set(dx, pal.accentA); set(10, pal.outline); continue; }
+          set(8, k % 6 === 0 ? pal.accentB : pal.accentA); set(9, 0x6a1812); set(10, pal.outline);
+          if (k === 8) set(6, pal.accentB);
+          if (k === 9) { set(6, 0xb8862a); set(5, 0xb8862a); }
+        }
+      } else if (style === 'roots') {
+        // The Moss Cathedral: great roots arch out over the edge and back in,
+        // bark with a lit top, moss on their backs, fine roots trailing.
+        const P = 48, off = side < 0 ? 0 : 24, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 29);
+        const reach = 6 + (hsh >> 2) % 8, span = 16 + (hsh >> 5) % 16;
+        if (hsh % 4 === 0) continue;
+        if (k < span) {
+          const dx0 = Math.round(Math.sin((k / span) * Math.PI) * reach);
+          const th = 3;
+          for (let t = 0; t < th; t++) set(dx0 + t, t === 0 && k < span / 2 ? pal.accentB : t === th - 1 ? 0x2a1c10 : 0x6a4e30);
+          set(dx0 + th, pal.outline);
+          if (k % 5 === 2) set(dx0 - 1, pal.accentA);
+        } else if (k < span + 10 && (hsh >> 9) % 2) {
+          set(2 + ((k + hsh) % 3 === 0 ? 1 : 0), 0x8a7048);
+        }
       } else if (style === 'vines') {
         // Ivy hangs off the edge: a dark strand with bright leaves, now and then.
         const P = 34, k = ((wy + (side < 0 ? 0 : 17)) % P + P) % P;
@@ -600,6 +657,10 @@ export class WallPainter {
     if (id === 'hive') { set(0, 1, pal.accentA); set(0, 2, pal.accentB); return; }
     if (id === 'clockwork') { set(1, 0, pal.accentC); set(1, -1, pal.accentB); return; }
     if (id === 'bones') { set(1, 0, pal.accentA); set(2, -1, pal.accentB); return; }
+    // A drip of water, a flake of red plaster, a glowing sporecap.
+    if (id === 'cascade') { set(0, 1, pal.accentC); set(0, 2, 0xffffff); set(1, -1, pal.accentB); return; }
+    if (id === 'monastery') { set(1, 0, pal.accentA); set(1, -1, pal.accentB); return; }
+    if (id === 'moss') { set(0, -1, pal.accentC); set(1, -1, pal.accentB); set(-1, 0, pal.accentA); return; }
     const leaf = pal.accentC || 0x86ad58, dark = pal.accentA || 0x3f6a3c;
     const side = rng.chance(0.5) ? 1 : -1;
     set(side, 0, dark); set(side * 2, -1, leaf); set(side * 3, -1, leaf); set(side, -2, leaf); set(side * 2, -3, dark);

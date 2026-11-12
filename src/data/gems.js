@@ -13,9 +13,13 @@ export const GEMS = {
   tourmaline: { id: 'tourmaline', name: 'TOURMALINE', biome: 'aurora', value: 10, rarity: 0.4, color: 0x3ff0b0 },
   jet: { id: 'jet', name: 'BONE JET', biome: 'bones', value: 11, rarity: 0.38, color: 0xc8b8e8 },
   pearl: { id: 'pearl', name: 'DRAGON PEARL', biome: 'dragon', value: 12, rarity: 0.35, color: 0xff6a4a },
+  // The Far Range.
+  riverpearl: { id: 'riverpearl', name: 'RIVER PEARL', biome: 'cascade', value: 13, rarity: 0.34, color: 0xe8fcff },
+  jade: { id: 'jade', name: 'TEMPLE JADE', biome: 'monastery', value: 14, rarity: 0.33, color: 0x4ad890 },
+  mossagate: { id: 'mossagate', name: 'MOSS AGATE', biome: 'moss', value: 15, rarity: 0.32, color: 0xb8f070 },
 };
 
-export const GEM_ORDER = ['emerald', 'amber', 'sapphire', 'opal', 'honeystone', 'ruby', 'diamond', 'verdigris', 'topaz', 'tourmaline', 'jet', 'pearl'];
+export const GEM_ORDER = ['emerald', 'amber', 'sapphire', 'opal', 'honeystone', 'ruby', 'diamond', 'verdigris', 'topaz', 'tourmaline', 'jet', 'pearl', 'riverpearl', 'jade', 'mossagate'];
 
 export function gemForBiome(biomeId) {
   return GEM_ORDER.map((k) => GEMS[k]).find((g) => g.biome === biomeId) || GEMS.emerald;

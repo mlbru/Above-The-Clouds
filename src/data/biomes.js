@@ -338,6 +338,96 @@ export const BIOMES = {
     mechanic: 'dragonEye',
     sea: 0xc87058,
   },
+  // ---- The Far Range: the mountain across the cloud sea (data/gate.js). The
+  // dragon sets you down on its Far Shore; these three come first above it.
+  // `far` biomes hide the old mountain's ranges: from here you look back
+  // across the sea at the peak you came from.
+  cascade: {
+    id: 'cascade',
+    name: 'THE CASCADE',
+    far: true,
+    from: 1873,
+    // Black basalt, always wet, green with moss: water falls everywhere.
+    rock: [0x0c1614, 0x172824, 0x24403a, 0x3a6058, 0x64908a],
+    outline: 0x050a0a,
+    accentA: 0x2f6a3a, accentB: 0x6fb85a, accentC: 0xd8f6ff,
+    holdTint: 0xb8d8d0,
+    windowScale: 0.84, costMultiplier: 1.25, drainMultiplier: 1.25,
+    hazards: { loose: 0.06, icy: 0 },
+    weather: { wind: 0.35, snow: 0, leaves: 0.25, mist: 0.65 },
+    ambience: { birds: 0.6, stream: 1, wind: 0.3 },
+    music: { root: 55, scale: [0, 2, 4, 7, 9], instrument: 'marimba', tempo: 92, octave: 12, motif: [[7, 0.5], [9, 0.5], [7, 0.5], [4, 0.5], [2, 1], [4, 0.5], [0, 1.5]] },
+    wall: { overlays: ['slick', 'ferns'], ledgeTop: 'accentA', ledgeFringe: true, featureStrata: false, edge: 'falls' },
+    decor: { rocks: 'decor_fern', piton: 'decor_fern' },
+    rest: { hut: 0.08, viewpoints: ['RAINBOW LEDGE', 'THE SPRAY SHELF', 'PLUNGE POOL VIEW', 'FERN GROTTO'] },
+    backdrop: {
+      sky: { top: 0x3a86c0, bottom: 0xdcf6f0, amount: 0.35 },
+      layers: [
+        { key: 'bg_cascade_cliffs', paint: 'cascadeCliffs', seed: 371, h: 150, E: 2173, f: 0.1, haze: 0.14, fill: 0xdcf2ee, depth: DEPTH.far + 6 },
+        { key: 'bg_cascade_falls', paint: 'cascadeFalls', seed: 381, h: 120, E: 2023, f: 0.16, haze: 0.06, fill: 0x10201c, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'spray',
+    sea: 0xd8f0f0,
+  },
+  monastery: {
+    id: 'monastery',
+    name: 'THE HANGING MONASTERY',
+    far: true,
+    from: 2046,
+    // Warm sandstone carved into stairs and shrines, red lacquer and gold.
+    rock: [0x22160f, 0x3e2a1c, 0x624430, 0x8e6c4c, 0xc49e78],
+    outline: 0x120a06,
+    accentA: 0xb8342a, accentB: 0xf2c252, accentC: 0x5ac89a,
+    holdTint: 0xe8c8a0,
+    windowScale: 0.84, costMultiplier: 1.25, drainMultiplier: 1.25,
+    hazards: { loose: 0.08, icy: 0 },
+    weather: { wind: 0.5, snow: 0, leaves: 0.2, mist: 0.3 },
+    ambience: { birds: 0.4, stream: 0, wind: 0.45 },
+    music: { root: 50, scale: [0, 2, 5, 7, 9], instrument: 'bell', tempo: 76, octave: 12, motif: [[0, 1], [7, 1], [5, 0.5], [7, 0.5], [9, 2], [7, 1], [0, 2]], drum: true },
+    wall: { overlays: ['niches', 'stucco'], ledgeTop: 'accentA', featureStrata: false, edge: 'eaves' },
+    decor: { rocks: 'decor_lantern_far', piton: 'decor_wheel', crystals: 'decor_lantern_far' },
+    rest: { hut: 0.2, viewpoints: ['TEA BALCONY', 'THE BELL LOFT', 'CLOUD GATE', 'PRAYER TERRACE'] },
+    backdrop: {
+      sky: { top: 0x4a5ab0, bottom: 0xfadab4, amount: 0.4 },
+      layers: [
+        { key: 'bg_monastery_pillars', paint: 'monasteryPillars', seed: 391, h: 150, E: 2346, f: 0.1, haze: 0.14, fill: 0xf0e4e4, depth: DEPTH.far + 6 },
+        { key: 'bg_monastery_halls', paint: 'monasteryHalls', seed: 401, h: 120, E: 2196, f: 0.16, haze: 0.05, fill: 0x2a1a16, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'bells',
+    sea: 0xf4d8c0,
+  },
+  moss: {
+    id: 'moss',
+    name: 'THE MOSS CATHEDRAL',
+    far: true,
+    from: 2219,
+    // Old stone under a deep green cushion, roots as thick as towers, and
+    // light falling in long shafts through the gaps.
+    rock: [0x0e160c, 0x1a2a14, 0x2c4220, 0x46642e, 0x7c9a4c],
+    outline: 0x060a04,
+    accentA: 0x3e7a26, accentB: 0x9ed65a, accentC: 0xd8ff8a,
+    holdTint: 0xc8dca0,
+    windowScale: 0.82, costMultiplier: 1.3, drainMultiplier: 1.3,
+    hazards: { loose: 0.04, icy: 0 },
+    weather: { wind: 0.12, snow: 0, leaves: 0.35, mist: 0.45 },
+    ambience: { birds: 0.3, stream: 0.3, wind: 0.1 },
+    music: { root: 52, scale: [0, 2, 3, 7, 9], instrument: 'flute', tempo: 84, octave: 12, motif: [[0, 1.5], [3, 0.5], [7, 1], [9, 1], [7, 0.5], [3, 0.5], [2, 1], [0, 2]] },
+    wall: { overlays: ['cushion', 'rootveins'], ledgeTop: 'accentB', ledgeFringe: true, featureStrata: false, edge: 'roots' },
+    decor: { rocks: 'decor_glowcap', piton: 'decor_glowcap', icicles: 'decor_rootcurtain' },
+    rest: { hut: 0.06, viewpoints: ['THE NAVE', 'ROOT BALCONY', 'THE GREEN WINDOW', 'CHOIR OF ROOTS'] },
+    backdrop: {
+      sky: { top: 0x24483a, bottom: 0xdaeaa4, amount: 0.55 },
+      layers: [
+        { key: 'bg_moss_arches', paint: 'mossArches', seed: 411, h: 160, E: 2519, f: 0.1, haze: 0.12, fill: 0x16261a, depth: DEPTH.far + 6 },
+        { key: 'bg_moss_roots', paint: 'mossRoots', seed: 421, h: 130, E: 2369, f: 0.16, haze: 0.04, fill: 0x0c160c, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'vines',
+    sea: 0xd0e8b0,
+    overcast: 0.35,
+  },
   // Expedition themes (special: never part of the endless mountain). An
   // expedition with a `theme` uses that biome for its whole climb.
   volcano: {
@@ -436,9 +526,12 @@ export function biomeTheme() { return THEME; }
 // Order the mountain passes through. After the last entry the high biomes loop.
 // Every high biome is about 173 m long (the four below them are shorter).
 export const SEQUENCE = ['green', 'stone', 'frozen', 'clouds', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
-const LOOP = ['hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
+// The high loop starts on the Far Range: its own three biomes first, then the
+// old high biomes come round again (the Far Range has them too).
+export const LOOP = ['cascade', 'monastery', 'moss', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
 export const LOOP_START = 1873;
-const LOOP_SPAN = 173;
+export const FAR_BIOMES = ['cascade', 'monastery', 'moss'];
+export const LOOP_SPAN = 173;
 export const BLEND_METERS = 18;
 
 function biomeIdAt(h) {
@@ -509,5 +602,5 @@ export function biomeMixAt(heightMeters) {
 
 // How much of the hour's warmth each biome takes: the Green Rise stays fresh
 // and cool even at sunset; the hive and the dragon soak up every bit of gold.
-export const BIOME_WARMTH = { green: 0.5, stone: 0.8, frozen: 0.7, storm: 0.7, aurora: 0.75, hive: 1.15, dragon: 1.15, clockwork: 1.05 };
+export const BIOME_WARMTH = { cascade: 0.6, monastery: 1.15, moss: 0.8, green: 0.5, stone: 0.8, frozen: 0.7, storm: 0.7, aurora: 0.75, hive: 1.15, dragon: 1.15, clockwork: 1.05 };
 export const mixWarmth = (mix) => (BIOME_WARMTH[mix.a.id] ?? 1) * (1 - mix.t) + (BIOME_WARMTH[mix.b.id] ?? 1) * mix.t;

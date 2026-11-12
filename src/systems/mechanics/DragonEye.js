@@ -35,6 +35,8 @@ export class DragonEye {
     this.left = cfg.firstSleepSec * 1000;
     this.inside = 0;
     this.breathIn = 0;
+    // Breath interval while something holds it awake (the Gate), or null.
+    this.held = null;
   }
 
   get phaseMs() {

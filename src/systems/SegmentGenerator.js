@@ -5,7 +5,7 @@ import { SEGMENT_TEMPLATES } from '../data/segments.js';
 import { biomeAt } from '../data/biomes.js';
 import { choosePattern } from '../data/comboPatterns.js';
 import { difficultyAt } from './DifficultySystem.js';
-import { isGateSegment } from '../data/gate.js';
+import { isGateSegment, isFarShoreSegment } from '../data/gate.js';
 import { gemForBiome } from '../data/gems.js';
 import { GEM_INCOME } from '../data/shop.js';
 
@@ -47,7 +47,8 @@ function pickRest(rng, biome, viewpointCount) {
 }
 
 // Generates one segment. `prev` is the previous segment (or null for the base).
-export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'normal') {
+// restScale < 1 brings ledges closer together (the GOAT HOOVES gift).
+export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'normal', restScale = 1) {
   const gen = balance.generation;
   const rng = new SeededRandom(hashInts(seed, index, 7717));
   const startLevel = prev ? prev.endLevel + 1 : 0;
@@ -57,7 +58,9 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   const sinceRest = prev ? prev.sinceRest + 1 : 0;
   // The Dragon's Gate (data/gate.js) is always a ledge, at the top of the first Spine.
   const gate = !!prev && isGateSegment(levelToMeters(prev.startLevel), levelToMeters(startLevel));
-  const isRest = index > 0 && (gate || sinceRest >= diff.restEvery - 1);
+  // And the Far Shore, where it sets you down on the next mountain.
+  const farShore = !!prev && isFarShoreSegment(levelToMeters(prev.startLevel), levelToMeters(startLevel));
+  const isRest = index > 0 && (gate || farShore || sinceRest >= Math.max(1, Math.round(diff.restEvery * restScale)) - 1);
   const count = rng.int(template.levels[0], template.levels[1]);
   const targetWidth = rng.range(template.width[0], template.width[1]);
   const hazardChance = {
@@ -136,6 +139,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   let rest = null;
   if (index === 0) rest = { type: 'camp', name: 'BASE CAMP', discovery: null, viewpoint: null };
   else if (gate) rest = { type: 'gate', name: "THE DRAGON'S GATE", gate: true, discovery: null, viewpoint: null };
+  else if (farShore) rest = { type: 'farshore', name: 'THE FAR SHORE', farShore: true, discovery: null, viewpoint: null };
   else if (isRest) rest = pickRest(rng, biome, viewpointCount);
 
   // Decorations hug the wall edges so they never cover holds.
@@ -260,7 +264,7 @@ export class Mountain {
 
   generateNext() {
     const index = this.last ? this.last.index + 1 : 0;
-    const seg = generateSegment(this.seed, index, this.last, this.balance, this.mode);
+    const seg = generateSegment(this.seed, index, this.last, this.balance, this.mode, this.restScale || 1);
     this.segments.set(index, seg);
     for (const lv of seg.levels) this.levels.set(lv.level, { ...lv, segIndex: index });
     this.last = seg;

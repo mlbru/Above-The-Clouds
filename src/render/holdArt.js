@@ -23,8 +23,11 @@ export const HOLD_SHAPES = {
   dragon: { hold: ['scale', 'scale', 'crimp', 'round', 'scale'], jug: ['bucket', 'horn'] },
   storm: { hold: ['crimp', 'flake', 'sloper', 'round', 'pocket'], jug: ['bucket', 'horn'] },
   clouds: { hold: ['sloper', 'round', 'pocket', 'crimp', 'sloper'], jug: ['bucket', 'horn'] },
+  // The Far Range: wet rounded basalt; old stone under moss.
+  cascade: { hold: ['sloper', 'round', 'pocket', 'mossy', 'sloper'], jug: ['bucket', 'horn'] },
+  moss: { hold: ['mossy', 'mossy', 'round', 'pocket', 'sloper'], jug: ['bucket', 'horn'] },
 };
-export const SHAPED_BIOMES_SKIP = ['hive', 'clockwork', 'bones'];
+export const SHAPED_BIOMES_SKIP = ['hive', 'clockwork', 'bones', 'monastery'];
 export const holdShapeKey = (biomeId, shape) => `holdshape_${biomeId}_${shape}`;
 export const shapesFor = (biomeId, kind) => (HOLD_SHAPES[biomeId] || HOLD_SHAPES.default)[kind === 'jug' ? 'jug' : 'hold'];
 

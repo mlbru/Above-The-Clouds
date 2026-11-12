@@ -11,6 +11,7 @@ import { buildBoonTextures, boonIconKey } from '../render/boonArt.js';
 import { gemForBiome } from '../data/gems.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
+import { DARE } from '../data/dares.js';
 
 const NO_FX = boonEffects([]);
 const css = (c) => `#${c.toString(16).padStart(6, '0')}`;
@@ -184,7 +185,9 @@ export const climbBoons = {
     g.looseMul = fx.looseMissMultiplier;
     g.goodFactor = fx.goodCostFactor;
     g.noFlawless = fx.noFlawlessBonus;
-    if (this.mechanics) this.mechanics.carried = new Set(held.filter(isSouvenir).map(souvenirBiome));
+    if (this.mechanics) this.mechanics.carried = new Set([...held.filter(isSouvenir).map(souvenirBiome), ...fx.carry]);
+    // GOAT HOOVES: the mountain ahead is generated with ledges twice as often.
+    if (this.mountain) this.mountain.restScale = fx.restScale;
     this.hud.setBoons(held.map((id) => ({ icon: boonIconKey(id), color: GROUPS[boonCard(id).group].color })));
     if (fx.songbird && !this.songbird) {
       this.songbird = this.add.sprite(this.climber.x, this.climber.y, 'songbird_0').setDepth(DEPTH.climber + 2);
@@ -196,7 +199,12 @@ export const climbBoons = {
   boonView() {
     const fx = this.bfx || NO_FX;
     const night = this.dayNight.state().night > 0.5;
-    return { minAlpha: fx.minNoteAlpha, lateReveal: fx.songbird && !(fx.nightOwl && night) ? fx.lateReveal : 1 };
+    // SHORT SIGHT (a dare): notes only show on the near half of the track.
+    const short = this.dares && this.dares.includes('shortsight') ? DARE.shortSight : 1;
+    const bird = fx.songbird && !(fx.nightOwl && night) ? fx.lateReveal : 1;
+    // NIGHT SHIFT: a flash of lightning lights every note for a moment.
+    const lit = fx.nightShift && this.clock < (this.lightUntil || 0);
+    return { minAlpha: lit ? 1 : fx.minNoteAlpha, lateReveal: Math.min(short, bird), metronome: fx.metronome };
   },
 
   // ---------------------------------------------------------------- routes

@@ -75,7 +75,7 @@ New gear: **pitons** (pack of 2). Press ↓ while hanging on a normal hold to ha
 the beat: it becomes a mini checkpoint for this biome only. Hammering costs grip. This gives
 "save here" a real decision.
 
-### 1.8 Rescue a stranded climber · M
+### ~~1.8 Rescue a stranded climber · M~~ ✓ built (their flag flies at base camp)
 Rare event: a climber hangs from a broken rope on a route. Take that route and they climb
 **behind you**, copying your notes: every miss you make, they make too. Bring them to a
 ledge and they give you something (a gem pouch, a card, their flag at base camp forever).
@@ -86,7 +86,7 @@ Rarely, a **big ledge** with room for a tent. Camp there and the run fast-forwar
 next dawn or dusk (your choice), refills you to 120 grip and saves a "camp" you can restart
 from once. Pairs nicely with day/night mechanics and Cat's Eyes.
 
-### 1.10 Mountain events (one per run, seeded) · M
+### ~~1.10 Mountain events (one per run, seeded) · M~~ ✓ built (all five, all visual; about 7 runs in 10 have one)
 A run-wide surprise announced by Bram at the start:
 - **Avalanche season**: once per biome a slide comes; climb fast to the next ledge or get swept back.
 - **Migration**: thousands of cranes fly past; any perfect hit lets one drop a feather (gems).
@@ -107,21 +107,21 @@ with its own rhythm, like a drum game. Huge skill ceiling, opt-in only.
 Two arrows tied with a rope come in swapped and hop over each other into their true order
 before the line. Press them in the order they land. Arrives with the Bone Garden.
 
-### 1.13 New boons to add to the cairn
-- **METRONOME**: a tick plays on every beat. *Price:* the music is quieter.
-- **SHERPA**: once per biome, a missed note is played for you. *Price:* gems worth 30% less.
-- **STORMCALLER**: lightning strikes give +10 grip. *Price:* storms in every biome.
-- **GOAT HOOVES**: ledges are twice as common. *Price:* ledges only give 60 grip.
-- **CROWSONG**: a crow points at the route with a gem. *Price:* it steals one gem per biome.
-- **LAST LIGHT** (legendary): when grip hits 0, freeze time for one beat to save it. *Price:* you only get one slip in the whole run.
-- Synergy **NIGHT SHIFT**: Cat's Eyes + Stormcaller: storms only come at night, and lightning shows the next three notes.
+### ~~1.13 New boons to add to the cairn~~ ✓ built (the ones about sound were made visual: see below)
+- ~~**METRONOME**~~ ✓ built as a pendulum you see: a brass metronome beside the track swings to the beat and the hit line flashes. *Price:* the beat is 5% faster (not "the music is quieter").
+- ~~**SHERPA**~~ ✓: once per biome, a missed note is played for you. *Price:* gems worth 30% less.
+- ~~**STORMCALLER**~~ ✓: lightning strikes give +10 grip. *Price:* storms in every biome.
+- ~~**GOAT HOOVES**~~ ✓: ledges are twice as common. *Price:* ledges only give 60 grip.
+- ~~**CROWSONG**~~ ✓ built as OLD CROW: after every ledge a crow flies in and leaves a gem on one of your routes. *Price:* it steals one gem per biome.
+- ~~**LAST LIGHT**~~ ✓ (legendary): when grip hits 0, freeze time for one beat to save it. *Price:* you only get one slip in the whole run.
+- ~~Synergy **NIGHT SHIFT**~~ ✓ (lightning lights up every note on the track): Cat's Eyes + Stormcaller: storms only come at night, and lightning shows the next three notes.
 
-### 1.14 New dares
-- **Silent Mountain**: no music, only the metronome click.
-- **Fragile**: every hold crumbles.
-- **Pacifist Dragon**: the dragon is awake the whole time but never breathes. It just stares.
-- **Tourist**: one route only, always the middle one.
-- **Featherweight**: one slip in the whole run instead of per biome.
+### ~~1.14 New dares~~ ✓ built
+- ~~**Silent Mountain**~~ ✓ built as SHORT SIGHT instead (it needed hearing): notes only show on the last half of the track.
+- ~~**Fragile**~~ ✓: every hold crumbles.
+- ~~**Pacifist Dragon**~~ ✓: the dragon is awake the whole time but never breathes. It just stares.
+- ~~**Tourist**~~ ✓: one route only, always the middle one.
+- ~~**Featherweight**~~ ✓ built as ONE ROPE (FEATHERWEIGHT was already a boon): one slip in the whole run instead of per biome.
 
 ---
 
@@ -273,13 +273,13 @@ filled by distance climbed.
 Every biome needs one twist, one look, one song and one gem. These fit **between** the
 existing ones (the mountain has room for more) or in the high loop above 1950 m.
 
-### 4.1 The Cascade · twist: **Spray**
+### ~~4.1 The Cascade · twist: **Spray**~~ ✓ built as the Far Range's first biome (with 8.1's curtain of water over the notes)
 A gorge with a waterfall falling down the wall beside you. Every few seconds the waterfall
 swings across the routes; holds under it are wet: hits cost more grip but every perfect on a
 wet hold fills the "rainbow" meter, and a full rainbow gives a free climb.
 *Look:* mist, rainbows, ferns, slick black rock. *Song:* kalimba and rain. *Gem:* river pearl.
 
-### 4.2 The Hanging Monastery · twist: **Bells**
+### ~~4.2 The Hanging Monastery · twist: **Bells**~~ ✓ built as the Far Range's second biome; the call is seen, not heard (the monk's strikes light the arrows one by one)
 Temples built into the cliff, wooden walkways, prayer wheels. Monks ring a bell before some
 climbs: the bell plays the phrase, then you echo it with a blank track (call and response,
 §1.6). Ledges are temple balconies where a monk pours tea (+grip).
@@ -387,7 +387,7 @@ The Golden City was never an accident. Above the dragon is where it comes from: 
 city in the clouds, abandoned. Climb its towers, ring its bells. The secret 1-in-200 city
 becomes a teaser of the real thing.
 
-### H · The Roc's Eyrie and the Far Range (half built: the dragon carries you to the Far Range; its own biomes are still to come, see §8)
+### ~~H · The Roc's Eyrie and the Far Range~~ ✓ built: the dragon sets you down on the Far Shore and the Far Range has its own three biomes (heights read as mountain + far range, e.g. 1906 + 120 FAR)
 A giant bird's nest at the top. The roc carries you to **another mountain** across the
 cloud sea, with a new set of biomes (a desert mountain, a jungle one, an ocean sea-stack).
 A second world without throwing away the first.
@@ -466,7 +466,7 @@ Following the rule that every menu is themed and animated:
 
 ## 8 · The Far Range: ideas for its first three biomes
 
-The dragon now drops you on the Far Shore, about 1850 m up a new mountain: green-black rock,
+The dragon now drops you on the Far Shore, about 1900 m up a new mountain: green-black rock,
 waterfalls falling into the cloud sea, and one lit ledge. These are its first three biomes,
 picked so that every twist can be seen, so it works without sound.
 
@@ -495,7 +495,7 @@ see the last moment before the line.
 *Gem:* lantern amber.
 
 ### 8.4 Other candidates
-- **The Moss Cathedral**: giant hanging roots. *Vine notes*: hold an arrow and switch to
+- ~~**The Moss Cathedral**~~ ✓ built as the Far Range's third biome: giant hanging roots. *Vine notes*: hold an arrow and switch to
   the next one where the vine bends, without letting go.
 - **The Kite Ridge**: a windy crest where people once flew kites. *Kite notes* bob up and
   down on their strings as they slide in.

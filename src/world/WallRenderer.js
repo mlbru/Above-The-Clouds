@@ -19,6 +19,7 @@ import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 const LIGHT_OF = [
   ['vent', 0xff7a2a, 1.6, 0.45], ['crystal', 0xd8a6ff, 1.3, 0.35], ['tent', 0xffb060, 1.2, 0.2],
   ['hut', 0xffb060, 2.2, 0.35], ['pipe', 0xffa040, 1.0, 0.25], ['comb', 0xffc040, 1.0, 0.2],
+  ['lantern_far', 0xff8a40, 1.5, 0.5], ['glowcap', 0x7af0c8, 1.3, 0.5],
 ];
 
 const DECOR_TEX = {
@@ -27,6 +28,7 @@ const DECOR_TEX = {
   pine: 'decor_cliffpine',
   piton: 'decor_piton', nest: 'decor_nest', vent: 'decor_vent', chain: 'decor_chain',
   frostfern: 'decor_frostfern', bones: 'decor_bones', coins: 'decor_coins', comb: 'decor_comb', pipe: 'decor_pipe',
+  lantern: 'decor_lantern_far', wheel: 'decor_wheel', glowcap: 'decor_glowcap', rootcurtain: 'decor_rootcurtain',
 };
 
 // What sits under each hold, per biome: a dark drop shadow (offset down-right)
@@ -44,6 +46,9 @@ const HOLD_SHADOW = {
   hive: { tint: 0xffb840, alpha: 0.2, dx: 0, dy: 1, glow: true },
   clockwork: { tint: 0x0a0806, alpha: 0.5, dx: 1, dy: 3 },
   bones: { tint: 0x0c0a0a, alpha: 0.45, dx: 1, dy: 2 },
+  cascade: { tint: 0x020606, alpha: 0.55, dx: 1, dy: 3 },
+  monastery: { tint: 0x140806, alpha: 0.45, dx: 2, dy: 3 },
+  moss: { tint: 0xb8ff6a, alpha: 0.12, dx: 0, dy: 1, glow: true },
   volcano: { tint: 0xff6a1a, alpha: 0.25, dx: 0, dy: 1, glow: true },
 };
 
@@ -177,6 +182,12 @@ export class WallRenderer {
       // Pools of light from fires, lamps, vents and crystals: only at night.
       if (a.type === 'nightlight') a.obj.setAlpha((a.base + Math.sin(t / 110 + a.phase) * 0.05 + Math.sin(t / 43 + a.phase) * 0.03) * Math.max(0, (this.night || 0) - 0.15) * 1.3);
       if (a.type === 'blink') a.obj.setAlpha(Math.floor(t / 520 + a.phase) % 2 ? 1 : 0.25);
+      // The Far Range: rainbows in the spray fade at night; shafts of light
+      // breathe; prayer wheels turn; flags flutter.
+      if (a.type === 'bow') a.obj.setAlpha((0.22 + 0.1 * Math.sin(t / 1300 + a.phase)) * Math.max(0, 1 - (this.night || 0) * 1.6));
+      if (a.type === 'shaft') a.obj.setAlpha((a.base + Math.sin(t / 2100 + a.phase) * a.base * 0.4) * Math.max(0.15, 1 - (this.night || 0)));
+      if (a.type === 'wheel') a.obj.setFrame(Math.floor(t / 260 + a.phase) % 3);
+      if (a.type === 'pennant') a.obj.setY(a.y + (Math.floor(t / 300 + a.phase) % 2)).setScale(1, Math.floor(t / 300 + a.phase) % 2 ? 0.8 : 1);
       if (a.type === 'pumpkin') a.obj.setFrame(Math.floor(t / 140 + a.phase) % 5 === 0 ? 1 : 0);
       if (a.type === 'butterfly') {
         const u = t / 1000 + a.phase;
@@ -236,20 +247,29 @@ export class WallRenderer {
       if (!key) continue;
       const img = this.scene.add.image(d.x, d.y, key).setDepth(DEPTH.decor).setFlipX(d.side > 0);
       // Things that hang (icicles, chains) hang from their top.
-      if (key === 'decor_icicles' || key === 'decor_chain') img.setOrigin(0.5, 0);
+      if (key === 'decor_icicles' || key === 'decor_chain' || key === 'decor_rootcurtain') img.setOrigin(0.5, 0);
       // Cliff pines root in the rock and lean out over the edge.
       else if (key.startsWith('decor_cliffpine')) img.setOrigin(d.side > 0 ? 0.25 : 0.75, 0.95);
       else img.setOrigin(0.5, 1);
       v.objects.push(img);
     }
     if (seg.rest) this.placeRestDecor(seg, v, rng);
+    this.placeFarDressing(seg, v, rng);
     this.addShadowsAndLights(v, seg);
     if (seg.waterfall) {
       const top = levelToY(seg.endLevel) - LEVEL_PX / 2;
       const bottom = levelToY(seg.startLevel) + LEVEL_PX / 2;
       const xs = seg.levels.map((lv) => (seg.waterfall.side < 0 ? lv.bounds.l + 14 : lv.bounds.r - 14));
       const x = seg.waterfall.side < 0 ? Math.max(...xs) : Math.min(...xs);
-      const wf = this.scene.add.tileSprite(x, top, 10, bottom - top, 'waterfall').setOrigin(0.5, 0).setDepth(DEPTH.wall + 1).setAlpha(0.9);
+      // In the Cascade the falls are big: twice as wide, with a rainbow in
+      // the spray at their foot.
+      const big = biomeAt(levelToMeters(seg.startLevel)).id === 'cascade';
+      const wf = this.scene.add.tileSprite(x, top, big ? 20 : 10, bottom - top, 'waterfall').setOrigin(0.5, 0).setDepth(DEPTH.wall + 1).setAlpha(0.9);
+      if (big) {
+        const bow = this.scene.add.image(x, bottom - 4, 'far_rainbow').setOrigin(0.5, 1).setDepth(DEPTH.wall + 3).setBlendMode('ADD').setAlpha(0.32).setScale(0.9);
+        v.objects.push(bow);
+        this.animated.push({ type: 'bow', obj: bow, phase: seg.index, seg: seg.index });
+      }
       // A source at the top and a foaming shelf with spray at the bottom, so
       // the water never starts or stops in mid-air.
       const head = this.scene.add.sprite(x, top + 6, 'waterfall_top', 0).setOrigin(0.5, 1).setDepth(DEPTH.wall + 2);
@@ -284,6 +304,96 @@ export class WallRenderer {
     }
   }
 
+  // The Far Shore: where the dragon sets you down on the new mountain. An old
+  // standing stone with a dragon carved round it (the carving glows at
+  // night), a stone lantern that is always lit, your flag planted in the moss,
+  // ferns and glowing caps along the edge.
+  placeFarShore(node, side, spot, add, si) {
+    const sc = this.scene, y = node.y;
+    const stoneX = spot(58), lampX = spot(32), flagX = node.x - side * 34;
+    add(sc.add.image(stoneX, y + 1, 'far_stone').setOrigin(0.5, 1).setDepth(DEPTH.decor));
+    const carve = add(sc.add.image(stoneX, y + 1, 'far_stone_glow').setOrigin(0.5, 1).setDepth(DEPTH.decor + 0.1).setBlendMode('ADD').setAlpha(0.5));
+    this.animated.push({ type: 'flicker', obj: carve, base: 0.35, phase: 2, seg: si });
+    add(sc.add.image(lampX, y + 1, 'far_tlantern').setOrigin(0.5, 1).setDepth(DEPTH.decor));
+    const lamp = add(sc.add.image(lampX, y - 14, 'glow').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffb050).setScale(0.9).setAlpha(0.4));
+    this.animated.push({ type: 'flicker', obj: lamp, base: 0.4, phase: 1, seg: si });
+    add(sc.add.image(flagX, y + 1, 'flag').setOrigin(0.1, 1).setDepth(DEPTH.decor + 1));
+    for (const [dx, key] of [[78, 'decor_fern'], [92, 'decor_glowcap'], [-60, 'decor_fern'], [-76, 'decor_glowcap']]) {
+      add(sc.add.image(spot(Math.abs(dx)) + (dx < 0 ? -2 * side * Math.abs(dx) : 0), y + 1, key).setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(dx < 0));
+    }
+  }
+
+  // The Far Range's set dressing, per segment: walkways and prayer flags in
+  // the Hanging Monastery, shafts of light and roots in the Moss Cathedral.
+  placeFarDressing(seg, v, rng) {
+    const biome = biomeAt(levelToMeters(seg.startLevel));
+    const sc = this.scene;
+    const add = (o) => { v.objects.push(o); return o; };
+    const mid = seg.levels.slice(2, -2);
+    if (!mid.length) return;
+    if (biome.id === 'monastery') {
+      // Plank walkways bolted along the cliff, out from one edge.
+      if (seg.features.includes('walkway')) {
+        for (let k = 0; k < 2; k++) {
+          const lv = rng.pick(mid);
+          if (lv.nodes.some((n) => n.kind === 'ledge')) continue;
+          const side = rng.chance(0.5) ? -1 : 1;
+          const len = rng.int(5, 9) * 12;
+          const edge = side < 0 ? lv.bounds.l - 6 : lv.bounds.r + 6;
+          const x0 = side < 0 ? edge : edge - len;
+          const y = levelToY(lv.level) + 14;
+          add(sc.add.tileSprite(x0, y, len, 14, 'far_walkway').setOrigin(0, 0).setDepth(DEPTH.decor - 1).setFlipX(side > 0));
+        }
+      }
+      // A string of prayer flags across the wall, sagging, fluttering.
+      if (rng.chance(0.75)) {
+        const lv = rng.pick(mid), b = lv.bounds;
+        const y0 = levelToY(lv.level) - 18, x0 = b.l + rng.int(0, 30), x1 = b.r - rng.int(0, 30);
+        const g = add(sc.add.graphics().setDepth(DEPTH.decor - 1));
+        const cols = [0x4a8ae8, 0xf4f0e4, 0xe84a3a, 0x5ac86a, 0xf2c252];
+        const sag = rng.int(10, 22);
+        const yAt = (x) => y0 + Math.sin(((x - x0) / (x1 - x0)) * Math.PI) * sag;
+        g.lineStyle(1, 0x2a1a12, 1);
+        g.beginPath(); g.moveTo(x0, y0);
+        for (let x = x0; x <= x1; x += 4) g.lineTo(x, yAt(x));
+        g.strokePath();
+        let i = 0;
+        for (let x = x0 + 6; x < x1 - 4; x += 9) {
+          const f = add(sc.add.rectangle(x, Math.round(yAt(x)) + 1, 6, 7, cols[i % 5]).setOrigin(0.5, 0).setDepth(DEPTH.decor - 0.9));
+          this.animated.push({ type: 'pennant', obj: f, y: f.y, phase: i * 0.37, seg: seg.index });
+          i++;
+        }
+      }
+      // A turning prayer wheel on the odd ledge-side spot.
+      for (const d of seg.decor) {
+        if (d.type !== 'wheel') continue;
+        const w = v.objects.find((o) => o.texture && o.texture.key === 'decor_wheel' && o.x === d.x && o.y === d.y);
+        if (w) { w.setTexture('far_wheel', 0); this.animated.push({ type: 'wheel', obj: w, phase: d.x % 7, seg: seg.index }); }
+      }
+    } else if (biome.id === 'moss') {
+      // Long shafts of light falling in through the roots, slanting.
+      if (seg.features.includes('shafts')) {
+        const n = rng.int(1, 2);
+        for (let k = 0; k < n; k++) {
+          const lv = rng.pick(mid), b = lv.bounds;
+          const x = rng.range(b.l + 20, b.r - 20), y = levelToY(lv.level) - 60;
+          const base = rng.range(0.16, 0.26);
+          const shaft = add(sc.add.image(x, y, 'far_shaft').setOrigin(0.5, 0).setDepth(DEPTH.light).setBlendMode('ADD')
+            .setTint(0xfff0b0).setScale(rng.range(1.2, 1.8), rng.range(1.4, 2)).setRotation(-0.38).setAlpha(base));
+          this.animated.push({ type: 'shaft', obj: shaft, base, phase: x, seg: seg.index });
+          // Motes turning in the light.
+          if (!(sc.effects && sc.effects.reduced)) {
+            const motes = add(sc.add.particles(x + 30, y + 90, 'px2', {
+              frequency: 420, lifespan: 3600, speedX: { min: -4, max: 4 }, speedY: { min: -3, max: 4 },
+              alpha: { onEmit: () => 0, onUpdate: (p, k, t) => Math.sin(t * Math.PI) * 0.8 }, x: { min: -24, max: 24 }, y: { min: -60, max: 60 }, tint: 0xfff4c0,
+            }).setDepth(DEPTH.light + 0.5));
+            motes.setBlendMode('ADD');
+          }
+        }
+      }
+    }
+  }
+
   placeRestDecor(seg, v, rng) {
     const lv = seg.levels.find((l) => l.nodes.length && l.nodes[0].kind === 'ledge');
     if (!lv) return;
@@ -314,6 +424,20 @@ export class WallRenderer {
       if (seg.index === 0) this.placeCampLife(node, side, rng, add);
       if (seg.index === 0 && !this.scene.tutorial) this.placeSeason(node, side, spot, rng, add);
       if (seg.index === 0 && !this.scene.tutorial) this.placeCampGrowth(node, side, spot, rng, add);
+    } else if (type === 'farshore') {
+      this.placeFarShore(node, side, spot, add, seg.index);
+    } else if (type !== 'gate' && biomeAt(levelToMeters(node.level)).id === 'monastery') {
+      // A temple balcony: a monk with tea on a low table, a lantern.
+      const mx = spot(54), tx = spot(36);
+      add(this.scene.add.sprite(mx, node.y + 1, 'far_monk', 3).setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side < 0));
+      const g = add(this.scene.add.graphics().setDepth(DEPTH.decor));
+      g.fillStyle(0x16100c, 1).fillRect(tx - 7, node.y - 6, 15, 3).fillRect(tx - 6, node.y - 3, 2, 3).fillRect(tx + 5, node.y - 3, 2, 3);
+      g.fillStyle(0x8a3a24, 1).fillRect(tx - 6, node.y - 5, 13, 1);
+      g.fillStyle(0xf4f0e4, 1).fillRect(tx - 1, node.y - 8, 3, 2);
+      g.fillStyle(0x2a6a50, 1).fillRect(tx + 3, node.y - 9, 3, 3);
+      add(this.scene.add.image(spot(84), node.y, 'decor_lantern_far').setOrigin(0.5, 1).setDepth(DEPTH.decor));
+      seg.rest.tea = { x: tx };
+      if (type === 'hut') this.placeHut(spot(110), node, add);
     } else if (type === 'hut') {
       this.placeHut(spot(66), node, add);
     } else if (type === 'viewpoint') {
@@ -419,6 +543,17 @@ export class WallRenderer {
       const p = add(sc.add.sprite(px, y + 1, `camp_person_${id}`, 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setFlipX(px > fx));
       this.animated.push({ type: 'person', obj: p, phase: i * 1.7, seg: 0 });
     });
+    // The flags of the climbers you brought down off the wall (idea sheet
+    // 1.8): a pole each beyond the tent, a pennant in their jacket colour.
+    (d.rescued || []).slice(0, 7).forEach((p, i) => {
+      const px = clampX(node.x + side * (146 + i * 9)), tall = 30 + (i % 2) * 4;
+      const pg = add(sc.add.graphics().setDepth(DEPTH.decor - 0.5));
+      pg.fillStyle(0x16141f, 1).fillRect(px - 1, y - tall, 3, tall + 1);
+      pg.fillStyle(0x9a7048, 1).fillRect(px, y - tall, 1, tall);
+      pg.fillStyle(0xf2c14e, 1).fillRect(px - 1, y - tall - 1, 3, 1);
+      const f = add(sc.add.triangle(px + 1, y - tall + 1, 0, 0, side > 0 ? 11 : 11, 3, 0, 7, p.coat).setOrigin(0, 0).setDepth(DEPTH.decor - 0.4));
+      this.animated.push({ type: 'pennant', obj: f, y: f.y, phase: i * 0.6, seg: 0 });
+    });
   }
 
   // The Dragon's Gate (data/gate.js): two carved obsidian pillars, centred
@@ -465,23 +600,10 @@ export class WallRenderer {
 
   // After the crossing: the Gate is gone (you are on another mountain now);
   // the Far Shore has a lantern on a post and a red flag, as seen from the air.
+  // After the flight the Gate's fires go out (the dragon has left). The Far
+  // Shore ledge itself is dressed by placeFarShore.
   farShore() {
     (this.gateObjs || []).forEach((o) => o.active && o.setVisible(false));
-    const sp = this.gateSpot;
-    if (!sp || this.farShoreDone) return;
-    this.farShoreDone = true;
-    const sc = this.scene, g = sp.add(sc.add.graphics().setDepth(DEPTH.decor));
-    const lx = sp.x - 40, fx = sp.x + 44, y = sp.y;
-    g.fillStyle(0x16100c, 1).fillRect(lx - 1, y - 30, 4, 30).fillRect(lx - 1, y - 31, 9, 3);
-    g.fillStyle(0x4a3424, 1).fillRect(lx, y - 30, 2, 30);
-    g.fillStyle(0x16100c, 1).fillRect(lx + 4, y - 27, 7, 9);
-    g.fillStyle(0xffd070, 1).fillRect(lx + 5, y - 26, 5, 7);
-    g.fillStyle(0xfff4d0, 1).fillRect(lx + 6, y - 25, 2, 3);
-    const glow = sp.add(sc.add.image(lx + 7, y - 22, 'glow').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffc060).setScale(1.1).setAlpha(0.4));
-    this.animated.push({ type: 'flicker', obj: glow, base: 0.4, phase: 1, seg: sp.si });
-    g.fillStyle(0x16100c, 1).fillRect(fx, y - 40, 2, 40);
-    const flag = sp.add(sc.add.sprite(fx + 2, y - 40, 'decor_flags', 0).setOrigin(0, 0).setDepth(DEPTH.decor).setTint(0xff8a7a));
-    this.animated.push({ type: 'flags', obj: flag, phase: 0.5, seg: sp.si });
   }
 
   // Halloween and Christmas at base camp (data/seasons.js): carved pumpkins

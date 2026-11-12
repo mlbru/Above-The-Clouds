@@ -22,6 +22,9 @@ const GOALS = {
   aurora: { streak: 32, gems: 3 },
   bones: { streak: 35, gems: 2 },
   dragon: { streak: 35, gems: 2 },
+  cascade: { streak: 36, gems: 2 },
+  monastery: { streak: 36, gems: 2 },
+  moss: { streak: 38, gems: 2 },
 };
 
 // The streak star was once 'perfects' (a count, not a streak); old saves keep it.

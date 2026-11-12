@@ -152,35 +152,44 @@ function shadeRest(g) {
 
 // ---------------------------------------------------------------- head
 // jaw: 0 closed .. ~0.6 wide open (radians the lower jaw drops).
-function drawHead(jaw) {
-  const g = new PixelGrid(HEAD_W, HEAD_H);
+// s scales the whole head (the flying dragon of the crossing wears the same
+// head, a little smaller): shapes are drawn through `d`, in head coordinates.
+export function drawHead(jaw, s = 1) {
+  const g = new PixelGrid(Math.ceil(HEAD_W * s), Math.ceil(HEAD_H * s));
+  const d = s === 1 ? g : {
+    set: (x, y, c) => g.set(x * s, y * s, c),
+    ellipse: (cx, cy, rx, ry, c) => g.ellipse(cx * s, cy * s, Math.max(0.6, rx * s), Math.max(0.6, ry * s), c),
+    rect: (x, y, w, h, c) => g.rect(Math.round(x * s), Math.round(y * s), Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), c),
+    line: (x0, y0, x1, y1, c) => g.line(x0 * s, y0 * s, x1 * s, y1 * s, c),
+    get: (x, y) => g.get(x, y),
+  };
   // A crown of horns: a great swept-back pair, a hooked lower one, and a row
   // of short spikes along the back of the skull.
-  taper(g, [27, 13], [10, 0], [1, 6], 7, 1, HORN);
-  taper(g, [23, 18], [8, 12], [0, 16], 5, 1, HORN);
-  taper(g, [21, 24], [10, 22], [4, 27], 4, 1, HORN);
-  [[33, 13, 31, 6], [38, 12, 37, 6]].forEach(([x0, y0, x1, y1]) => taper(g, [x0, y0], [x0 - 1, (y0 + y1) / 2], [x1, y1], 3, 1, HORN));
+  taper(d, [27, 13], [10, 0], [1, 6], 7, 1, HORN);
+  taper(d, [23, 18], [8, 12], [0, 16], 5, 1, HORN);
+  taper(d, [21, 24], [10, 22], [4, 27], 4, 1, HORN);
+  [[33, 13, 31, 6], [38, 12, 37, 6]].forEach(([x0, y0, x1, y1]) => taper(d, [x0, y0], [x0 - 1, (y0 + y1) / 2], [x1, y1], 3, 1, HORN));
   // Frills of spines down the back of the head and jaw.
   [[[16, 25], [4, 26], [8, 21]], [[15, 31], [2, 36], [6, 30]], [[18, 38], [8, 47], [11, 38]], [[27, 40], [24, 49], [31, 41]]].forEach(([a, b, c]) => {
-    fillPoly(g, [a, b, c], SPINE);
-    g.set(b[0], b[1], TIP);
+    fillPoly(d, [a, b, c], SPINE);
+    d.set(b[0], b[1], TIP);
   });
   // Skull and neck root.
-  g.ellipse(30, 25, 16, 12, BODY);
-  g.ellipse(19, 35, 9, 8, BODY);
+  d.ellipse(30, 25, 16, 12, BODY);
+  d.ellipse(19, 35, 9, 8, BODY);
   // Upper snout: a long wedge from the brow to a blunt, bumped nose.
   for (let x = 38; x <= 78; x++) {
     let top = x < 56 ? 15 + (x - 40) * 0.28 : 19.5 + (x - 56) * 0.12;
     if (x >= 66 && x <= 74) top -= Math.sin(((x - 66) / 8) * Math.PI) * 1.6;
     if (x > 75) top += (x - 75) ** 2 * 0.9;
     const bottom = x > 76 ? 31 : 32;
-    for (let y = Math.round(top); y <= bottom; y++) g.set(x, y, BODY);
+    for (let y = Math.round(top); y <= bottom; y++) d.set(x, y, BODY);
   }
   // A heavy brow ridge with two short spikes, and a little horn on the nose.
-  fillPoly(g, [[29, 12], [42, 12], [52, 15], [58, 20], [54, 21], [45, 18], [31, 17]], BROW);
-  fillPoly(g, [[35, 13], [38, 7], [40, 13]], HORN);
-  fillPoly(g, [[43, 13], [47, 9], [48, 14]], HORN);
-  taper(g, [65, 20], [65, 14], [68, 11], 3, 1, HORN);
+  fillPoly(d, [[29, 12], [42, 12], [52, 15], [58, 20], [54, 21], [45, 18], [31, 17]], BROW);
+  fillPoly(d, [[35, 13], [38, 7], [40, 13]], HORN);
+  fillPoly(d, [[43, 13], [47, 9], [48, 14]], HORN);
+  taper(d, [65, 20], [65, 14], [68, 11], 3, 1, HORN);
   // Lower jaw, rotated down around its hinge.
   const hinge = [29, 32];
   const sin = Math.sin(jaw), cos = Math.cos(jaw);
@@ -188,45 +197,45 @@ function drawHead(jaw) {
   const jawPts = [[24, 32], [74, 32], [73, 35], [66, 37], [42, 40], [27, 42]].map(([x, y]) => rot(x, y));
   if (jaw > 0.05) {
     // The open mouth: dark, with the fire glowing in the throat.
-    fillPoly(g, [[30, 32], [76, 32], jawPts[1], jawPts[0]], MOUTH);
-    g.ellipse(37, 34 + jaw * 8, 6, 3 + jaw * 6, THROAT);
+    fillPoly(d, [[30, 32], [76, 32], jawPts[1], jawPts[0]], MOUTH);
+    d.ellipse(37, 34 + jaw * 8, 6, 3 + jaw * 6, THROAT);
   }
-  fillPoly(g, jawPts, BODY);
+  fillPoly(d, jawPts, BODY);
   // The underside of the jaw is pale belly plate.
-  fillPoly(g, [[30, 39], [64, 36], [66, 37], [42, 40], [27, 42]].map(([x, y]) => rot(x, y)), BELLY);
+  fillPoly(d, [[30, 39], [64, 36], [66, 37], [42, 40], [27, 42]].map(([x, y]) => rot(x, y)), BELLY);
   // Teeth: fangs down from the upper jaw, smaller ones up from the lower.
   for (let x = 45; x <= 72; x += 5) {
     const long = x === 50 || x === 65;
-    g.set(x, 33, TOOTH); g.set(x + 1, 33, TOOTH);
-    g.set(x, 34, TOOTH);
-    if (long || jaw > 0.05) g.set(x, 35, TOOTH);
-    if (long && jaw > 0.05) g.set(x, 36, TOOTH);
+    d.set(x, 33, TOOTH); d.set(x + 1, 33, TOOTH);
+    d.set(x, 34, TOOTH);
+    if (long || jaw > 0.05) d.set(x, 35, TOOTH);
+    if (long && jaw > 0.05) d.set(x, 36, TOOTH);
   }
   if (jaw > 0.05) {
     for (let x = 47; x <= 70; x += 6) {
       const [bx, by] = rot(x, 33);
-      g.set(bx, by - 1, TOOTH); g.set(bx + 1, by - 1, TOOTH); g.set(bx, by - 2, TOOTH);
+      d.set(bx, by - 1, TOOTH); d.set(bx + 1, by - 1, TOOTH); d.set(bx, by - 2, TOOTH);
     }
   }
   // Spikes along the jaw line, eye socket and nostril.
   [[44, 40], [54, 38], [62, 37]].forEach(([x, y]) => {
     const [bx, by] = rot(x, y);
-    fillPoly(g, [[bx - 2, by - 1], [bx + 2, by - 1], [bx - 1, by + 4]], SPINE);
+    fillPoly(d, [[bx - 2, by - 1], [bx + 2, by - 1], [bx - 1, by + 4]], SPINE);
   });
-  g.ellipse(HEAD_EYE.x, HEAD_EYE.y, 6, 3.6, SOCKET);
-  g.rect(72, 22, 3, 2, NOSTRIL);
+  d.ellipse(HEAD_EYE.x, HEAD_EYE.y, 6, 3.6, SOCKET);
+  d.rect(72, 22, 3, 2, NOSTRIL);
   shadeBody(g);
   // An old scar: three claw lines across the cheek.
-  for (let k = 0; k < 3; k++) g.line(36 + k * 3, 24, 41 + k * 3, 31, P.horn[0]);
-  const glow = new PixelGrid(HEAD_W, HEAD_H);
+  for (let k = 0; k < 3; k++) d.line(36 + k * 3, 24, 41 + k * 3, 31, P.horn[0]);
+  const glow = new PixelGrid(g.w, g.h);
   crack(g, glow, (c) => P.ramp.includes(c), 7, 9, 9);
-  glow.set(73, 22, 0xffd090); glow.set(74, 22, 0xffffff);
+  glow.set(73 * s, 22 * s, 0xffd090); glow.set(74 * s, 22 * s, 0xffffff);
   // The throat glow is a gradient of fire, brightest deep inside.
   for (let y = 0; y < g.h; y++) {
     for (let x = 0; x < g.w; x++) {
       if (g.get(x, y) !== THROAT) continue;
-      const d = Math.hypot((x - 37) / 6, (y - 34 - jaw * 8) / (3 + jaw * 6));
-      g.set(x, y, ramp(P.throat, 1 - d, x, y));
+      const dd = Math.hypot((x - 37 * s) / (6 * s), (y - (34 + jaw * 8) * s) / ((3 + jaw * 6) * s));
+      g.set(x, y, ramp(P.throat, 1 - dd, x, y));
     }
   }
   shadeRest(g);
@@ -234,7 +243,7 @@ function drawHead(jaw) {
   for (let x = 0; x < g.w; x++) {
     for (let y = 1; y < g.h; y++) {
       const c = g.get(x, y);
-      if (g.get(x, y - 1) === null && (c === P.ramp[0] || c === P.ramp[1]) && y < 20) { g.set(x, y, P.ramp[3]); break; }
+      if (g.get(x, y - 1) === null && (c === P.ramp[0] || c === P.ramp[1]) && y < 20 * s) { g.set(x, y, P.ramp[3]); break; }
     }
   }
   // A warm rim of light along the top of the skull and snout.

@@ -10,10 +10,10 @@
 // FLY.meta[i]: { saddle, mouth } in frame coordinates.
 import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
 import { lerpColor, bayer } from '../utils/color.js';
-import { DRAGON_PAL as P, lcg } from './dragonArt.js';
+import { DRAGON_PAL as P, lcg, drawHead, HEAD_NECK, HEAD_MOUTH, JAWS } from './dragonArt.js';
 import { stroke, poly, shade, makeRamp, rampAt } from './pixelKit.js';
 
-const FW = 410, FH = 380;
+const FW = 446, FH = 380;
 const FRAMES = 12;
 const BODY = 1, BELLY = 2, MEMB = 3, MEMB_FAR = 4, BONE = 5, BONE_FAR = 6, HORN = 7, SPINE = 8, TIP = 9, LIMB = 10, LIMB_FAR = 11, EDGE = 12, VEIN = 13, HEAD = 14, MOUTH = 15, TOOTH = 16;
 const smooth = (a, b, t) => { const k = Math.max(0, Math.min(1, (t - a) / (b - a))); return k * k * (3 - 2 * k); };
@@ -24,7 +24,7 @@ const NECK_END = 0.27, BODY_END = 0.53;
 export const FLY = { W: FW, H: FH, frames: FRAMES, meta: [] };
 
 function radius(u) {
-  if (u < NECK_END) return lerp(8.5, 13, smooth(0, NECK_END, u));
+  if (u < NECK_END) return lerp(7.5, 13, smooth(0, NECK_END, u));
   if (u < 0.4) return lerp(13, 20, smooth(NECK_END, 0.4, u));
   if (u < BODY_END) return lerp(20, 15, smooth(0.4, BODY_END, u));
   return 0.8 + 14.2 * Math.pow(1 - (u - BODY_END) / (1 - BODY_END), 1.45);
@@ -42,7 +42,7 @@ function spine(phase) {
   const bob = Math.sin(phase) * 3;
   const head = [368, 178 + bob * 0.6], shoulder = [268, 238 + bob], hips = [164, 242 + bob * 0.5];
   // The neck: an S from the head back and down to the shoulders.
-  for (let i = 0; i <= 60; i++) raw.push(cubic(head, [336, 160 + bob], [312, 246 + bob], shoulder, i / 60));
+  for (let i = 0; i <= 60; i++) raw.push(cubic(head, [338, 182 + bob], [306, 250 + bob], shoulder, i / 60));
   // The body, slung between the shoulders and the hips.
   for (let i = 1; i <= 50; i++) { const t = i / 50; raw.push([lerp(shoulder[0], hips[0], t), lerp(shoulder[1], hips[1], t) + Math.sin(t * Math.PI) * 5]); }
   // The tail: long, a wave running down it, the end flicking up.
@@ -124,34 +124,11 @@ function leg(g, pts, u, front, mark) {
   for (let k = -1; k <= 1; k++) stroke(g, F, F, [F[0] + tx * 5 + k * 2, F[1] + ty * 5 + 4], 1.8, 1, HORN);
 }
 
-// The head: long and narrow, a heavy brow, a wedge of a snout, swept-back
-// horns and a frill of spikes down the jaw; jaw (0..1) opens the mouth.
-function head(g, pts, jaw) {
-  const n = at(pts, 0);
-  // Facing on along the neck (away from the body), dipped a little.
-  const ang = Math.atan2(-n.ty, -n.tx) + 0.12;
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  const HS = 1.4;
-  const T = ([x, y]) => [n.x + (x * ca - y * sa) * HS, n.y + (x * sa + y * ca) * HS];
-  const a2 = jaw * 0.5, c2 = Math.cos(a2), s2 = Math.sin(a2);
-  const J = ([x, y]) => { const px = x - 2, py = y - 1; return T([2 + px * c2 - py * s2, 1 + px * s2 + py * c2]); };
-  // Horns and the frill first, behind the skull.
-  stroke(g, T([-2, -6]), T([-14, -14]), T([-28, -12]), 5.5, 1, HORN);
-  stroke(g, T([1, -5]), T([-10, -8]), T([-20, -4]), 4, 1, HORN);
-  for (let k = 0; k < 4; k++) stroke(g, T([-2 - k * 4, 4 + k]), T([-5 - k * 4, 8 + k]), T([-9 - k * 4, 10 + k * 1.5]), 2, 1, HORN);
-  // The lower jaw (dropped when it roars), the mouth and teeth inside.
-  if (jaw > 0.05) {
-    poly(g, [T([4, -1]), T([30, 0]), J([26, 3]), J([2, 4])], MOUTH);
-    poly(g, [J([0, 1]), J([26, 2]), J([24, 5]), J([2, 6])], HEAD);
-    for (let x = 6; x < 26; x += 3) { const [tx, ty] = T([x, 1]); g.set(Math.round(tx), Math.round(ty), TOOTH); const [jx, jy] = J([x, 1.5]); g.set(Math.round(jx), Math.round(jy), TOOTH); }
-  } else poly(g, [T([0, 2]), T([27, 2]), T([25, 5]), T([1, 6])], HEAD);
-  // Skull and snout, and the brow ridge.
-  const [sx, sy] = T([3, -1]);
-  g.ellipse(sx, sy, 9 * HS, 7 * HS, HEAD);
-  poly(g, [T([4, -6]), T([22, -4]), T([30, -1]), T([31, 2]), T([4, 3])], HEAD);
-  stroke(g, T([0, -6]), T([8, -8]), T([16, -5]), 4, 3, HEAD);
-  return { eye: T([9, -3]), nostril: T([28, -1.5]), mouth: T([31, 1.5]) };
-}
+// The head is the wall dragon's own (render/dragonArt.js), drawn a little
+// smaller, so the dragon you ride is the one that hunted you up the Spine.
+const HS = 0.82;
+const HEADS = {};
+const headFor = (jaw) => (HEADS[jaw] ||= drawHead(jaw ? JAWS[3] : 0, HS));
 
 function frame(i, jaw) {
   const phase = (i / FRAMES) * Math.PI * 2;
@@ -192,14 +169,13 @@ function frame(i, jaw) {
   // In front: legs, the head, the near wing.
   leg(g, pts, 0.31, true, LIMB);
   leg(g, pts, 0.5, false, LIMB);
-  const hd = head(g, pts, jaw);
   wing(g, pts, e, false);
   // Seams where the near wing, legs or head cross the body.
   const src = g.px.slice();
   const isBody = (v) => v === BODY || v === BELLY;
   for (let y = 1; y < FH - 1; y++) for (let x = 1; x < FW - 1; x++) {
     const v = src[y * FW + x];
-    if (v !== MEMB && v !== LIMB && v !== BONE && v !== HEAD) continue;
+    if (v !== MEMB && v !== LIMB && v !== BONE) continue;
     if ([src[y * FW + x - 1], src[y * FW + x + 1], src[(y - 1) * FW + x], src[(y + 1) * FW + x]].some(isBody)) g.px[y * FW + x] = EDGE;
   }
   for (const path of CRACKS) path.forEach(([u, v], j) => {
@@ -211,7 +187,7 @@ function frame(i, jaw) {
   });
 
   // ---- shading
-  const memb = [0x1e060c, P.membrane[0], P.membrane[1], P.membrane[2], 0x8a2a30, 0xb04234, 0xd8664a];
+  const memb = [0x1e060c, P.membrane[0], P.membrane[1], P.membrane[2], 0x7a2228, 0x963428];
   const membFar = memb.map((c) => lerpColor(c, 0x12040a, 0.45));
   const limbRamp = makeRamp(P.ramp[0], P.ramp[2], P.ramp[4], 5);
   const limbFar = limbRamp.map((c) => lerpColor(c, 0x0a0206, 0.4));
@@ -236,7 +212,7 @@ function frame(i, jaw) {
     const v = pre[y * FW + x];
     if (v === BODY) {
       const t = (vb[y * FW + x] + 1) / 2;
-      let k = 0.9 - t * 0.88;
+      let k = 0.8 - t * 0.82;
       const row = Math.floor(y / 3), sx = (x + (row % 2) * 2) % 4, sy = y % 3;
       if (sy === 2 && sx !== 0) k -= 0.2; else if (sy === 0 && sx === 1) k += 0.12;
       g.set(x, y, vb[y * FW + x] < -0.84 && (x + y) % 3 !== 0 ? P.rim : rampAt(P.ramp, k, x, y));
@@ -251,7 +227,7 @@ function frame(i, jaw) {
     } else if (v === VEIN) g.set(x, y, P.vein);
     else if (v === BONE) {
       const pb = (xx, yy) => pre[yy * FW + xx] === BONE;
-      g.set(x, y, !pb(x, y - 1) || !pb(x - 1, y) ? 0xc8784e : !pb(x, y + 1) ? 0x3a0e12 : 0x8a3a2a);
+      g.set(x, y, !pb(x, y - 1) || !pb(x - 1, y) ? P.ramp[4] : !pb(x, y + 1) ? P.ramp[1] : P.ramp[3]);
     } else if (v === BONE_FAR) g.set(x, y, P.ramp[0]);
     else if (v === SPINE) g.set(x, y, P.spine);
     else if (v === TIP) g.set(x, y, P.spineTip);
@@ -259,18 +235,22 @@ function frame(i, jaw) {
     else if (v === MOUTH) g.set(x, y, P.mouth);
     else if (v === TOOTH) g.set(x, y, P.tooth);
   }
-  shade(g, HEAD, P.ramp.concat([P.rim]), { r: 3, base: 0.5, light: [0.3, -0.95], bias: (x, y) => ((x + y * 2) % 5 === 0 ? -0.12 : 0) });
   shade(g, LIMB, limbRamp, { r: 2, base: 0.5 });
   shade(g, LIMB_FAR, limbFar, { r: 2, base: 0.4 });
   shade(g, HORN, P.horn, { r: 1, base: 0.6 });
-  // The eye and nostril, and a glow in the throat when the jaw is open.
-  const ex = Math.round(hd.eye[0]), ey = Math.round(hd.eye[1]);
-  g.set(ex, ey, 0xffd040); g.set(ex + 1, ey, 0xffa020); g.set(ex, ey + 1, 0x1a0404); g.set(ex - 1, ey, 0x1a0404);
-  glow.set(ex, ey, 0xffffff); glow.set(ex + 1, ey, 0xffc060);
-  g.set(Math.round(hd.nostril[0]), Math.round(hd.nostril[1]), 0x0a0204);
+  // The head, laid over the end of the neck, its cracks and eye in the glow.
+  const n0 = at(pts, 0), hd = headFor(jaw);
+  const ox = Math.round(n0.x - HEAD_NECK.x * HS), oy = Math.round(n0.y - HEAD_NECK.y * HS);
+  for (let y = 0; y < hd.g.h; y++) for (let x = 0; x < hd.g.w; x++) {
+    const c = hd.g.get(x, y);
+    if (c !== null) g.set(ox + x, oy + y, c);
+    const c2 = hd.glow.get(x, y);
+    if (c2 !== null) glow.set(ox + x, oy + y, c2);
+  }
+  const mouth = [ox + HEAD_MOUTH.x * HS, oy + HEAD_MOUTH.y * HS];
   g.outline(P.outline);
   const sd = at(pts, 0.29);
-  FLY.meta[i] = { saddle: [sd.x - sd.nx * (sd.r - 1), sd.y - sd.ny * (sd.r - 1)], mouth: hd.mouth };
+  FLY.meta[i] = { saddle: [sd.x - sd.nx * (sd.r - 1), sd.y - sd.ny * (sd.r - 1)], mouth };
   return { g, glow };
 }
 

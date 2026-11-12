@@ -18,6 +18,11 @@ const BRAM = {
   quick: 'THE MOUNTAIN IS IN A HURRY TODAY. KEEP UP, OR KEEP FALLING.',
   light: 'HALF A PACK, HALF A REST. THE LEDGES WILL NOT SAVE YOU NOW.',
   blind: 'CLOSE YOUR EYES AND LISTEN. THE ROCK KNOWS THE BEAT.',
+  shortsight: 'NO LOOKING AHEAD. YOU SEE THE NOTE WHEN IT IS NEARLY ON YOU.',
+  fragile: 'EVERY HOLD IS ROTTEN TODAY. DO NOT HANG ABOUT.',
+  pacifist: 'THE DRAGON WILL NOT BURN YOU. IT WILL JUST WATCH. IT IS WORSE, BELIEVE ME.',
+  tourist: 'NO CHOOSING. THE MIDDLE WAY, ALL THE WAY UP. LIKE A TOURIST ON A RAIL.',
+  onerope: 'ONE ROPE FOR THE WHOLE MOUNTAIN. SLIP TWICE AND YOU ARE DONE.',
 };
 const BRAM_IDLE = 'FEELING BRAVE? TAKE A DARE OR TWO. I PAY EXTRA FOR EVERY ONE.';
 const BRAM_TWO = 'NOW THAT IS A CLIMB I WOULD PAY TO SEE.';
@@ -68,24 +73,32 @@ export class DaresScene extends Phaser.Scene {
     (new PixelText(this, GAME_WIDTH / 2, top + 7, "BRAM'S DARES", { color: COLORS.gold }).setOrigin(0.5, 0).setScale(2));
     (new PixelText(this, GAME_WIDTH / 2, top + 25, `TAKE UP TO ${MAX_DARES}. EVERY DARE PAYS X${DARE.gemScale} GEMS.`, { color: COLORS.dim }).setOrigin(0.5, 0));
 
-    // The cards: one row, or three and two when upright.
+    // The cards hang in one long row on a line strung across the night; the
+    // row slides along to keep the card you look at in view.
+    this.row = this.add.container(0, 0);
+    this.rowW = DARES.length * CARD_W + (DARES.length - 1) * 8 + 24;
+    this.lineG = this.add.graphics();
+    this.row.add(this.lineG);
     this.cards = DARES.map((d, i) => {
-      let x, y;
-      if (IS_PORTRAIT) {
-        const row = i < 3 ? 0 : 1, inRow = row ? 2 : 3, col = row ? i - 3 : i;
-        const rowW = inRow * CARD_W + (inRow - 1) * 8;
-        x = (GAME_WIDTH - rowW) / 2 + col * (CARD_W + 8) + CARD_W / 2;
-        y = top + 44 + row * (CARD_H + 10) + CARD_H / 2;
-      } else {
-        const rowW = DARES.length * CARD_W + (DARES.length - 1) * 8;
-        x = (GAME_WIDTH - rowW) / 2 + i * (CARD_W + 8) + CARD_W / 2;
-        y = top + 42 + CARD_H / 2;
-      }
-      return this.makeCard(d, i, x, y);
+      const x = 12 + i * (CARD_W + 8) + CARD_W / 2;
+      const y = top + 44 + CARD_H / 2;
+      const card = this.makeCard(d, i, x, y);
+      this.row.add(card.c);
+      return card;
     });
+    // The washing line they are pinned to, sagging between the cards.
+    const lg = this.lineG, ly = top + 45;
+    for (let x = 0; x < this.rowW; x++) {
+      const k = ((x - 12 + 4) % (CARD_W + 8)) / (CARD_W + 8);
+      lg.fillStyle(0x8a7450, 1).fillRect(x, Math.round(ly - 2 + Math.sin(k * Math.PI) * 3), 1, 1);
+    }
+    this.rowX = 0;
+    // Arrows at the edges while more cards hide beyond them.
+    this.edgeG = this.add.graphics().setDepth(8);
+    this.input.on('wheel', (p, o, dx, dy) => this.select(Math.max(0, Math.min(DARES.length - 1, this.index + Math.sign(dx || dy)))));
 
     // Bram and what he says, then the payout, along the bottom.
-    const by = IS_PORTRAIT ? top + 44 + 2 * (CARD_H + 10) + 8 : top + 42 + CARD_H + 10;
+    const by = top + 44 + CARD_H + 10;
     this.bottomY = by;
     this.bram = this.add.sprite(26, by + 38, 'npc_trader', 0).setOrigin(0.5, 1);
     this.bubbleG = this.add.graphics();
@@ -177,6 +190,13 @@ export class DaresScene extends Phaser.Scene {
       k.c.setDepth(on ? 5 : 1);
     });
     if (this.lastSaid !== 'action') this.say(BRAM[DARES[i].id]);
+    // Slide the row so the card is in view, with its neighbours peeking in.
+    const cx = this.cards[i].baseX;
+    const target = Math.max(Math.min(0, GAME_WIDTH - this.rowW), Math.min(0, Math.round(GAME_WIDTH / 2 - cx)));
+    if (target !== this.rowX) {
+      this.rowX = target;
+      this.tweens.add({ targets: this.row, x: target, duration: quiet ? 0 : 260, ease: 'Cubic.easeOut' });
+    }
   }
 
   toggle() {
@@ -217,7 +237,7 @@ export class DaresScene extends Phaser.Scene {
         this.tweens.add({ targets: card.c, scale: 1.06, duration: 160, ease: 'Back.easeOut' });
         // A few flecks of wax.
         for (let k = 0; k < 6; k++) {
-          const f = this.add.rectangle(card.c.x + card.seal.x, card.c.y + card.seal.y, 2, 2, 0xd83a3a).setDepth(9);
+          const f = this.add.rectangle(this.row.x + card.c.x + card.seal.x, card.c.y + card.seal.y, 2, 2, 0xd83a3a).setDepth(9);
           this.tweens.add({ targets: f, x: f.x + (Math.random() - 0.5) * 40, y: f.y + (Math.random() - 0.5) * 30, alpha: 0, duration: 380, onComplete: () => f.destroy() });
         }
       },
@@ -291,6 +311,10 @@ export class DaresScene extends Phaser.Scene {
       g.fillStyle(0xf4efe4, a).fillRect(Math.round(s.x), Math.round(s.y), 1, 1);
     }
     this.fire.setAlpha(0.3 + 0.08 * Math.sin(this.t / 90) + 0.05 * Math.sin(this.t / 37));
+    // Little arrows at the edges where more cards are hanging out of view.
+    const eg = this.edgeG.clear(), ay = this.top + 44 + CARD_H / 2, bob = Math.round(Math.sin(this.t / 220) * 1.5);
+    if (this.row.x < -2) { eg.fillStyle(0x07060e, 0.85).fillRect(0, ay - 10, 9, 20); eg.fillStyle(0xf2c14e, 1); for (let k = 0; k < 4; k++) eg.fillRect(2 + k + bob, ay - k, 1, k * 2 + 1); }
+    if (this.row.x > GAME_WIDTH - this.rowW + 2) { eg.fillStyle(0x07060e, 0.85).fillRect(GAME_WIDTH - 9, ay - 10, 9, 20); eg.fillStyle(0xf2c14e, 1); for (let k = 0; k < 4; k++) eg.fillRect(GAME_WIDTH - 3 - k - bob, ay - k, 1, k * 2 + 1); }
     // The chosen card's emblem bobs a little.
     const k = this.cards[this.index];
     if (k) k.icon.y = -CARD_H / 2 + 26 + Math.round(Math.sin(this.t / 260));
@@ -303,8 +327,6 @@ export class DaresScene extends Phaser.Scene {
     switch (event.code) {
       case 'ArrowLeft': case 'KeyA': this.select((this.index - 1 + n) % n); break;
       case 'ArrowRight': case 'KeyD': this.select((this.index + 1) % n); break;
-      case 'ArrowUp': case 'KeyW': if (IS_PORTRAIT && this.index >= 3) this.select(this.index - 3); break;
-      case 'ArrowDown': case 'KeyS': if (IS_PORTRAIT && this.index < 3) this.select(Math.min(n - 1, this.index + 3)); break;
       case 'Space': case 'Enter': this.toggle(); break;
       case 'KeyC': this.clearAll(); break;
       case 'Escape': case 'Backspace': this.close(); break;

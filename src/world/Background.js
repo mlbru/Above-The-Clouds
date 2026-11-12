@@ -1,6 +1,6 @@
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig.js';
 import { lerpColor, warmthOf } from '../utils/color.js';
-import { BIOMES, biomeLocalAlt, mixWarmth } from '../data/biomes.js';
+import { BIOMES, biomeLocalAlt, mixWarmth, LOOP_START } from '../data/biomes.js';
 import { SkyLife } from './SkyLife.js';
 import { buildMilkyWay, buildMoon } from '../render/skyArt.js';
 import { SeededRandom } from '../utils/seededRandom.js';
@@ -134,6 +134,13 @@ export class Background {
     // An expedition theme can scorch the distant hills or drop them altogether
     // (weighted, so the expedition picker can blend from one theme to the next).
     let hide = 0, scorch = 0xffffff;
+    // Across the cloud sea (the Far Range) the old foothills are far behind:
+    // only the sea, this mountain's own scenery and, on the horizon, the peak
+    // you came from.
+    // (ClimbScene sets farWorld when the dragon sets you down.)
+    const farTarget = this.farWorld || alt >= LOOP_START ? 1 : 0;
+    this.farK = (this.farK || 0) + (farTarget - (this.farK || 0)) * Math.min(1, dt / 1500);
+    if (this.farK > 0.01) { hide = this.farK; this.skyLife.oldMountain = true; }
     for (const th of mix ? new Set([mix.a, mix.b]) : []) {
       if (!th.special) continue;
       const w = weight(th.id);

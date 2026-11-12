@@ -161,7 +161,7 @@ test('biome stretches tell repeat visits in the high loop apart', () => {
   assert.equal(biomeStretchAt(100), 'stone@55');
   assert.equal(biomeStretchAt(200), 'stone@55');
   assert.notEqual(biomeStretchAt(215), biomeStretchAt(200));
-  const loopA = biomeStretchAt(1880), loopB = biomeStretchAt(1880 + 173 * 8);
+  const loopA = biomeStretchAt(1880), loopB = biomeStretchAt(1880 + 173 * 11);
   assert.equal(loopA.split('@')[0], loopB.split('@')[0]);
   assert.notEqual(loopA, loopB);
 });
@@ -173,9 +173,12 @@ test('nextBiomeAbove: the next stretch and where it starts', () => {
   assert.deepEqual([nextBiomeAbove(900).biome.id, nextBiomeAbove(900).from], ['clockwork', 1006]);
   assert.deepEqual([nextBiomeAbove(1400).biome.id, nextBiomeAbove(1400).from], ['bones', 1526]);
   assert.deepEqual([nextBiomeAbove(1600).biome.id, nextBiomeAbove(1600).from], ['dragon', 1700]);
-  // The dragon stays the last biome of the way up; then the high loop starts.
-  assert.deepEqual([nextBiomeAbove(1800).biome.id, nextBiomeAbove(1800).from], ['hive', 1873]);
-  assert.deepEqual([nextBiomeAbove(1873).biome.id, nextBiomeAbove(1873).from], ['obsidian', 2046]);
+  // The dragon stays the last biome of the way up; then the Far Range starts
+  // the high loop with its own three biomes.
+  assert.deepEqual([nextBiomeAbove(1800).biome.id, nextBiomeAbove(1800).from], ['cascade', 1873]);
+  assert.deepEqual([nextBiomeAbove(1873).biome.id, nextBiomeAbove(1873).from], ['monastery', 2046]);
+  assert.deepEqual([nextBiomeAbove(2046).biome.id, nextBiomeAbove(2046).from], ['moss', 2219]);
+  assert.deepEqual([nextBiomeAbove(2219).biome.id, nextBiomeAbove(2219).from], ['hive', 2392]);
 });
 
 test('every biome on the way up is about as long as the others', () => {
@@ -189,7 +192,7 @@ test('every biome on the way up is about as long as the others', () => {
 });
 
 test('every biome on the way up has its own gem, segments and backdrop', () => {
-  for (const id of SEQUENCE) {
+  for (const id of [...SEQUENCE, 'cascade', 'monastery', 'moss']) {
     assert.equal(gemForBiome(id).biome, id, `${id} gem`);
     assert.ok(SEGMENT_TEMPLATES.some((t) => t.biomes.includes(id)), `${id} segments`);
     if (id !== 'green') assert.ok(BIOMES[id].backdrop.layers.length, `${id} backdrop`);

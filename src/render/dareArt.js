@@ -57,6 +57,47 @@ const ICONS = {
   },
 };
 
+// The dares of idea sheet 1.14.
+Object.assign(ICONS, {
+  // An eye squinting at a track cut in half: only the near end is drawn.
+  shortsight: (g) => {
+    g.rect(1, 14, 18, 3, 0x2a2440); g.rect(2, 15, 8, 1, 0x9fe8ff); g.rect(11, 15, 7, 1, 0x3a3550);
+    g.rect(3, 13, 1, 5, 0xffffff);
+    for (let x = 4; x <= 15; x++) { const y = Math.round(7 - Math.sin(((x - 4) / 11) * Math.PI) * 3); g.set(x, y, 0xf4efe4); g.set(x, 14 - y, 0xf4efe4); }
+    g.ellipse(9.5, 7, 2, 1.6, 0x9fe8ff); g.set(9, 7, 0x16141f); g.set(10, 6, 0xffffff);
+  },
+  // A hold breaking into pieces, grit falling.
+  fragile: (g) => {
+    g.ellipse(7, 7, 5, 3.5, 0xb8ab9a); g.ellipse(13, 8, 4, 3, 0x8a7f74);
+    g.line(9, 4, 10, 11, 0x2a2420); g.line(5, 5, 7, 9, 0x4e463e);
+    g.rect(8, 13, 2, 2, 0x8a7f74); g.rect(12, 15, 2, 2, 0xb8ab9a); g.set(6, 17, 0x8a7f74); g.set(11, 18, 0x6e655c); g.set(14, 12, 0x6e655c);
+    g.set(5, 5, 0xf6f3ea); g.set(6, 5, 0xf6f3ea);
+  },
+  // The dragon's great eye, wide open, staring.
+  pacifist: (g) => {
+    g.ellipse(10, 10, 9, 5.5, 0x40121a);
+    g.ellipse(10, 10, 7.5, 4.4, 0xffb030);
+    g.ellipse(10, 10, 6, 3.4, 0xffd25a);
+    g.rect(9, 6, 2, 9, 0x16060a);
+    g.set(8, 8, 0xffffff); g.set(7, 9, 0xfff4c0);
+    g.line(1, 5, 6, 3, 0x641c1e, 2); g.line(19, 5, 14, 3, 0x641c1e, 2);
+  },
+  // A camera on a strap with one arrow pointing straight ahead.
+  tourist: (g) => {
+    g.line(3, 2, 7, 6, 0xd84a3a); g.line(17, 2, 13, 6, 0xd84a3a);
+    g.rect(4, 6, 12, 8, 0x3a3046); g.rect(4, 6, 12, 2, 0x5a5070);
+    g.ellipse(10, 10, 3, 3, 0x9fd8ff); g.ellipse(10, 10, 1.5, 1.5, 0x2a4a6a); g.set(9, 9, 0xffffff);
+    g.rect(13, 4, 2, 2, 0xf2c14e);
+    g.rect(9, 16, 2, 3, 0xf2c14e); g.set(8, 17, 0xf2c14e); g.set(11, 17, 0xf2c14e);
+  },
+  // A single rope, one knot, frayed at the top.
+  onerope: (g) => {
+    for (let y = 3; y < 19; y++) { const x = 10 + Math.round(Math.sin(y * 0.5) * 1.5); g.set(x, y, y % 3 ? 0xe8e4dc : 0xb8b0a0); g.set(x + 1, y, y % 3 ? 0xc8c0b0 : 0x8a8478); }
+    g.ellipse(10.5, 11, 2.4, 2, 0xf4efe4); g.set(10, 10, 0x8a8478);
+    g.set(9, 2, 0xe8e4dc); g.set(12, 1, 0xe8e4dc); g.set(11, 2, 0xc8c0b0); g.set(8, 1, 0xc8c0b0);
+  },
+});
+
 function addGrid(scene, key, grid) {
   if (scene.textures.exists(key)) scene.textures.remove(key);
   const c = makeCanvas(grid.w, grid.h);

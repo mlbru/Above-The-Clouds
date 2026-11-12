@@ -21,3 +21,7 @@ export const GATE = {
 // Is the segment starting at startMeters (after one that started at
 // prevMeters) the Gate ledge?
 export const isGateSegment = (prevMeters, startMeters) => prevMeters < GATE.ledgeAt && startMeters >= GATE.ledgeAt && startMeters < GATE.below;
+
+// The Far Shore: the first ledge of the Far Range, where the dragon sets you
+// down. The first segment that starts at or above LOOP_START ends on it.
+export const isFarShoreSegment = (prevMeters, startMeters) => prevMeters < LOOP_START && startMeters >= LOOP_START;

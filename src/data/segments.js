@@ -27,6 +27,16 @@ export const SEGMENT_TEMPLATES = [
   { id: 'ribcage-slope', name: 'Ribcage Slope', biomes: ['bones'], levels: [10, 12], width: [260, 310], wander: 26, density: 0.85, style: 'traverse', difficulty: 4, decor: ['bones', 'rocks'], features: [] },
   { id: 'ossuary-chimney', name: 'Ossuary Chimney', biomes: ['bones'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['bones'], features: ['crack'] },
   { id: 'obsidian-fins', name: 'Obsidian Fins', biomes: ['obsidian'], levels: [10, 12], width: [210, 250], wander: 26, density: 0.8, style: 'traverse', difficulty: 4, decor: ['vent', 'crystals'], features: ['crack'], hazardBoost: { loose: 0.1 } },
+  // The Far Range.
+  { id: 'spray-gorge', name: 'Spray Gorge', biomes: ['cascade'], levels: [12, 14], width: [270, 320], wander: 18, density: 0.85, style: 'crack', difficulty: 4, decor: ['fern', 'rocks'], features: ['waterfall'] },
+  { id: 'basalt-organ', name: 'Basalt Organ', biomes: ['cascade'], levels: [11, 13], width: [230, 280], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['fern', 'rocks'], features: ['waterfall'] },
+  { id: 'dripping-chimney', name: 'Dripping Chimney', biomes: ['cascade'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['fern'], features: ['crack'] },
+  { id: 'temple-stair', name: 'Temple Stair', biomes: ['monastery'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.9, style: 'balanced', difficulty: 4, decor: ['lantern', 'wheel'], features: ['walkway'] },
+  { id: 'cliff-walk', name: 'Cliff Walk', biomes: ['monastery'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['lantern', 'wheel'], features: ['walkway'] },
+  { id: 'shrine-chimney', name: 'Shrine Chimney', biomes: ['monastery'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['lantern'], features: ['crack'] },
+  { id: 'root-nave', name: 'Root Nave', biomes: ['moss'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['glowcap', 'rootcurtain', 'fern'], features: ['shafts'] },
+  { id: 'fallen-giant', name: 'Fallen Giant', biomes: ['moss'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['glowcap', 'fern'], features: ['shafts'] },
+  { id: 'moss-chimney', name: 'Moss Chimney', biomes: ['moss'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['rootcurtain', 'glowcap'], features: ['crack'] },
 ];
 
 export const REST_TYPES = {
