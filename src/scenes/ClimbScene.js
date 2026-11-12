@@ -3279,7 +3279,7 @@ export class ClimbScene extends Phaser.Scene {
     {
       const m = biomeMixAt(alt);
       const weightOf = (id) => (m.a.id === id ? 1 - m.t : 0) + (m.b.id === id ? m.t : 0);
-      this.farSides.update(dt, { weightOf, camY: this.camY, light: this.background.lastLight || day.light, skyBottom: this.background.lastSkyBottom || day.skyBottom, night: day.night });
+      this.farSides.update(dt, { weightOf, camY: this.camY, camX: this.camX, light: this.background.lastLight || day.light, skyBottom: this.background.lastSkyBottom || day.skyBottom, night: day.night });
     }
     this.showerK = this.scenery.update(dt, {
       biome, day, sky: this.background, storm: stormSky, camY: this.camY, reduced: this.settings.reducedParticles,

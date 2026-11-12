@@ -625,12 +625,14 @@ function paintMist(scene) {
   const noise = makeNoise2D(777);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const u = x / w * Math.PI * 2;
-    const band = Math.sin((y / h) * Math.PI);
+    // Soft at the top and bottom, in a few alpha steps (no screen-door
+    // dither: over a whole screen width that read as a grey band of grain).
+    const band = Math.pow(Math.sin((y / h) * Math.PI), 1.6);
     const n = (Math.sin(u * 2 + y * 0.05) * 0.5 + 0.5) * 0.5 + noise(x * 0.04, y * 0.12) * 0.5;
-    const a = band * n;
+    const a = Math.max(0, band * n * 1.6 - 0.35);
     const i = (y * w + x) * 4;
     img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
-    img.data[i + 3] = a > 0.35 + bayer(x, y) * 0.4 ? 255 : 0;
+    img.data[i + 3] = Math.round(Math.min(1, Math.round(a * 4) / 4) * 255);
   }
   ctx.putImageData(img, 0, 0);
   if (scene.textures.exists('mist')) scene.textures.remove('mist');

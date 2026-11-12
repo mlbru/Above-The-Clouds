@@ -48,7 +48,7 @@ export class FarSides {
   }
 
   // weightOf(id): how much of that biome is around you (0..1).
-  update(dt, { weightOf, camY, light, skyBottom, night }) {
+  update(dt, { weightOf, camY, camX = 0, light, skyBottom, night }) {
     this.t += dt;
     const any = FAR_BIOMES.some((id) => weightOf(id) > 0.001);
     if (!any && !this.items) return;
@@ -59,10 +59,15 @@ export class FarSides {
       for (const o of [it.img, it.water, it.glow]) if (o) o.setVisible(on);
       if (!on) continue;
       const ty = ((camY * it.f) % SIDE_H + SIDE_H) % SIDE_H;
+      // A little sideways parallax too, where the camera can pan (upright screens).
+      const x = (it.side === 'l' ? it.inset : GAME_WIDTH - SIDE_W - it.inset) - Math.round(camX * it.f * 0.4);
+      for (const o of [it.img, it.water, it.glow]) if (o) o.setX(x);
       const tint = lerpColor(light, skyBottom, it.haze * (1 - night * 0.5));
       it.img.setTilePosition(0, ty).setAlpha(w).setTint(tint);
-      if (it.water) it.water.setTilePosition(0, ty - this.t * 0.11 * (it.layer === 'mid' ? 1.4 : 1)).setAlpha(w * 0.92).setTint(lerpColor(tint, 0xffffff, 0.3));
-      if (it.glow) it.glow.setTilePosition(0, ty).setAlpha(w * Math.max(0, night - 0.15) * 1.15 * (0.85 + 0.15 * Math.sin(this.t / 700 + it.f * 9)));
+      // Water catches a little light by day; at night it is as dark as the rock.
+      if (it.water) it.water.setTilePosition(0, ty - this.t * 0.11 * (it.layer === 'mid' ? 1.4 : 1)).setAlpha(w * 0.92).setTint(lerpColor(tint, 0xffffff, 0.3 * (1 - night)));
+      // (Drawn under the scene's light, so it needs to be strong to read at night.)
+      if (it.glow) it.glow.setTilePosition(0, ty).setAlpha(w * Math.min(1, Math.max(0, night - 0.15) * 1.8) * (0.85 + 0.15 * Math.sin(this.t / 700 + it.f * 9)));
     }
   }
 

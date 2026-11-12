@@ -103,6 +103,9 @@ export const climbRun = {
 
   // ---- avalanche season
   updateAvalanche(dt, alt) {
+    // Snow takes the light of the hour: blue-grey at night, not glowing white.
+    const dim = (this.dayNight.state().night || 0) * 0.62;
+    const sn = (c) => (dim > 0 ? lerpColor(c, 0x2a3250, dim) : c);
     const stretch = biomeStretchAt(alt);
     const from = Number(stretch.split('@')[1]) || 0;
     const c = EVENT_CFG.avalanche;
@@ -132,24 +135,24 @@ export const climbRun = {
         const x = (i / 21) * (W + 30) - 15 + Math.sin(a.t / 400 + i) * 3;
         const r = 10 + ((i * 13) % 9) + k * 8;
         const y = lip - r * 0.6 + Math.sin(a.t / 260 + i * 1.7) * 2 * k;
-        g.fillStyle(0x9aaec8, 0.92).fillCircle(x, y + 2, r);
-        g.fillStyle(0xc8d6e8, 0.95).fillCircle(x - r * 0.2, y - r * 0.2, r * 0.75);
-        g.fillStyle(0xeef4fc, 0.9).fillCircle(x - r * 0.35, y - r * 0.4, r * 0.35);
+        g.fillStyle(sn(0x9aaec8), 0.92).fillCircle(x, y + 2, r);
+        g.fillStyle(sn(0xc8d6e8), 0.95).fillCircle(x - r * 0.2, y - r * 0.2, r * 0.75);
+        g.fillStyle(sn(0xeef4fc), 0.9).fillCircle(x - r * 0.35, y - r * 0.4, r * 0.35);
       }
-      g.fillStyle(0xb8c8dc, 0.95).fillRect(0, 0, W, Math.max(0, lip - 12));
+      g.fillStyle(sn(0xb8c8dc), 0.95).fillRect(0, 0, W, Math.max(0, lip - 12));
       // The warning: a plate with the word, the seconds left and a bar that runs down.
       const bx = W / 2 - 64, by = Math.round(lip + 10);
       g.fillStyle(0x16141f, 0.9).fillRect(bx - 3, by - 3, 134, 19);
       g.fillStyle(a.safe ? 0x2e5a22 : 0x2a3448, 1).fillRect(bx - 2, by - 2, 132, 17);
       g.fillStyle(0x16141f, 1).fillRect(bx, by + 10, 128, 4);
       g.fillStyle(a.safe ? 0x8fd16a : k > 0.75 && Math.floor(a.t / 160) % 2 ? 0xffffff : 0xb8d8f0, 1).fillRect(bx, by + 10, Math.round(128 * (1 - k)), 4);
-      g.fillStyle(0xffffff, 0.6).fillRect(bx, by + 10, Math.round(128 * (1 - k)), 1);
+      g.fillStyle(sn(0xffffff), 0.6).fillRect(bx, by + 10, Math.round(128 * (1 - k)), 1);
       if (!a.label) a.label = new PixelText(this, 0, 0, '', { color: '#e8f4ff' }).setScrollFactor(0).setDepth(DEPTH.weather + 3);
       a.label.setVisible(true).setPosition(bx + 2, by).setText(a.safe ? 'AVALANCHE  •  SAFE ON THE LEDGE' : `AVALANCHE IN ${Math.ceil(left / 1000)}  •  GET TO A LEDGE`).setColor(a.safe ? '#b8ff8a' : k > 0.75 ? '#ffffff' : '#e8f4ff');
       for (let i = 0; i < 10 + k * 70; i++) {
         const x = (i * 97 + Math.floor(a.t / 7) * (i % 3 + 1)) % W;
         const y = ((i * 53 + a.t * (0.04 + (i % 5) * 0.01)) % (GAME_HEIGHT * 0.8));
-        g.fillStyle(0xffffff, 0.5 + 0.4 * k).fillRect(x, Math.round(y), i % 4 ? 1 : 2, i % 4 ? 1 : 2);
+        g.fillStyle(sn(0xffffff), 0.5 + 0.4 * k).fillRect(x, Math.round(y), i % 4 ? 1 : 2, i % 4 ? 1 : 2);
       }
       if (k > 0.6 && Math.random() < dt / 300 && this.settings.shake) this.cam.shake(120, 0.001 + k * 0.002);
       if (left <= 0) {
@@ -175,11 +178,11 @@ export const climbRun = {
     for (let i = 0; i < 26; i++) {
       const x = (i / 25) * (W + 40) - 20, r = 26 + ((i * 37) % 22);
       const y = front - ((i * 29) % 40);
-      g.fillStyle(0xdfe8f4, 0.95).fillCircle(x, y, r);
-      g.fillStyle(0xffffff, 0.9).fillCircle(x - r * 0.25, y - r * 0.3, r * 0.6);
+      g.fillStyle(sn(0xdfe8f4), 0.95).fillCircle(x, y, r);
+      g.fillStyle(sn(0xffffff), 0.9).fillCircle(x - r * 0.25, y - r * 0.3, r * 0.6);
     }
-    g.fillStyle(0xf4f8ff, 0.9 * (1 - k * 0.6)).fillRect(0, 0, W, Math.max(0, front - 30));
-    for (let i = 0; i < 30; i++) g.fillStyle(0xffffff, 0.9).fillRect((i * 71 + Math.floor(a.t / 3)) % W, Math.round(front + 20 + ((i * 13) % 60)), 3, 3);
+    g.fillStyle(sn(0xf4f8ff), 0.9 * (1 - k * 0.6)).fillRect(0, 0, W, Math.max(0, front - 30));
+    for (let i = 0; i < 30; i++) g.fillStyle(sn(0xffffff), 0.9).fillRect((i * 71 + Math.floor(a.t / 3)) % W, Math.round(front + 20 + ((i * 13) % 60)), 3, 3);
   },
 
   // ---- the migration

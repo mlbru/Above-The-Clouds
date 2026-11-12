@@ -321,6 +321,8 @@ export class WallRenderer {
     add(sc.add.image(hutX, y + 1, 'far_hut').setOrigin(0.5, 1).setDepth(DEPTH.decor - 1).setFlipX(side < 0));
     const door = add(sc.add.image(hutX, y + 1, 'far_hut_glow').setOrigin(0.5, 1).setDepth(DEPTH.decor - 0.9).setBlendMode('ADD').setFlipX(side < 0).setAlpha(0.5));
     this.animated.push({ type: 'flicker', obj: door, base: 0.45, phase: 3, seg: si });
+    const doorPool = add(sc.add.image(hutX, y - 10, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xffa040).setScale(2.2, 1.6).setAlpha(0));
+    this.animated.push({ type: 'nightlight', obj: doorPool, base: 0.4, phase: 2, seg: si });
     add(sc.add.image(rackX, y + 1, 'far_rack').setOrigin(0.5, 1).setDepth(DEPTH.decor - 1.5));
     // The fire, the pot over it, the keeper, a log to sit on.
     add(sc.add.image(fireX, y + 1, 'far_tripod').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1.5));
@@ -350,6 +352,10 @@ export class WallRenderer {
     add(sc.add.image(lampX, y + 1, 'far_tlantern').setOrigin(0.5, 1).setDepth(DEPTH.decor));
     const lamp = add(sc.add.image(lampX, y - 14, 'glow').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffb050).setScale(0.9).setAlpha(0.4));
     this.animated.push({ type: 'flicker', obj: lamp, base: 0.4, phase: 1, seg: si });
+    const lampPool = add(sc.add.image(lampX, y - 14, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xffb050).setScale(1.6).setAlpha(0));
+    this.animated.push({ type: 'nightlight', obj: lampPool, base: 0.45, phase: 4, seg: si });
+    const carvePool = add(sc.add.image(stoneX, y + 1, 'far_stone_glow').setOrigin(0.5, 1).setDepth(DEPTH.light + 1).setBlendMode('ADD').setAlpha(0));
+    this.animated.push({ type: 'nightlight', obj: carvePool, base: 0.7, phase: 5, seg: si });
     add(sc.add.image(flagX, y + 1, 'flag').setOrigin(0.1, 1).setDepth(DEPTH.decor + 1));
     // Prayer flags from the stone to the hut, fluttering.
     const fg = add(sc.add.graphics().setDepth(DEPTH.decor - 1.2));
@@ -387,14 +393,14 @@ export class WallRenderer {
           const edge = side < 0 ? lv.bounds.l - 6 : lv.bounds.r + 6;
           const x0 = side < 0 ? edge : edge - len;
           const y = levelToY(lv.level) + 14;
-          add(sc.add.tileSprite(x0, y, len, 14, 'far_walkway').setOrigin(0, 0).setDepth(DEPTH.decor - 1).setFlipX(side > 0));
+          add(sc.add.tileSprite(x0, y, len, 14, 'far_walkway').setOrigin(0, 0).setDepth(DEPTH.holds - 4).setFlipX(side > 0));
         }
       }
       // A string of prayer flags across the wall, sagging, fluttering.
       if (rng.chance(0.75)) {
         const lv = rng.pick(mid), b = lv.bounds;
         const y0 = levelToY(lv.level) - 18, x0 = b.l + rng.int(0, 30), x1 = b.r - rng.int(0, 30);
-        const g = add(sc.add.graphics().setDepth(DEPTH.decor - 1));
+        const g = add(sc.add.graphics().setDepth(DEPTH.holds - 3));
         const cols = [0x4a8ae8, 0xf4f0e4, 0xe84a3a, 0x5ac86a, 0xf2c252];
         const sag = rng.int(10, 22);
         const yAt = (x) => y0 + Math.sin(((x - x0) / (x1 - x0)) * Math.PI) * sag;
@@ -404,7 +410,7 @@ export class WallRenderer {
         g.strokePath();
         let i = 0;
         for (let x = x0 + 6; x < x1 - 4; x += 9) {
-          const f = add(sc.add.rectangle(x, Math.round(yAt(x)) + 1, 6, 7, cols[i % 5]).setOrigin(0.5, 0).setDepth(DEPTH.decor - 0.9));
+          const f = add(sc.add.rectangle(x, Math.round(yAt(x)) + 1, 6, 7, cols[i % 5]).setOrigin(0.5, 0).setDepth(DEPTH.holds - 2.9));
           this.animated.push({ type: 'pennant', obj: f, y: f.y, phase: i * 0.37, seg: seg.index });
           i++;
         }

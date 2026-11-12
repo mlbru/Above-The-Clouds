@@ -13,7 +13,7 @@ import { makeCanvas } from '../utils/pixelGrid.js';
 import { lerpColor, bayer, rgb } from '../utils/color.js';
 import { SeededRandom } from '../utils/seededRandom.js';
 
-export const SIDE_W = 176, SIDE_H = 512;
+export const SIDE_W = 224, SIDE_H = 512;
 const TAU = Math.PI * 2;
 
 // Value noise that wraps vertically every SIDE_H pixels.
@@ -73,7 +73,7 @@ function cascade(seed, near) {
   const b = buffer(), water = buffer(), glow = buffer();
   const rock = near ? [0x050c0c, 0x0a1614, 0x12221e, 0x1c322c, 0x2a463e] : [0x16302c, 0x1e3c36, 0x284a42, 0x365c52, 0x4a7466];
   const green = near ? [0x0c2414, 0x163a1e, 0x24562a, 0x3a7a3a] : [0x24502e, 0x30683a, 0x44844a, 0x62a45a];
-  const edge = edgeFn(rng, near ? 92 : 132, near ? 22 : 26);
+  const edge = edgeFn(rng, near ? 112 : 178, near ? 22 : 24);
   for (let y = 0; y < SIDE_H; y++) {
     const e = edge(y);
     for (let x = 0; x < Math.min(SIDE_W, e + 1); x++) {
@@ -125,7 +125,7 @@ function cascade(seed, near) {
     }
   }
   // Waterfalls down the whole height, in their own layer (it flows).
-  const falls = near ? [rng.range(40, 70)] : [rng.range(30, 60), rng.range(90, 115)];
+  const falls = near ? [rng.range(40, 80)] : [rng.range(30, 60), rng.range(96, 120), rng.range(140, 160)];
   for (const fx of falls) {
     const w = near ? 7 : 5;
     for (let y = 0; y < SIDE_H; y++) {
@@ -213,7 +213,7 @@ function monastery(seed, near) {
     return { base: b, glow };
   }
   // The back layer: a cliff with halls built into it.
-  const edge = edgeFn(rng, 142, 16);
+  const edge = edgeFn(rng, 186, 16);
   for (let y = 0; y < SIDE_H; y++) {
     const e = edge(y);
     for (let x = 0; x < Math.min(SIDE_W, e + 1); x++) {
@@ -257,12 +257,12 @@ function moss(seed, near) {
   const b = buffer(), glow = buffer();
   const bark = near ? [0x060a04, 0x0e140a, 0x182010, 0x242e18, 0x323e20] : [0x1a2416, 0x24301c, 0x303e24, 0x3e5030, 0x52663c];
   const mossC = near ? [0x163a12, 0x245a1a, 0x3a8226, 0x6ab03a] : [0x2a5a22, 0x3a7a2a, 0x5a9e3a, 0x8ac85a];
-  const trunks = near ? [{ x: 34, w: 46 }] : [{ x: 26, w: 34 }, { x: 96, w: 26 }];
+  const trunks = near ? [{ x: 34, w: 46 }] : [{ x: 26, w: 34 }, { x: 96, w: 26 }, { x: 158, w: 30 }];
   // Behind the far trunks: the dim depths of the forest, more trunks in the
   // gloom and a ceiling of leaves, so no sky shows through.
   if (!near) {
     for (let y = 0; y < SIDE_H; y++) {
-      const e = 150 + Math.sin((y / SIDE_H) * TAU * 3) * 8 + (n(0, y, 1, 30) - 0.5) * 14;
+      const e = 196 + Math.sin((y / SIDE_H) * TAU * 3) * 8 + (n(0, y, 1, 30) - 0.5) * 14;
       for (let x = 0; x < Math.min(SIDE_W, e); x++) {
         const tr = Math.sin(x * 0.42 + n(x, y, 30, 120) * 5);
         let c = tr > 0.55 ? 0x2a3a26 : tr > 0.2 ? 0x22301e : 0x1a2618;
