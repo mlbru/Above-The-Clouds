@@ -8,15 +8,17 @@ export const BELLS = {
   minWeight: 0.5,
   every: [1, 3],
   // How long each arrow of the call stays lit (beats), and the pause after.
-  stepBeats: 0.75,
-  pauseMs: 500,
+  stepBeats: 1.1,
+  // Then the whole phrase stays lit this long to learn it, and a short pause.
+  holdMs: 1800,
+  pauseMs: 600,
   // Longest phrase a monk will ring.
-  maxNotes: 8,
+  maxNotes: 6,
 };
 
 // How long the call takes for a route with n notes (ms), at beatMs.
 export function callMs(n, beatMs, cfg = BELLS) {
-  return Math.round(n * cfg.stepBeats * beatMs + cfg.pauseMs);
+  return Math.round(n * cfg.stepBeats * beatMs + cfg.holdMs + cfg.pauseMs);
 }
 
 export class Bells {

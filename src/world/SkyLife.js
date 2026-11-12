@@ -33,11 +33,18 @@ export class SkyLife {
     // The mountain you left, far across the cloud sea: a hazy dark peak on the
     // left horizon, the Gate's two fires still burning near its top at night.
     if (this.oldMountain) {
-      const col = haze(0x2a1a22, 0.62 - day.night * 0.2), lit = haze(0x6a3a2a, 0.6);
-      for (let x = 0; x < 96; x += 1) {
-        const top = Math.round(70 + Math.abs(x - 34) * 1.1 + Math.sin(x * 0.4) * 2 + (x > 50 ? (x - 50) * 0.6 : 0));
-        g.fillStyle(col, 1).fillRect(x, top, 1, 260);
-        if (x === 34 || x === 35) g.fillStyle(lit, 1).fillRect(x, top, 1, 2);
+      // The peak itself changes only with the hour: redrawn twice a second
+      // into a graphics of its own, not every frame.
+      if (!this.oldG) this.oldG = this.scene.add.graphics().setScrollFactor(0).setDepth(this.g.depth - 0.01);
+      if ((this.oldT = (this.oldT || 0) - dt) <= 0) {
+        this.oldT = 500;
+        const og = this.oldG.clear();
+        const col = haze(0x2a1a22, 0.62 - day.night * 0.2), lit = haze(0x6a3a2a, 0.6);
+        for (let x = 0; x < 96; x++) {
+          const top = Math.round(70 + Math.abs(x - 34) * 1.1 + Math.sin(x * 0.4) * 2 + (x > 50 ? (x - 50) * 0.6 : 0));
+          og.fillStyle(col, 1).fillRect(x, top, 1, 260);
+        }
+        og.fillStyle(lit, 1).fillRect(34, 70, 2, 2);
       }
       const k = Math.max(0.25, day.night);
       for (const fx of [30, 39]) g.fillStyle(0xff8a3c, k * (0.6 + 0.4 * Math.sin(this.t / 90 + fx))).fillRect(fx, 72 + Math.abs(fx - 34), 1, 1);

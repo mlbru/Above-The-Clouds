@@ -163,6 +163,7 @@ export class WallRenderer {
       const v = this.visuals.get(j.segment.index);
       return !j.done || (v && !v.image);
     });
+    this.cullSegments(viewTopY, viewBottomY);
     const t = this.scene.time.now;
     for (const a of this.animated) {
       if (a.type === 'waterfall') a.obj.tilePositionY -= dt * 0.09;
@@ -791,11 +792,32 @@ export class WallRenderer {
     }).setDepth(DEPTH.decor - 1));
   }
 
+  // Segments well above or below the view are not drawn at all (their holds,
+  // decor, lights and wall image), which saves hundreds of draws a frame.
+  // Done with the main camera's bit in cameraFilter, so anything a segment
+  // hid on purpose (setVisible) stays hidden.
+  cullSegments(viewTopY, viewBottomY) {
+    const main = this.scene.cameras.main.id, margin = 320;
+    for (const v of this.visuals.values()) {
+      const sg = v.seg;
+      const top = levelToY(sg.endLevel) - LEVEL_PX * 2, bottom = levelToY(sg.startLevel) + LEVEL_PX * 2 + (sg.index === 0 ? 400 : 60);
+      const on = bottom > viewTopY - margin && top < viewBottomY + margin;
+      if (on === v.shown && !v.dirtyCull) continue;
+      v.shown = on;
+      v.dirtyCull = false;
+      for (const o of [...v.objects, v.image, ...(v.rims || [])]) {
+        if (!o || !o.active) continue;
+        if (on) o.cameraFilter &= ~main; else o.cameraFilter |= main;
+      }
+    }
+  }
+
   finishWall(v, job) {
     const tm = this.scene.textures;
     if (tm.exists(v.texKey)) tm.remove(v.texKey);
     tm.addCanvas(v.texKey, job.canvas);
     v.image = this.scene.add.image(0, job.top, v.texKey).setOrigin(0, 0).setDepth(DEPTH.wall);
+    v.dirtyCull = true;
     if (job.rim) {
       v.rims = ['l', 'r'].map((side) => {
         const key = `${v.texKey}_rim${side}`;

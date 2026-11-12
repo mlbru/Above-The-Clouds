@@ -20,6 +20,10 @@ export class FarSides {
     this.t = 0;
   }
 
+  // Paint the textures ahead of time (the scene calls this while the dragon
+  // flight's cutscene starts, so the ~150 ms of painting is never felt).
+  prebuild() { if (!this.items) this.build(); }
+
   build() {
     const sc = this.scene;
     buildFarSideTextures(sc);

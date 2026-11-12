@@ -498,12 +498,23 @@ export class ComboPrompt {
       if (it) e.rings.push({ x: it.sx, t });
       if (this.scene.onBellStrike) this.scene.onBellStrike(k, n);
     }
+    // After the last strike the whole phrase stays lit a while to learn it,
+    // a bar under the row running down until the arrows go blank.
+    const callEnd = e.t0 + n * e.step;
+    const studying = now >= callEnd && now < callEnd + BELLS.holdMs;
     this.items.forEach((it, i) => {
       if (!it.note.echo || it.note.result) return;
-      const show = calling && i <= k;
+      const show = (calling && i <= k) || studying;
       it.callLit = calling && i === k;
-      it.small.setTexture(show ? `arrow_s_${it.note.dir}` : 'icon_bell_s');
+      const key = show ? `arrow_s_${it.note.dir}` : 'icon_bell_s';
+      if (it.small.texture.key !== key) it.small.setTexture(key);
     });
+    if (studying && this.items.length) {
+      const left = 1 - (now - callEnd) / BELLS.holdMs;
+      const x0 = this.items[0].sx - 4, w = this.items.length * 10;
+      g.fillStyle(0x16141f, 0.9).fillRect(x0 - 1, TRACK_Y - 13, w + 2, 3);
+      g.fillStyle(0xf2c252, 1).fillRect(x0, TRACK_Y - 12, Math.round(w * left), 1);
+    }
     // Rings of light out from the lit arrow (the bell's note, seen).
     e.rings = e.rings.filter((r) => t - r.t < 520);
     for (const r of e.rings) {

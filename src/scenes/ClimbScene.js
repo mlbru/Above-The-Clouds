@@ -368,6 +368,7 @@ export class ClimbScene extends Phaser.Scene {
     this.hudFade = this.fromTitle ? this.hud.root.map((o) => { const to = o.alpha; o.setAlpha(0); return { o, to }; }) : null;
     this.hudFadeT = 0;
     if (this.devRun && this.devStart > 0) this.startHigh(this.devStart);
+    if (this.devRun && this.devStart >= LOOP_START - 40) this.farSides.prebuild();
     else if (this.liftTo) this.rideLift();
     if (typeof window !== 'undefined') window.__atc = this;
     wipeIn(this);
@@ -2863,6 +2864,8 @@ export class ClimbScene extends Phaser.Scene {
     if (this.settings.shake) this.cam.shake(1100, 0.006);
     this.climber.setPose('look');
     const m = Math.floor(levelToMeters(node.level));
+    // Paint the Far Range's side scenery now, under the roar and the flash.
+    this.time.delayedCall(200, () => this.farSides.prebuild());
     this.time.delayedCall(1300, () => {
       if (!this.sys.isActive()) return;
       this.liftRide = new DragonFlight(this, {
