@@ -152,7 +152,9 @@ while the height counts back to 0 m, then lands in the cloud sea (`cloudFall()` 
   notes appear and get more common all the way to about 3500 m: **mirrored** arrows in pink that
   you press the other way (950 m+), **doubles**, two stacked arrows pressed together (1200 m+), and
   **rolls**, a dotted tail you tap again and again until its dots are gone (1450 m+; 3 taps,
-  4 from 2200 m, 5 from 3000 m). From 1700 m climbs get one more input (`mirror`, `chord`,
+  4 from 2200 m, 5 from 3000 m), and **roped pairs** (from the Bone Garden): two arrows tied
+  with a rope come in the wrong way round and hop over each other into their true order
+  before the line. Press them in the order they land; you read it, you never need the sound. From 1700 m climbs get one more input (`mirror`, `chord`,
   `roll` in the `ramp` of `balanceConfig.js`).
 - **Perfect streaks**: consecutive perfect moves are counted under the grip meter. At 10, 20
   and 30 (then every 10) you get grip back; 20 and 30 in a row unlock the Golden Beanie and
@@ -322,6 +324,38 @@ saves as you go. Five of the choices tune the feel per player:
 - **LEDGE LIFE**: LIVELY adds new idles after about 9 seconds on a ledge: a drink from the
   bottle, a look at the map, a wave, warm breath into the hands in the cold, pointing at the
   stars at night. CALM keeps the original fidgets.
+
+## The Dragon's Gate and the Far Range
+
+Near the top of the first Dragon's Spine (from 1760 m) the dragon wakes for good: it never
+sleeps again, breathes every few seconds and its war drums never stop. The first ledge past
+1830 m is always there and is the Gate itself: two black pillars wrapped in bone, a chain
+between them, braziers on top. Reach it and the dragon rears over you, you climb onto its
+neck, and it carries you across the cloud sea (`src/ui/DragonFlight.js`): the old mountain
+falls away with the Gate's fires still burning, peaks poke through the clouds, it roars and
+breathes fire over the open sea, and the Far Range rises ahead. You land on the Far Shore and
+the climb goes on from the same height; the mountain you left stays on the horizon. Once per
+run, in every endless mode (`src/data/gate.js`). The Far Range's own biomes are not built
+yet (ideas in `docs/idea-sheet-4.md` §8): after the Far Shore the high biomes take turns.
+
+## Pets
+
+The pen at the far end of base camp (**PETS**, `src/scenes/PetScene.js`) holds the pets you
+have found: a goat kid (after a goat follows you up the wall), a hive bee (the Amber Hive), a
+crystal moth (the Crystal Heights) and a dragonling (cross the Dragon's Gate). Take one along
+and it rides with you on every run, growing with the metres you climb together: baby, young
+(1500 m) and grown (6000 m). Each has one small habit that only shows you what is already
+there: the kid bleats at loose or crumbling rock on the route you pick, the bee hovers over a
+gem while you choose, the moth glows at night, and the dragonling puffs smoke on your
+shoulder and hides behind your head when the big one wakes (`src/data/pets.js`,
+`src/entities/PetFx.js`). The ones you leave behind potter about in the pen at camp.
+
+## Close passers
+
+Every half a minute or so something passes right in front of the camera, big and quick: a
+bird on the lower slopes, a bank of cloud that washes over the view above the clouds, fat
+snowflakes in the cold, a ribbon of bees, bats, crystal dust, steam, or embers near the
+dragon. They keep to the top of the screen, clear of the note track (`src/world/NearPass.js`).
 
 ## Thin Air
 

@@ -103,6 +103,10 @@ more. Could be a boon or a dare rather than the base rule.
 A separate mode, **Duet**: the track splits into a left hand lane and a right hand lane, each
 with its own rhythm, like a drum game. Huge skill ceiling, opt-in only.
 
+### ~~1.14b Roped pairs (a new beat you read, not hear)~~ ✓ built
+Two arrows tied with a rope come in swapped and hop over each other into their true order
+before the line. Press them in the order they land. Arrives with the Bone Garden.
+
 ### 1.13 New boons to add to the cairn
 - **METRONOME**: a tick plays on every beat. *Price:* the music is quieter.
 - **SHERPA**: once per biome, a missed note is played for you. *Price:* gems worth 30% less.
@@ -176,7 +180,7 @@ Rim light from the sun and from biome light sources: orange from the dragon's fi
 from the aurora, pink from prism light, a lightning flash that throws a hard shadow on the
 wall for one frame.
 
-### 2.10 Things in front of the camera · S
+### ~~2.10 Things in front of the camera · S~~ ✓ built
 Every so often, something passes **between** you and the climber: a cloud bank that blurs
 the screen for a second, a crane flying past huge and close, a drift of snow, a curtain of
 bees, a falling ember. Gives depth.
@@ -257,7 +261,7 @@ A single biome as a short challenge with a medal: climb the Stone Wall in under 
 rock hits, climb the Aurora in full swing with no misses. Bronze, silver, gold, plus a
 "dev time" medal.
 
-### 3.10 A pet that grows · M
+### ~~3.10 A pet that grows · M~~ ✓ built (goat kid, hive bee, crystal moth, dragonling)
 A companion that rides on your pack and grows across runs: a goat kid, a crystal moth, a
 bee from the Hive, a baby dragon (§5.K). Each has one small helpful habit and a growth bar
 filled by distance climbed.
@@ -342,7 +346,7 @@ only. A breather between two hard biomes.
 Right now the high biomes loop forever after 1950 m. Here are many ideas for what could be
 up there, then a recommended way to stitch the best ones together.
 
-### A · The Dragon's Gate (the boss)
+### ~~A · The Dragon's Gate (the boss)~~ ✓ built
 At the top of the Dragon's Spine the dragon wakes for good and **does not go back to
 sleep**. A long crux pitch: it breathes on every fourth climb, its wings make gusts, the
 music is a full battle version of the throat-singing motif. At the top, the dragon rears,
@@ -383,7 +387,7 @@ The Golden City was never an accident. Above the dragon is where it comes from: 
 city in the clouds, abandoned. Climb its towers, ring its bells. The secret 1-in-200 city
 becomes a teaser of the real thing.
 
-### H · The Roc's Eyrie and the Far Range
+### H · The Roc's Eyrie and the Far Range (half built: the dragon carries you to the Far Range; its own biomes are still to come, see §8)
 A giant bird's nest at the top. The roc carries you to **another mountain** across the
 cloud sea, with a new set of biomes (a desert mountain, a jungle one, an ocean sea-stack).
 A second world without throwing away the first.
@@ -457,3 +461,43 @@ Following the rule that every menu is themed and animated:
 - ~~A distant second climber on a far peak in the backdrop, sometimes waving.~~ ✓
 - ~~Sound: your breathing speeds up as grip goes down.~~ ✓
 - ~~The cloud sea under you gets thicker the higher you are; at night it glows with the town's lights far below.~~ ✓
+
+---
+
+## 8 · The Far Range: ideas for its first three biomes
+
+The dragon now drops you on the Far Shore, about 1850 m up a new mountain: green-black rock,
+waterfalls falling into the cloud sea, and one lit ledge. These are its first three biomes,
+picked so that every twist can be seen, so it works without sound.
+
+### 8.1 The Weeping Falls · twist: **Curtains**
+The rock you saw from the dragon's back: black-green stone, moss, waterfalls everywhere.
+Every few climbs a curtain of falling water sweeps sideways across the note track. Notes
+behind it ripple and bob up and down, so you read them through moving water. Perfect hits
+on wet holds leave a rainbow in the spray; three in a row give a free climb.
+*Look:* slick dark rock, ferns, white water, mist rising off the clouds below.
+*Gem:* river pearl.
+
+### 8.2 The Glass Tarn · twist: **Two-way track**
+A frozen crater lake high on the mountain, smooth as a mirror. The note track reflects:
+notes slide in from both ends and meet at a hit line in the middle. The ones from the right
+are the reflection, and they are just as real. Two streams to read at once, all by eye.
+*Look:* pale ice, the sky upside down in the lake, your own climber reflected under you.
+*Gem:* tarn glass.
+
+### 8.3 The Lantern Terraces · twist: **Keep the lights on**
+A village nobody lives in any more, cut into the mountain in steps, strung with paper
+lanterns. It is always dusk here. Only a pool of lantern light is lit on the note track;
+every perfect hit lights the next lantern and widens the pool, every miss lets one go out
+and the track gets darker. Climb well and you can see far ahead; climb badly and you only
+see the last moment before the line.
+*Look:* paper lanterns in red and gold, empty houses, prayer bells, cats.
+*Gem:* lantern amber.
+
+### 8.4 Other candidates
+- **The Moss Cathedral**: giant hanging roots. *Vine notes*: hold an arrow and switch to
+  the next one where the vine bends, without letting go.
+- **The Kite Ridge**: a windy crest where people once flew kites. *Kite notes* bob up and
+  down on their strings as they slide in.
+- **The Sunken Bells**: a bell tower half swallowed by the rock. Every bell that rings
+  (seen as a ring of light) flips the next note's arrow.

@@ -83,6 +83,10 @@ export const BALANCE = {
     mirror: [832, 3200, 0.5],
     chord: [1179, 3400, 0.45],
     roll: [1353, 3500, 0.5],
+    // Roped pairs: two arrows tied together come in swapped and hop into
+    // their true order before the line (read it, no sound needed). They
+    // arrive with the Bone Garden.
+    swap: [1526, 2600, 0.35],
     rollTaps: [{ from: 0, taps: 3 }, { from: 2200, taps: 4 }, { from: 3000, taps: 5 }],
     rollBeats: 1.5,
     // A press of a chord's second arrow may come this much after the first.

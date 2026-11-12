@@ -301,7 +301,20 @@ function personFrame(id, f) {
   return g;
 }
 
+// The pets' pen at base camp: a low split-rail fence round a bed of straw.
+function penGrid() {
+  const g = new PixelGrid(40, 16);
+  g.rect(1, 12, 38, 3, 0xc8a050);
+  for (let x = 2; x < 38; x += 3) g.set(x, 11 + (x % 2), 0xe8c870);
+  for (const px of [1, 13, 26, 38]) { g.rect(px, 3, 2, 12, WOOD_D); g.set(px, 3, WOOD_L); }
+  g.rect(1, 5, 39, 2, WOOD); g.rect(1, 5, 39, 1, WOOD_L);
+  g.rect(1, 9, 39, 2, WOOD); g.rect(1, 9, 39, 1, WOOD_L);
+  g.outline(OUT);
+  return g;
+}
+
 export function buildCampTextures(scene) {
+  add(scene, 'camp_pen', penGrid());
   add(scene, 'camp_board', boardGrid());
   for (const id of Object.keys(PEOPLE_LOOK)) addFrames(scene, `camp_person_${id}`, [personFrame(id, 0), personFrame(id, 1)]);
   addFrames(scene, 'camp_fire', [0, 1, 2].map(fireFrame));

@@ -66,9 +66,22 @@ export class DragonEye {
   // A fire breath is ready on the next hold you hang from.
   get breathDue() { return this.active && this.breathIn <= 0; }
 
+  // The Dragon's Gate (data/gate.js): awake for good, breathing every
+  // `breathSec` seconds, until released (then it settles as usual).
+  holdAwake(breathSec) {
+    this.held = breathSec;
+    if (this.phase === 'sleep' || this.phase === 'closing') { this.phase = 'opening'; this.left = this.cfg.openSec * 1000; }
+  }
+
+  release() {
+    this.held = null;
+    if (this.phase === 'watching' || this.phase === 'opening') { this.phase = 'closing'; this.left = this.cfg.closeSec * 1000; }
+  }
+
   // Plans the next breath: the directions to dodge, then restarts the timer.
   startBreath(heightM) {
-    this.breathIn = this.rng.range(this.cfg.breathSec[0], this.cfg.breathSec[1]) * 1000;
+    const range = this.held || this.cfg.breathSec;
+    this.breathIn = this.rng.range(range[0], range[1]) * 1000;
     const first = this.rng.pick(['L', 'R']);
     if (heightM < this.cfg.doubleFrom) return [first];
     return [first, first === 'L' ? 'R' : 'L'];
@@ -80,6 +93,8 @@ export class DragonEye {
     if (this.active) this.breathIn -= dt;
     if (this.phase === 'sleep' && weight < this.cfg.minWeight) return null;
     this.left -= dt;
+    // Held awake by the Gate: it never closes its eye.
+    if (this.held && this.phase === 'watching') this.left = Math.max(this.left, 1000);
     if (this.left > 0) return null;
     const next = { sleep: 'opening', opening: 'watching', watching: 'closing', closing: 'sleep' }[this.phase];
     this.phase = next;

@@ -9,6 +9,8 @@ import { lerpColor } from '../utils/color.js';
 import { currentSeason } from '../data/seasons.js';
 import { BIOMES } from '../data/biomes.js';
 import { PEOPLE } from '../data/requests.js';
+import { PETS, activePet, petStage } from '../data/pets.js';
+import { buildPetTextures } from '../render/petArt.js';
 import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 
 // Decorations that give light at night: [texture key part, colour, size, strength].
@@ -122,6 +124,10 @@ export class WallRenderer {
       if (a.type === 'trader') a.obj.setFrame(Math.floor(t / 140) % 26 === 0 ? 1 : Math.floor(t / 900) % 2 ? 2 : 0);
       if (a.type === 'fire') a.obj.setFrame(Math.floor(t / 110) % 3);
       if (a.type === 'person') a.obj.setFrame(Math.floor(t / 1300 + a.phase) % 4 === 0 ? 1 : 0);
+      if (a.type === 'pet') {
+        if (a.fly) a.obj.setFrame(Math.floor(t / 60 + a.phase) % 2).setY(Math.round(a.y0 + Math.sin(t / 300 + a.phase) * 3));
+        else a.obj.setFrame(Math.floor(t / 900 + a.phase) % 5 === 0 ? 1 : 0);
+      }
       // Fire and lamps glow brighter as night falls.
       if (a.type === 'flicker') a.obj.setAlpha((a.base + Math.sin(t / 90 + a.phase) * 0.06 + Math.sin(t / 37 + a.phase) * 0.04) * (0.6 + (this.night || 0) * 1.1));
       // Pools of light from fires, lamps, vents and crystals: only at night.
@@ -274,6 +280,8 @@ export class WallRenderer {
       }
     } else if (type === 'tool') {
       add(this.scene.add.image(spot(40), node.y - 14, 'decor_axe_stuck').setDepth(DEPTH.decor));
+    } else if (type === 'gate') {
+      this.placeGate(node, lv.bounds, add, seg.index);
     } else if (type === 'summit') {
       // The top of an expedition: a cairn, prayer flags and a flag on the very top.
       add(this.scene.add.image(node.x - side * 22, node.y, 'decor_cairn').setOrigin(0.5, 1).setDepth(DEPTH.decor));
@@ -298,6 +306,21 @@ export class WallRenderer {
     const bx = clampX(node.x - side * 140);
     add(sc.add.image(bx, y + 1, 'camp_board').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side > 0));
     this.campSpots = { ...(this.campSpots || {}), board: { x: bx, y } };
+    // The pets' pen, past the board: the ones you have and are not taking
+    // along potter about inside it.
+    const have = PETS.filter((p) => p.unlocked(d));
+    if (have.length) {
+      const px = clampX(node.x - side * 186);
+      add(sc.add.image(px, y + 1, 'camp_pen').setOrigin(0.5, 1).setDepth(DEPTH.decor));
+      this.campSpots = { ...(this.campSpots || {}), pen: { x: px, y } };
+      buildPetTextures(sc);
+      const away = activePet(d);
+      have.filter((p) => !away || p.id !== away.id).forEach((p, i) => {
+        const flying = p.id === 'bee' || p.id === 'moth';
+        const pet = add(sc.add.sprite(px - 12 + i * 10, y - (flying ? 12 : 3), `pet_${p.id}_${petStage(d, p.id)}`, 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 0.5).setFlipX(i % 2 === 1));
+        this.animated.push({ type: 'pet', obj: pet, phase: i * 1.3, fly: flying, y0: pet.y, frames: p.id === 'kid' || p.id === 'dragonling' ? 2 : 2, seg: 0 });
+      });
+    }
     // Tents: one more for every 500 m of record, pitched beyond the pines.
     const best = (d.bestByMode && d.bestByMode.normal) || 0;
     const tents = Math.min(4, Math.floor(best / 500));
@@ -352,6 +375,47 @@ export class WallRenderer {
       const p = add(sc.add.sprite(px, y + 1, `camp_person_${id}`, 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setFlipX(px > fx));
       this.animated.push({ type: 'person', obj: p, phase: i * 1.7, seg: 0 });
     });
+  }
+
+  // The Dragon's Gate (data/gate.js): two black glass pillars wrapped in
+  // bone, a sagging chain between them, braziers burning on top.
+  placeGate(node, bounds, add, si) {
+    const sc = this.scene, y = node.y;
+    const half = Math.min(52, Math.max(30, (bounds.r - bounds.l) / 2 - 14));
+    const g = add(sc.add.graphics().setDepth(DEPTH.decor));
+    const OB = 0x1a1220, OB2 = 0x34243a, RIM = 0x8a5aa8, BONE = 0xe8dcc0, BONE_D = 0xa89878;
+    for (const s of [-1, 1]) {
+      const px = Math.round(node.x + s * half), top = y - 52;
+      g.fillStyle(0x0a0608, 1).fillRect(px - 6, top - 2, 13, 54);
+      g.fillStyle(OB, 1).fillRect(px - 5, top, 11, 52);
+      g.fillStyle(OB2, 1).fillRect(px - 5, top, 3, 52);
+      g.fillStyle(RIM, 1).fillRect(px + (s < 0 ? 4 : -5), top + 2, 1, 48);
+      // Ribs of bone curling round it.
+      for (let k = 0; k < 4; k++) {
+        const ry = top + 8 + k * 11;
+        g.fillStyle(BONE_D, 1).fillRect(px - 7, ry + 1, 15, 2);
+        g.fillStyle(BONE, 1).fillRect(px - 7, ry, 15, 1);
+        g.fillStyle(BONE, 1).fillRect(px + s * 7, ry - 2, 2, 3);
+      }
+      // A spike on top, and the brazier bowl.
+      g.fillStyle(BONE, 1).fillTriangle(px - 4, top, px + 4, top, px + s * 2, top - 9);
+      g.fillStyle(0x3a2a20, 1).fillRect(px - 6, top - 4, 13, 3);
+      g.fillStyle(0x6a4a30, 1).fillRect(px - 6, top - 4, 13, 1);
+      const fire = add(sc.add.sprite(px, top - 3, 'camp_fire', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setScale(0.75));
+      this.animated.push({ type: 'fire', obj: fire, seg: si });
+      const glow = add(sc.add.image(px, top - 8, 'glow').setDepth(DEPTH.decor - 1).setBlendMode('ADD').setTint(0xff7a2c).setScale(1.1).setAlpha(0.4));
+      this.animated.push({ type: 'flicker', obj: glow, base: 0.4, phase: s + 2, seg: si });
+      const pool = add(sc.add.image(px, top + 10, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xff6a20).setScale(2.4, 2).setAlpha(0));
+      this.animated.push({ type: 'nightlight', obj: pool, base: 0.5, phase: s, seg: si });
+    }
+    // The chain sagging between them.
+    const x0 = node.x - half + 6, x1 = node.x + half - 6, cy = y - 46;
+    for (let x = x0; x <= x1; x += 3) {
+      const u = (x - x0) / (x1 - x0);
+      const yy = Math.round(cy + Math.sin(u * Math.PI) * 10);
+      g.fillStyle(0x16141f, 1).fillRect(Math.round(x), yy, 3, 2);
+      g.fillStyle((x / 3) % 2 ? 0x6a6470 : 0x9a94a0, 1).fillRect(Math.round(x), yy, 2, 1);
+    }
   }
 
   // Halloween and Christmas at base camp (data/seasons.js): carved pumpkins

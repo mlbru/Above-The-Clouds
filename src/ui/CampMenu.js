@@ -8,6 +8,7 @@ import { BIOMES } from '../data/biomes.js';
 import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 import { thinAirTop, activeThinAir } from '../data/thinAir.js';
 import { ensureRequests } from '../data/requests.js';
+import { PETS, activePet } from '../data/pets.js';
 
 // Base camp as a menu, used by the title screen and by base camp during a
 // run: the logo, one floating word over each spot at camp (the wall is CLIMB,
@@ -97,6 +98,8 @@ export class CampMenu {
     const j = journalProgress(prog);
     const unseen = JOURNAL_CHAPTERS.reduce((n, c) => n + c.entries.filter((e) => e.known(prog) && !(d.journalSeen || []).includes(e.id)).length, 0);
     this.spots = [
+      // The pets' pen, at the far end of camp.
+      a.pets && sp.pen && (() => { const p = activePet(d); const n = PETS.filter((q) => q.unlocked(d)).length; return { id: 'pets', label: 'PETS', x: sp.pen.x, y: sp.pen.y - 30, badge: p ? p.name : `${n} WAITING`, badgeNew: false, go: a.pets }; })(),
       // Camp requests: the corkboard on its post past the woodpile.
       a.requests && sp.board && (() => { const st = ensureRequests(d); const done = st.active.filter((n) => n.done).length; return { id: 'requests', label: 'REQUESTS', x: sp.board.x, y: sp.board.y - 40, badge: done ? `${done} DONE` : `${st.active.length} NOTES`, badgeNew: !!done, go: a.requests }; })(),
       a.collection && sp.fire && { id: 'collection', label: 'COLLECTION', x: sp.fire.x, y: sp.fire.y - 20, badge: unseen ? `${unseen} NEW` : `${j.seen}/${j.total}`, badgeNew: !!unseen, go: a.collection },

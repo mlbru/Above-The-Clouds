@@ -39,6 +39,7 @@ export function difficultyAt(meters, mode = 'normal', balance = BALANCE) {
     mirror: r.mirror ? ramp01(r.mirror, h) : 0,
     chord: r.chord ? ramp01(r.chord, h) : 0,
     roll: r.roll ? ramp01(r.roll, h) : 0,
+    swap: r.swap ? ramp01(r.swap, h) : 0,
     rollTaps,
   };
 }

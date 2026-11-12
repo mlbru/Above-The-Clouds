@@ -5,6 +5,7 @@ import { SEGMENT_TEMPLATES } from '../data/segments.js';
 import { biomeAt } from '../data/biomes.js';
 import { choosePattern } from '../data/comboPatterns.js';
 import { difficultyAt } from './DifficultySystem.js';
+import { isGateSegment } from '../data/gate.js';
 import { gemForBiome } from '../data/gems.js';
 import { GEM_INCOME } from '../data/shop.js';
 
@@ -54,7 +55,9 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   const template = pickTemplate(rng, biome.id, prev && prev.templateId, index);
   const diff = difficultyAt(levelToMeters(startLevel), mode, balance);
   const sinceRest = prev ? prev.sinceRest + 1 : 0;
-  const isRest = index > 0 && sinceRest >= diff.restEvery - 1;
+  // The Dragon's Gate (data/gate.js) is always a ledge, at the top of the first Spine.
+  const gate = !!prev && isGateSegment(levelToMeters(prev.startLevel), levelToMeters(startLevel));
+  const isRest = index > 0 && (gate || sinceRest >= diff.restEvery - 1);
   const count = rng.int(template.levels[0], template.levels[1]);
   const targetWidth = rng.range(template.width[0], template.width[1]);
   const hazardChance = {
@@ -132,6 +135,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   const viewpointCount = (prev ? prev.viewpointCount : 0);
   let rest = null;
   if (index === 0) rest = { type: 'camp', name: 'BASE CAMP', discovery: null, viewpoint: null };
+  else if (gate) rest = { type: 'gate', name: "THE DRAGON'S GATE", gate: true, discovery: null, viewpoint: null };
   else if (isRest) rest = pickRest(rng, biome, viewpointCount);
 
   // Decorations hug the wall edges so they never cover holds.
@@ -197,7 +201,19 @@ export function buildRhythm(rng, pattern, ramp, biome, typeIndex = 1) {
   }
   // The high mountain's notes. Each keeps clear of the other tricks so a note
   // never asks two new things at once.
-  const plain = (n) => !n.hold && !n.hidden && !n.gust && !n.mirror && !n.chord && !n.roll;
+  const plain = (n) => !n.hold && !n.hidden && !n.gust && !n.mirror && !n.chord && !n.roll && !n.swap;
+  // A roped pair: two different arrows a beat or more apart, never the first
+  // note (it needs time on the track to make its hop).
+  if (ramp.swap && rng.chance(Math.min(1, ramp.swap * k * 1.8))) {
+    const options = notes.map((n, i) => i).filter((i) => i >= 1 && i < notes.length - 1 && plain(notes[i]) && plain(notes[i + 1])
+      && notes[i].dir !== notes[i + 1].dir && notes[i + 1].gap >= 1);
+    if (options.length) {
+      const i = rng.pick(options);
+      notes[i].swap = 1;
+      notes[i + 1].swap = 2;
+      tags.add('ROPED');
+    }
+  }
   if (ramp.mirror) {
     for (let i = 0; i < notes.length; i++) {
       if (notes[i].dir !== 'U' && plain(notes[i]) && rng.chance(ramp.mirror * k)) { notes[i].mirror = true; tags.add('MIRROR'); }

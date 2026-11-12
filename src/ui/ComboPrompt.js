@@ -145,7 +145,7 @@ export class ComboPrompt {
       // A gear note's cog turns behind it, on the track and in the sequence row.
       const cog = note.gear ? this.add.image(0, TRACK_Y, 'icon_cog').setScrollFactor(0).setDepth(DEPTH.hud + 1.9).setTint(GEAR_TINT) : null;
       const cogS = note.gear ? this.add.image(small.x, small.y, 'icon_cog_s').setScrollFactor(0).setDepth(DEPTH.hud + 1.9).setTint(0xb8863a) : null;
-      this.items.push({ note, big, small, big2, small2, mark: null, holdBar, cog, cogS, ticks: -1 });
+      this.items.push({ note, big, small, big2, small2, mark: null, holdBar, cog, cogS, ticks: -1, sx: seqX + i * 10 + 4 });
     });
     if (combo.notes.some((n) => n.gust)) {
       this.gustIcon = this.add.image(TRACK_X + TRACK_W - 6, TRACK_Y - 33, 'icon_wind').setOrigin(1, 0).setTint(NOTE_TINT.gust).setScrollFactor(0).setDepth(DEPTH.hud + 2).setVisible(false);
@@ -215,7 +215,45 @@ export class ComboPrompt {
     this.items.forEach((it) => {
       const note = it.note;
       const isCur = note === c.current;
-      const x = HIT_X + (note.time - now) * PX_PER_MS;
+      let x = HIT_X + (note.time - now) * PX_PER_MS;
+      // A roped pair comes in the wrong way round, tied together; a beat and
+      // a half before the first reaches the line they hop over each other
+      // (the first over the top, the second underneath) into their true
+      // order and the rope slips off. Only the drawing changes.
+      let swapY = 0;
+      if (note.swap && !note.result) {
+        const first = note.swap === 1 ? note : c.notes[note.index - 1];
+        const partner = c.notes[note.index + (note.swap === 1 ? 1 : -1)];
+        const px = HIT_X + (partner.time - now) * PX_PER_MS;
+        const at = first.time - Math.max(650, 1.6 * c.beatMs);
+        const p = Math.max(0, Math.min(1, (now - at) / 260));
+        const e = p * p * (3 - 2 * p);
+        const natural = x;
+        x = px + (natural - px) * e;
+        swapY = Math.round(Math.sin(p * Math.PI) * (note.swap === 1 ? -9 : 6));
+        const ps = this.items[partner.index].sx;
+        it.small.setX(Math.round(ps + (it.sx - ps) * e));
+        if (note.swap === 1) {
+          const x2 = natural + (px - natural) * e; // where the second one is drawn
+          const y2 = Math.round(Math.sin(p * Math.PI) * 6);
+          const vis = Math.min(x, x2) < clipR && Math.max(x, x2) > TRACK_X - 6;
+          if (vis && p < 1) {
+            // The rope: red and cream, sagging between the two, a knot at each end.
+            const a = Math.round(Math.min(x, x2)), b = Math.round(Math.max(x, x2));
+            for (let px2 = a; px2 <= b; px2 += 2) {
+              const u = (px2 - a) / Math.max(1, b - a);
+              const y = Math.round(TRACK_Y + 6 + Math.sin(u * Math.PI) * 2 + (swapY + y2) * 0.5 * (1 - Math.abs(u - 0.5) * 2));
+              g.fillStyle(Math.floor(px2 / 4) % 2 ? 0xf4efe4 : 0xe0503a, 1).fillRect(Math.min(clipR, px2), y, 2, 1);
+            }
+            g.fillStyle(0xe0503a, 1).fillRect(a - 1, TRACK_Y + 5, 3, 2).fillRect(b - 1, TRACK_Y + 5, 3, 2);
+          }
+          // The rope slips off: a short flash between them.
+          if (p >= 1 && now - at < 520 && vis) {
+            const k = (now - at - 260) / 260, mx = Math.round((x + x2) / 2);
+            g.fillStyle(0xffffff, Math.max(0, 1 - k)).fillRect(mx - 1, TRACK_Y + 4, 3, 1).fillRect(mx - 4 - Math.round(k * 6), TRACK_Y + 6, 2, 1).fillRect(mx + 3 + Math.round(k * 6), TRACK_Y + 6, 2, 1);
+          }
+        }
+      } else if (note.swap) it.small.setX(it.sx);
       // Gust notes ride on a pale wind band with tighter zones.
       if (note.gust && !note.result) {
         const gw = Math.round(note.goodMs * PX_PER_MS);
@@ -298,6 +336,7 @@ export class ComboPrompt {
         if (this.dark) alpha = darkAlpha(this.dark, now, c.notes[0].time, this.route.beatMs, isCur);
         if (this.minAlpha && (note.hidden || this.revealMs || this.dark)) alpha = Math.max(alpha, this.minAlpha * (isCur ? 1 : 0.8));
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x)).setAlpha(alpha);
+        if (note.swap) it.big.setY(TRACK_Y + swapY);
         const tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
         it.big.setTint(tint);
         if (note.chord) {

@@ -38,6 +38,8 @@ export class ComboSystem {
         taps: spec.roll || 0,
         tapsLeft: spec.roll ? spec.roll - 1 : 0,
         mirror: !!spec.mirror,
+        // A roped pair (1: first, 2: second): only how it is drawn changes.
+        swap: spec.swap || 0,
         still: !!spec.still,
         swarm: !!spec.swarm,
         gear: spec.gear || 0,

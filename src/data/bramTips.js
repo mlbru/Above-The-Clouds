@@ -32,7 +32,8 @@ export const BRAM_TIPS = {
   mirror: 'PINK ARROWS ARE MIRRORED: PRESS THE\nOTHER WAY! A PINK LEFT MEANS RIGHT.',
   double: 'TWO ARROWS STACKED? PRESS BOTH AT\nONCE, ONE WITH EACH HAND.',
   roll: 'A DOTTED TAIL: TAP THAT ARROW AGAIN AND\nAGAIN UNTIL ALL THE DOTS ARE GONE!',
+  roped: 'TWO ARROWS ON A ROPE COME IN SWAPPED.\nWATCH THEM HOP, THEN PRESS THE NEW ORDER.',
 };
 
 // Route tags (from the segment generator) that have their own tip.
-export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears' };
+export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', ROPED: 'roped', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears' };

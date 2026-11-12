@@ -169,6 +169,7 @@ export class MenuScene extends Phaser.Scene {
           map: () => this.showMap(),
           thinAir: () => this.showThinAir(),
           requests: () => this.showRequests(),
+          pets: () => this.showPets(),
         },
         dares: () => {
           const ids = cleanDares(this.prog.settings.dares);
@@ -243,6 +244,12 @@ export class MenuScene extends Phaser.Scene {
   // mountain, so the camp is rebuilt when it comes back changed.
   showThinAir() {
     this.scene.launch('ThinAir', { returnTo: 'Menu' });
+    this.scene.pause();
+  }
+
+  // The pets' pen (scenes/PetScene.js).
+  showPets() {
+    this.scene.launch('Pets', { returnTo: 'Menu' });
     this.scene.pause();
   }
 

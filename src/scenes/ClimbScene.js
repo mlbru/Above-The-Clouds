@@ -20,6 +20,8 @@ import { Dragon } from '../world/Dragon.js';
 import { Critters } from '../world/Critters.js';
 import { currentSeason } from '../data/seasons.js';
 import { OutfitFx } from '../entities/OutfitFx.js';
+import { PetFx } from '../entities/PetFx.js';
+import { activePet, petStage, growPet, STAGES } from '../data/pets.js';
 import { Climber } from '../entities/Climber.js';
 import { HUD } from '../ui/HUD.js';
 import { RouteSelector } from '../ui/RouteSelector.js';
@@ -31,6 +33,8 @@ import { BIOMES, biomeAt, biomeMixAt, biomeStretchAt, nextBiomeAbove, setBiomeTh
 import { MASTERY_BIOMES, STARS, masteryGoals, starLabel } from '../data/mastery.js';
 import { LIFTS, LIFT_BY_ID, liftHeight, liftName } from '../data/lifts.js';
 import { LiftRide } from '../ui/LiftRide.js';
+import { DragonFlight } from '../ui/DragonFlight.js';
+import { GATE } from '../data/gate.js';
 import { BiomeMechanics } from '../systems/mechanics/index.js';
 import { ROCKFALL } from '../systems/mechanics/Rockfall.js';
 import { DARKNESS } from '../systems/mechanics/Darkness.js';
@@ -70,6 +74,7 @@ import { WeatherScenery } from '../world/WeatherScenery.js';
 import { NightWall } from '../world/NightWall.js';
 import { Foreground } from '../world/Foreground.js';
 import { LensDrops } from '../world/LensDrops.js';
+import { NearPass } from '../world/NearPass.js';
 
 const MILESTONE_LINES = {
   1: 'HIGHER THAN BIG BEN',
@@ -187,6 +192,7 @@ export class ClimbScene extends Phaser.Scene {
     this.scenery = new WeatherScenery(this, this.mountain);
     this.nightWall = new NightWall(this, this.mountain);
     this.foreground = new Foreground(this);
+    this.nearPass = new NearPass(this);
     this.lens = new LensDrops(this);
     // A lift ride cut short by leaving the run must not leave its hum playing.
     this.events.once('shutdown', () => Audio.stopHum());
@@ -214,6 +220,10 @@ export class ClimbScene extends Phaser.Scene {
     // The climber's shadow on the rock, cast away from the sun (see updateLight()).
     this.climberShadow = this.add.sprite(start.x, start.y, 'climber', 'stand').setDepth(DEPTH.climber - 1).setTintFill(0x07040e).setAlpha(0);
     this.outfit = new OutfitFx(this, this.climber);
+    // The pet that comes along (data/pets.js), chosen in the pen at camp.
+    this.petFx = new PetFx(this, this.climber);
+    const pet = this.tutorial ? null : activePet(this.prog.data);
+    this.petFx.setPet(pet ? pet.id : null, pet ? petStage(this.prog.data, pet.id) : 0);
     this.coat = new WeatherCoat(this, this.climber);
     this.lastBeat = null;
     this.hud = new HUD(this);
@@ -290,6 +300,7 @@ export class ClimbScene extends Phaser.Scene {
     this.starNews = [];
     this.starCalmAt = 0;
     this.liftRide = null;
+    this.gateBusy = false;
     this.lullabyUI = null;
     this.lullabyFire = false;
     this.fireFromAbove = false;
@@ -421,6 +432,8 @@ export class ClimbScene extends Phaser.Scene {
     const code = event.code;
     Audio.init();
     if (this.liftRide) { this.liftRide.skip(); return; }
+    // The Dragon's Gate: nothing to do while the dragon comes for you.
+    if (this.gateBusy) return;
     this.wakeUp();
     if (this.director && this.tutorialCard.open) {
       if (code === 'Escape' && this.tutorialCard.final) { this.prog.data.tutorialDone = true; this.prog.save(); this.toMenu(); }
@@ -834,6 +847,7 @@ export class ClimbScene extends Phaser.Scene {
       break;
     }
     this.selected = next;
+    this.petFx.onRoute(this.routes[next]);
     this.routeUI.setSelected(this.selected);
     this.drawPreview();
     Audio.play('ui');
@@ -844,6 +858,7 @@ export class ClimbScene extends Phaser.Scene {
     if (this.director && this.director.holdRoutes) return;
     if (i !== this.selected) {
       this.selected = i;
+      this.petFx.onRoute(this.routes[i]);
       this.routeUI.setSelected(i);
       this.drawPreview();
       Audio.play('ui');
@@ -1617,7 +1632,18 @@ export class ClimbScene extends Phaser.Scene {
     const h = levelToMeters(node.level);
     this.run.maxHeight = Math.max(this.run.maxHeight || 0, h);
     if (this.director) this.director.onArrive(node);
-    else this.prog.addClimbed(gain);
+    else {
+      this.prog.addClimbed(gain);
+      // The pet grows with every metre you climb together.
+      const grew = growPet(this.prog.data, gain);
+      if (grew != null) {
+        const pet = activePet(this.prog.data);
+        this.petFx.setPet(pet.id, grew);
+        this.hud.toast(`YOUR ${pet.name} HAS GROWN: ${STAGES[grew].name}!`, '#ffd6a0');
+        this.effects.sparkle(this.climber.x, this.climber.y - 20, 12);
+        Audio.play('milestone');
+      }
+    }
     const { newBest, unlocks } = this.director ? { newBest: false, unlocks: [] }
       : this.expedition ? { newBest: this.prog.recordExpeditionHeight(this.expedition.id, h), unlocks: [] }
         : this.dared ? this.prog.recordDareHeight(h, this.dareKey)
@@ -2079,6 +2105,10 @@ export class ClimbScene extends Phaser.Scene {
     if (shrine) {
       this.shrinePending = shrine;
       this.time.delayedCall(opts.respawn ? 900 : 650, () => { if (this.state === STATE.RESTING && this.shrinePending === shrine && !shrine.used) this.openShrine(shrine); });
+    }
+    // The Dragon's Gate (data/gate.js): the dragon comes for you.
+    if (rest.gate && !opts.initial && !opts.respawn && !this.director && !this.expedition && !this.run.gateDone) {
+      this.time.delayedCall(600, () => { if (this.state === STATE.RESTING && this.node === node && !this.run.gateDone) this.dragonGate(node); });
     }
     if (this.director) this.director.onRest(node);
     // How the climb went shows on the ledge: a cheer after a long perfect
@@ -2731,6 +2761,65 @@ export class ClimbScene extends Phaser.Scene {
     this.time.delayedCall(260, () => this.cam.zoomTo(1, 700, 'Sine.easeInOut', true));
   }
 
+  // The Dragon's Gate, part one: near the top of the first Spine the dragon
+  // wakes for good. It never sleeps again until you reach the Gate ledge.
+  updateGate(alt) {
+    if (this.director || this.expedition || this.lifting || !this.run || this.run.gateDone || this.run.gateOn) return;
+    if (alt < GATE.wakeFrom || alt >= GATE.below) return;
+    const eye = this.mechanics && this.mechanics.get('dragonEye');
+    if (!eye) return;
+    this.run.gateOn = true;
+    eye.holdAwake(GATE.breathSec);
+    this.hud.showBanner("THE DRAGON'S GATE", 'IT WILL NOT SLEEP AGAIN. CLIMB!');
+    Audio.play('dragonSting');
+    this.time.delayedCall(500, () => { if (this.sys.isActive()) { Audio.play('roar'); this.dragon.roar(1800); this.dragonShockwave(); } });
+  }
+
+  // The Dragon's Gate, part two: on the Gate ledge the dragon rears over
+  // you, lowers its head, and you climb on. Then the flight (ui/DragonFlight.js)
+  // carries you across the cloud sea; the run waits while it plays and goes
+  // on from the same height on the new mountain.
+  dragonGate(node) {
+    this.run.gateDone = true;
+    this.gateBusy = true;
+    this.restUI.hide();
+    this.hud.setVisible(false);
+    Audio.play('roar');
+    this.dragon.roar(2000);
+    this.freezeFrame(160, 0xff6a30);
+    this.hud.flashScreen(0xffb060, 0.35, 700);
+    if (this.settings.shake) this.cam.shake(1100, 0.006);
+    this.climber.setPose('look');
+    const m = Math.floor(levelToMeters(node.level));
+    this.time.delayedCall(1300, () => {
+      if (!this.sys.isActive()) return;
+      this.liftRide = new DragonFlight(this, {
+        meters: m,
+        farName: GATE.farName,
+        jacket: findCosmetic('jacket', this.prog.data.look.jacket).color,
+        day: this.dayNight.state(),
+        onDone: () => {
+          this.liftRide = null;
+          this.gateBusy = false;
+          this.lastFramePerf = performance.now();
+          const eye = this.mechanics && this.mechanics.get('dragonEye');
+          if (eye) eye.release();
+          this.run.world = 2;
+          this.background.skyLife.oldMountain = true;
+          this.prog.bump('gates');
+          this.discover('dragon-gate');
+          this.checkLogbook();
+          this.hud.setVisible(true);
+          this.hud.showBanner(GATE.farName, `ACROSS THE CLOUD SEA  •  ${m} M`);
+          this.restInfo = { ...this.restInfo, title: 'THE FAR SHORE', subtitle: 'A NEW MOUNTAIN  •  GRIP RESTORED', detail: '' };
+          this.refillAtLedge();
+          if (this.state === STATE.RESTING) this.restUI.show({ ...this.restInfo, sitting: false });
+          Audio.setMusicIntensity(0.6);
+        },
+      });
+    });
+  }
+
   // Climbing into the Dragon's Spine: a brass stab, a far-off roar, the
   // mountain shudders and the sky flushes red for a moment.
   dragonEntrance() {
@@ -3100,6 +3189,7 @@ export class ClimbScene extends Phaser.Scene {
       this.effects.sweat(h.x + (Math.random() < 0.5 ? -3 : 3), h.y + 4);
     }
     if (!this.director) this.foreground.update(dt, climberAlt, this.camY, light, this.settings.reducedParticles);
+    if (!this.director) this.nearPass.update(dt, biomeAt(climberAlt).id, { night: day.night, light }, this.settings.reducedParticles, this.inPanorama || !!this.liftRide || this.atCamp || this.state === STATE.RUN_OVER);
     this.lens.update(dt, {
       rain: Math.max(shower, stormSky > 0.4 ? stormSky : 0), snow: Math.min(1, whiteout + mech.snow),
       // Frost creeps in from the corners in the cold biomes (more at night and in a whiteout).
@@ -3159,6 +3249,17 @@ export class ClimbScene extends Phaser.Scene {
       tape: this.expedition || this.director ? 0 : this.run.climbMs > 3600000 ? 2 : this.run.climbMs > 1800000 ? 1 : 0,
     });
     this.effects.breathAlt = climberAlt;
+    {
+      const eyeNow = this.mechanics && this.mechanics.get('dragonEye');
+      const gemRoute = this.state === STATE.ROUTE_SELECT && this.routes.find((r) => r.gem);
+      this.petFx.update(dt, {
+        state: wallState === 'ledge' ? 'ledge' : this.state === STATE.CLIMBING_COMBO ? 'climbing' : 'wall',
+        night: day.night,
+        gem: gemRoute ? { x: gemRoute.target.x, y: gemRoute.target.y } : null,
+        dragonAwake: !!(eyeNow && eyeNow.inside >= 0.5 && (eyeNow.phase === 'watching' || eyeNow.phase === 'opening')),
+        visible: this.climber.sprite.visible && !this.liftRide,
+      });
+    }
     // While choosing, glance over at a route with a gem on it.
     if (this.state === STATE.ROUTE_SELECT && this.node && this.node.kind !== 'ledge') {
       const g = this.routes.find((r) => r.gem && !r.taken);
@@ -3203,6 +3304,7 @@ export class ClimbScene extends Phaser.Scene {
     });
     Audio.update();
     this.updateEvents(dt, climberAlt, day);
+    this.updateGate(climberAlt);
     this.updateRecordMark();
     if (this.biomeMark && levelToMeters(this.node.level) >= this.biomeMark.from) this.clearBiomeMark(true);
     this.updateBot(now);
@@ -3454,6 +3556,7 @@ export class ClimbScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- debug / autopilot
   updateBot(now) {
+    if (this.gateBusy || this.liftRide) return;
     const b = this.bot;
     if (!b) return;
     if (this.journal.open) {

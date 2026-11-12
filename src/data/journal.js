@@ -94,6 +94,7 @@ const hazards = [
   { id: 'swing', name: 'SWING', text: 'ON THE AURORA RIDGE THE NOTES COME IN PAIRS: LONG-SHORT, LONG-SHORT.', pic: { key: 'arrow_U', scale: 3, tint: 0x5af0a0 } },
   { id: 'mirror', name: 'MIRRORED NOTES', text: 'PINK ARROWS POINT THE WRONG WAY. PRESS THE OTHER DIRECTION.', pic: { key: 'arrow_L', scale: 3, tint: 0xff6ad8 } },
   { id: 'double', name: 'DOUBLE NOTES', text: 'TWO ARROWS STACKED ON ONE BEAT. PRESS BOTH AT ONCE.', pic: { key: 'arrow_R', scale: 3, tint: 0xf2c14e } },
+  { id: 'roped', name: 'ROPED PAIR', text: 'TWO ARROWS TIED TOGETHER COME IN THE WRONG WAY ROUND AND HOP OVER EACH OTHER. PRESS THEM IN THE ORDER THEY LAND.', pic: { key: 'arrow_U', scale: 3, tint: 0xe0503a } },
   { id: 'roll', name: 'ROLLS', text: 'A DOTTED TAIL. TAP THE ARROW AGAIN AND AGAIN UNTIL EVERY DOT IS GONE.', pic: { key: 'arrow_U', scale: 3, tint: 0x9fffd0 } },
 ].map((h) => ({ ...h, id: `hazard-${h.id}`, hint: 'YOU WILL KNOW IT WHEN YOU MEET IT.', known: seenTip(h.id === 'hold' ? 'hold' : h.id) }));
 
@@ -112,6 +113,7 @@ const WONDER_PICS = {
   'prayer-flags': { key: 'decor_flags', frame: 0, scale: 1.5 },
   thunderstorm: { thumb: 'storm' },
   'dragon-eye': { thumb: 'dragon' },
+  'dragon-gate': { key: 'dragon_head_3', scale: 1 },
 };
 const wonders = Object.entries(DISCOVERIES)
   .filter(([id]) => id !== 'rare-bird')
