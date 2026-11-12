@@ -25,6 +25,21 @@ What this sheet built (all of it pushed, the playable files rebuilt).
 | The Hanging Monastery (2046 m) | sandstone with arched niches and painted panels, plank walkways, prayer flags, paper lanterns, prayer wheels, temples on pillars | **Bells**: a monk on a balcony strikes his bell for every arrow of the call and the row lights them one by one; then the notes come down as blank bells. On monastery ledges a monk pours tea: the next climb is free | Temple jade |
 | The Moss Cathedral (2219 m) | moss cushion, roots in the rock, root curtains, glowing caps, shafts of light, a nave of root arches behind | **Vines**: hold an arrow along the vine and press the next one where it bends | Moss agate |
 
+## Follow-up (same day)
+- **Far Shore camp**: the Far Range's own base camp, where the dragon sets you down. A
+  moss-roofed hut of hides with light in the door, the camp keeper smoking a pipe by the
+  fire with a pot on a tripod, a drying rack, the carved standing stone, a stone lantern,
+  prayer flags and your flag. The keeper's hot meal makes your first climb there free.
+- **Filled sides**: every Far Range biome has two layers of scenery on both sides of the
+  screen, scrolling at their own speed, so you climb inside a place and see little sky:
+  a gorge of wet basalt with trees and flowing waterfalls (Cascade), a cliff packed with
+  temple halls next to a pagoda tower (Monastery), giant mossy trunks with roots and
+  fungus shelves and a dim forest behind (Moss Cathedral). Windows, lanterns, glow-worms
+  and fungus light up at night (`render/farSideArt.js`, `world/FarSides.js`).
+- **Glitch fixed**: the close-passing cloud bank was a few huge stretched sprites plus a
+  full-screen tint, so at sunset the whole view flashed pink for a second. It is now a
+  bank of real pixel puffs drifting across the top of the view, with no screen tint.
+
 ## Run features (idea sheet 1.8, 1.10)
 - **Rescue**: now and then someone hangs from a broken rope under a hold. Take that route
   and they tie in and follow you; every miss you make, they make too (three and they rope

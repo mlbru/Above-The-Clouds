@@ -117,6 +117,9 @@ export class Background {
     const overcast = mix ? Math.min(1, [...new Set([mix.a, mix.b])].reduce((k, b) => k + (b.overcast || 0) * weight(b.id), 0) + storm) : Math.min(1, storm);
     this.overcast = Math.min(1, overcast + whiteout * 0.8);
     this.updateBodies(day, skyBottom);
+    // For scenery drawn elsewhere (the Far Range's sides): the hour's light and haze.
+    this.lastLight = light;
+    this.lastSkyBottom = skyBottom;
     this.drawSky(skyTop, skyBottom, day);
     this.skyLife.update(dt, alt, day, skyBottom);
     this.updateStars(day);

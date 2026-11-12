@@ -77,6 +77,7 @@ import { Foreground } from '../world/Foreground.js';
 import { LensDrops } from '../world/LensDrops.js';
 import { NearPass } from '../world/NearPass.js';
 import { FarFx } from '../world/FarFx.js';
+import { FarSides } from '../world/FarSides.js';
 import { callMs } from '../systems/mechanics/Bells.js';
 
 const MILESTONE_LINES = {
@@ -189,6 +190,8 @@ export class ClimbScene extends Phaser.Scene {
     this.grip = new GripSystem(BALANCE, this.modeCfg);
     this.dayNight = new DayNightSystem({ width: GAME_WIDTH, dayLengthSec: 600, startT: this.dares.includes('night') ? 0.8 : this.dayT ?? 0.09 });
     this.background = new Background(this);
+    // The Far Range's side scenery (world/FarSides.js).
+    this.farSides = new FarSides(this);
     // Now and then a shooting star can be wished on (see wishStar).
     this.background.skyLife.onStar = (star) => this.wishStar(star);
     this.wall = new WallRenderer(this, this.mountain, this.seed);
@@ -2885,7 +2888,15 @@ export class ClimbScene extends Phaser.Scene {
           this.checkLogbook();
           this.hud.setVisible(true);
           this.hud.showBanner(GATE.farName, `ACROSS THE CLOUD SEA  •  ${shoreM} M`);
-          this.restInfo = { ...this.restInfo, title: 'THE FAR SHORE', subtitle: 'A NEW MOUNTAIN  •  GRIP RESTORED', detail: '' };
+          this.restInfo = { ...this.restInfo, title: 'FAR SHORE CAMP', subtitle: 'A NEW BASE CAMP  •  GRIP RESTORED', detail: '' };
+          // The keeper of the camp has a hot meal on: the first climb is free.
+          this.discover('far-shore');
+          this.teaFree = true;
+          this.time.delayedCall(2600, () => {
+            if (!this.sys.isActive()) return;
+            if (this.tips) this.tips.say('THAT OLD ONE BY THE FIRE KEEPS THE CAMP.\nA HOT MEAL FOR YOU: YOUR FIRST CLIMB IS FREE.');
+            this.hud.toast('A HOT MEAL: YOUR NEXT CLIMB COSTS NO GRIP', '#ffd8a0');
+          });
           this.refillAtLedge();
           if (this.state === STATE.RESTING) this.restUI.show({ ...this.restInfo, sitting: false });
           Audio.setMusicIntensity(0.6);
@@ -2931,7 +2942,7 @@ export class ClimbScene extends Phaser.Scene {
     this.cam.setScroll(Math.round(this.camX), Math.round(this.camY));
     this.background.farWorld = true;
     this.background.farK = 1;
-    this.restInfo = { ...(this.restInfo || {}), title: 'THE FAR SHORE' };
+    this.restInfo = { ...(this.restInfo || {}), title: 'FAR SHORE CAMP' };
   }
 
   // Climbing into the Dragon's Spine: a brass stab, a far-off roar, the
@@ -3262,6 +3273,11 @@ export class ClimbScene extends Phaser.Scene {
     const shower = this.showerK || 0;
     this.background.update(dt, alt, day, { birds: ambience.birds }, { mix: biomeMixAt(alt), whiteout, storm: Math.max(stormSky, shower * 0.5) });
     this.updateRun(dt, climberAlt, day);
+    {
+      const m = biomeMixAt(alt);
+      const weightOf = (id) => (m.a.id === id ? 1 - m.t : 0) + (m.b.id === id ? m.t : 0);
+      this.farSides.update(dt, { weightOf, camY: this.camY, light: this.background.lastLight || day.light, skyBottom: this.background.lastSkyBottom || day.skyBottom, night: day.night });
+    }
     this.showerK = this.scenery.update(dt, {
       biome, day, sky: this.background, storm: stormSky, camY: this.camY, reduced: this.settings.reducedParticles,
       snow: Math.min(1, biome.weather.snow * 0.6 + mech.snow + whiteout), allowShowers: !this.director && !this.expedition,

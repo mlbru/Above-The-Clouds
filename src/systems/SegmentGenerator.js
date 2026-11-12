@@ -139,7 +139,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
   let rest = null;
   if (index === 0) rest = { type: 'camp', name: 'BASE CAMP', discovery: null, viewpoint: null };
   else if (gate) rest = { type: 'gate', name: "THE DRAGON'S GATE", gate: true, discovery: null, viewpoint: null };
-  else if (farShore) rest = { type: 'farshore', name: 'THE FAR SHORE', farShore: true, discovery: null, viewpoint: null };
+  else if (farShore) rest = { type: 'farshore', name: 'FAR SHORE CAMP', farShore: true, discovery: null, viewpoint: null };
   else if (isRest) rest = pickRest(rng, biome, viewpointCount);
 
   // Decorations hug the wall edges so they never cover holds.

@@ -57,11 +57,12 @@ export class NearPass {
         .setScale(13).setFlipX(dir < 0).setTint(lerpColor(0x2a2a36, c.light, 0.18));
     }
     if (kind === 'cloud') {
-      c.ms = 2600;
-      // A bank of near cloud: a few huge puffs that wash over the whole view.
-      this.clouds = [0, 1, 2, 3].map((i) => this.scene.add.image(0, 0, `cloud${i % 4}`).setScrollFactor(0).setDepth(DEPTH.foreground + 8.2)
-        .setScale(6 + i * 1.2).setTint(lerpColor(lerpColor(c.light, 0xffffff, 0.4), 0xb8c4e0, c.night * 0.6)).setAlpha(0));
-      c.offs = this.clouds.map((_, i) => [i * 70 - 40, rnd(-30, 50)]);
+      c.ms = 3200;
+      // A bank of near cloud drifting across the top of the view: a row of
+      // round puffs, lit on top and shaded underneath, drawn at full pixel size
+      // (not a stretched sprite) and never over the note track.
+      c.y = rnd(H * 0.12, H * 0.3);
+      c.puffs = Array.from({ length: 11 }, (_, i) => ({ dx: i * 26 - 130 + rnd(-8, 8), dy: rnd(-14, 10) - Math.sin((i / 10) * Math.PI) * 18, r: rnd(18, 34) }));
     }
     if (kind === 'snow' || kind === 'shards' || kind === 'embers' || kind === 'leaves') {
       c.ms = kind === 'embers' ? 4200 : 1800;
@@ -93,12 +94,19 @@ export class NearPass {
     this.sprite.setPosition(Math.round(x), Math.round(y)).setFrame(Math.floor(c.t / 180) % 2).setAlpha(Math.min(1, Math.sin(k * Math.PI) * 3));
   }
 
-  // A bank of cloud washing over the view: in, a moment of white, out.
+  // A bank of cloud drifting past close by: it slides across the upper part
+  // of the view and is gone, soft at its edges.
   cloud(g, a, c, k) {
-    const x = this.across(c, k, 260);
-    const fade = Math.min(1, Math.sin(k * Math.PI) * 1.6);
-    this.clouds.forEach((o, i) => o.setPosition(Math.round(x + c.offs[i][0] * c.dir), Math.round(H * 0.35 + c.offs[i][1])).setAlpha(0.55 * fade));
-    g.fillStyle(lerpColor(c.light, 0xffffff, 0.5), 0.18 * Math.max(0, Math.sin(k * Math.PI) - 0.3)).fillRect(0, 0, W, H);
+    const x = this.across(c, k, 220);
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 2.2);
+    const lit = lerpColor(lerpColor(c.light, 0xffffff, 0.55), 0xc8d0e8, c.night * 0.6);
+    const mid = lerpColor(lit, 0x9aa4c4, 0.25), low = lerpColor(lit, 0x7a84a8, 0.45);
+    for (const p of c.puffs) {
+      const px = Math.round(x + p.dx * c.dir), py = Math.round(c.y + p.dy);
+      g.fillStyle(low, 0.42 * fade).fillCircle(px, py + 4, p.r);
+      g.fillStyle(mid, 0.5 * fade).fillCircle(px - 2, py, p.r * 0.9);
+      g.fillStyle(lit, 0.55 * fade).fillCircle(px - 5, py - p.r * 0.25, p.r * 0.62);
+    }
   }
 
   // Fat flakes (or crystal dust, or tumbling leaves) streaming sideways.

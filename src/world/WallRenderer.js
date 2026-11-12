@@ -304,13 +304,45 @@ export class WallRenderer {
     }
   }
 
-  // The Far Shore: where the dragon sets you down on the new mountain. An old
-  // standing stone with a dragon carved round it (the carving glows at
-  // night), a stone lantern that is always lit, your flag planted in the moss,
-  // ferns and glowing caps along the edge.
+  // The Far Shore camp: the Far Range's own base camp, where the dragon sets
+  // you down. A moss-roofed hut of hides with light in the door, the keeper
+  // smoking a pipe by the fire with a pot on a tripod, a drying rack of fish
+  // and herbs, an old standing stone with a dragon carved round it (it glows
+  // at night), a stone lantern, prayer flags, and your flag in the moss.
   placeFarShore(node, side, spot, add, si) {
     const sc = this.scene, y = node.y;
-    const stoneX = spot(58), lampX = spot(32), flagX = node.x - side * 34;
+    const lv = this.mountain.getLevel(node.level);
+    const l = lv ? lv.bounds.l : node.x - 120, r = lv ? lv.bounds.r : node.x + 120;
+    const at = (dx) => Math.round(Math.max(l + 10, Math.min(r - 10, node.x + dx)));
+    const toward = side, away = -side;
+    const hutX = at(toward * 104), fireX = at(toward * 52), stoneX = at(away * 58), lampX = at(away * 84), flagX = at(away * 30), rackX = at(toward * 140);
+    // The hut, light glowing in its door.
+    add(sc.add.image(hutX, y + 1, 'far_hut').setOrigin(0.5, 1).setDepth(DEPTH.decor - 1).setFlipX(side < 0));
+    const door = add(sc.add.image(hutX, y + 1, 'far_hut_glow').setOrigin(0.5, 1).setDepth(DEPTH.decor - 0.9).setBlendMode('ADD').setFlipX(side < 0).setAlpha(0.5));
+    this.animated.push({ type: 'flicker', obj: door, base: 0.45, phase: 3, seg: si });
+    add(sc.add.image(rackX, y + 1, 'far_rack').setOrigin(0.5, 1).setDepth(DEPTH.decor - 1.5));
+    // The fire, the pot over it, the keeper, a log to sit on.
+    add(sc.add.image(fireX, y + 1, 'far_tripod').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1.5));
+    const fire = add(sc.add.sprite(fireX, y + 1, 'camp_fire', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1));
+    this.animated.push({ type: 'fire', obj: fire, seg: si });
+    const glow = add(sc.add.image(fireX, y - 6, 'glow').setDepth(DEPTH.decor - 1).setBlendMode('ADD').setTint(0xff9a3c).setScale(1.3).setAlpha(0.35));
+    this.animated.push({ type: 'flicker', obj: glow, base: 0.35, phase: 0, seg: si });
+    const pool = add(sc.add.image(fireX, y - 14, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xff8a3c).setScale(4.2, 3).setAlpha(0));
+    this.animated.push({ type: 'nightlight', obj: pool, base: 0.42, phase: 1, seg: si });
+    const reduced = sc.effects && sc.effects.reduced;
+    add(sc.add.particles(fireX, y - 18, 'puff', {
+      frequency: reduced ? 700 : 300, lifespan: 2800, speedX: { min: -4, max: 6 }, speedY: { min: -16, max: -9 },
+      alpha: { start: 0.35, end: 0 }, scale: { start: 0.5, end: 2 }, tint: 0xc8c4cc,
+    }).setDepth(DEPTH.decor));
+    add(sc.add.particles(fireX, y - 8, 'px2', {
+      frequency: reduced ? 600 : 260, lifespan: 1100, speedX: { min: -10, max: 10 }, speedY: { min: -36, max: -18 },
+      alpha: { start: 1, end: 0 }, scale: { start: 0.5, end: 0.5 }, tint: [0xffd25a, 0xff9a3c], blendMode: 'ADD',
+    }).setDepth(DEPTH.decor + 2));
+    const keeper = add(sc.add.sprite(at(toward * 34), y + 1, 'far_keeper', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setFlipX(side > 0));
+    this.animated.push({ type: 'person', obj: keeper, phase: 0.7, seg: si });
+    add(sc.add.image(at(toward * 70), y + 1, 'camp_bench').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side < 0));
+    this.farKeeper = { x: keeper.x, y };
+    // The stone and its glowing carving, the lantern, your flag.
     add(sc.add.image(stoneX, y + 1, 'far_stone').setOrigin(0.5, 1).setDepth(DEPTH.decor));
     const carve = add(sc.add.image(stoneX, y + 1, 'far_stone_glow').setOrigin(0.5, 1).setDepth(DEPTH.decor + 0.1).setBlendMode('ADD').setAlpha(0.5));
     this.animated.push({ type: 'flicker', obj: carve, base: 0.35, phase: 2, seg: si });
@@ -318,9 +350,21 @@ export class WallRenderer {
     const lamp = add(sc.add.image(lampX, y - 14, 'glow').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffb050).setScale(0.9).setAlpha(0.4));
     this.animated.push({ type: 'flicker', obj: lamp, base: 0.4, phase: 1, seg: si });
     add(sc.add.image(flagX, y + 1, 'flag').setOrigin(0.1, 1).setDepth(DEPTH.decor + 1));
-    for (const [dx, key] of [[78, 'decor_fern'], [92, 'decor_glowcap'], [-60, 'decor_fern'], [-76, 'decor_glowcap']]) {
-      add(sc.add.image(spot(Math.abs(dx)) + (dx < 0 ? -2 * side * Math.abs(dx) : 0), y + 1, key).setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(dx < 0));
+    // Prayer flags from the stone to the hut, fluttering.
+    const fg = add(sc.add.graphics().setDepth(DEPTH.decor - 1.2));
+    const x0 = stoneX, x1 = hutX, y0 = y - 34;
+    const cols = [0x4a8ae8, 0xf4f0e4, 0xe84a3a, 0x5ac86a, 0xf2c252];
+    const yAt = (x) => y0 + Math.sin(((x - x0) / (x1 - x0 || 1)) * Math.PI) * 10;
+    fg.lineStyle(1, 0x2a1a12, 1).beginPath(); fg.moveTo(x0, y0);
+    for (let k = 0; k <= 20; k++) { const x = x0 + ((x1 - x0) * k) / 20; fg.lineTo(x, yAt(x)); }
+    fg.strokePath();
+    for (let k = 1; k < 14; k++) {
+      const x = x0 + ((x1 - x0) * k) / 14;
+      const f = add(sc.add.rectangle(x, Math.round(yAt(x)) + 1, 5, 6, cols[k % 5]).setOrigin(0.5, 0).setDepth(DEPTH.decor - 1.1));
+      this.animated.push({ type: 'pennant', obj: f, y: f.y, phase: k * 0.37, seg: si });
     }
+    // Ferns and glowing caps along the edges of the ledge.
+    for (const x of [l + 8, l + 22, r - 8, r - 22]) add(sc.add.image(x, y + 1, (x * 7) % 2 ? 'decor_glowcap' : 'decor_fern').setOrigin(0.5, 1).setDepth(DEPTH.decor - 1).setFlipX(x > node.x));
   }
 
   // The Far Range's set dressing, per segment: walkways and prayer flags in

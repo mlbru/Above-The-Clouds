@@ -241,6 +241,97 @@ function stoneLantern() {
   return g;
 }
 
+// ---------------------------------------------------------------- the Far Shore camp
+// A round hut of hides on a frame of bent poles, moss thick on its roof, a
+// smoke hole, a door flap tied back with warm light inside.
+function hideHut() {
+  const g = new PixelGrid(48, 34), glow = new PixelGrid(48, 34);
+  const HIDE = 1, MOSS = 2, POLE = 3, DOOR = 4, STONE = 5;
+  g.ellipse(24, 30, 23, 22, HIDE);
+  for (let y = 31; y < 34; y++) for (let x = 0; x < 48; x++) g.set(x, y, null);
+  // Moss over the top, hanging in tongues.
+  for (let x = 4; x < 44; x++) {
+    const top = 30 - Math.sqrt(Math.max(0, 23 * 23 - (x - 24) * (x - 24))) * (22 / 23);
+    const depth = 4 + Math.round(Math.sin(x * 0.7) * 2 + Math.sin(x * 0.23) * 3);
+    for (let k = 0; k < depth; k++) g.set(x, Math.round(top) + 1 + k, MOSS);
+  }
+  // Poles poking out at the top, the frame lines down the hides.
+  for (const [x0, x1] of [[20, 16], [28, 32], [24, 24]]) g.line(x0, 9, x1, 3, POLE);
+  for (const x of [12, 36]) for (let y = 14; y < 31; y++) g.set(x + Math.round((y - 22) * 0.15 * Math.sign(x - 24)), y, POLE);
+  // The door: a dark opening with the flap tied back.
+  g.ellipse(25, 31, 6, 10, DOOR);
+  g.line(19, 22, 17, 30, POLE);
+  // Stones round the foot.
+  for (let x = 2; x < 46; x += 4) g.ellipse(x, 31, 2.2, 1.6, STONE);
+  shade(g, HIDE, [0x4a3020, 0x6e4a30, 0x926a46, 0xb88c5e, 0xd8b080], { r: 4, base: 0.5, depth: 0.5, bias: (x, y) => ((x + y * 3) % 9 === 0 ? -0.12 : 0) + (Math.abs(x - 24) % 9 === 0 ? -0.15 : 0) });
+  shade(g, MOSS, [0x1e3a14, 0x3e7a26, 0x6ab03a, 0xa8d860], { r: 2, base: 0.55 });
+  shade(g, POLE, [0x2a1a10, 0x5a3a20, 0x8a6038], { r: 1, base: 0.5 });
+  shade(g, STONE, [0x3a3a36, 0x5e5c56, 0x86827a], { r: 1, base: 0.55 });
+  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+    if (g.get(x, y) !== DOOR) continue;
+    const d = Math.hypot((x - 25) / 6, (y - 31) / 10);
+    g.set(x, y, d < 0.55 ? 0xffb050 : d < 0.8 ? 0xc86a28 : 0x3a1a0c);
+    if (d < 0.8) glow.set(x, y, d < 0.55 ? 0xffd080 : 0xff9040);
+  }
+  g.outline(0x0c0806);
+  return { g, glow };
+}
+
+// The keeper of the Far Shore camp, sitting cross-legged by the fire: old,
+// white-bearded, wrapped in a moss-green shawl, a long pipe. Frame 1 puffs.
+function keeperFrame(f) {
+  const g = new PixelGrid(18, 20);
+  const COAT = 1, SHAWL = 2, SKIN = 3, HAIR = 4, PIPE = 5;
+  g.ellipse(9, 17, 8, 3, COAT);
+  poly(g, [[4, 16], [6, 8], [12, 8], [14, 16]], COAT);
+  poly(g, [[5, 9], [13, 9], [14, 13], [4, 13]], SHAWL);
+  g.ellipse(9, 5.5, 3, 3.2, SKIN);
+  g.ellipse(9, 3.2, 3.3, 1.8, HAIR);
+  poly(g, [[7, 7], [11, 7], [10, 11], [8, 11]], HAIR);
+  g.line(11, 8, 15, 7 - f, PIPE); g.rect(15, 5 - f, 2, 2, PIPE);
+  shade(g, COAT, [0x2a2430, 0x463a50, 0x645470], { r: 2, base: 0.5 });
+  shade(g, SHAWL, [0x1e3a1a, 0x3a6a2a, 0x6a9a44], { r: 1, base: 0.55 });
+  shade(g, SKIN, [0x8a5a3a, 0xc08a60, 0xe0b088], { r: 1, base: 0.6 });
+  shade(g, HAIR, [0xa8a49c, 0xd8d4cc, 0xfaf8f0], { r: 1, base: 0.6 });
+  shade(g, PIPE, [0x3a2414, 0x6a4424], { r: 1, base: 0.5 });
+  g.set(8, 5, 0x1a1210); g.set(10, 5, 0x1a1210);
+  if (f) g.set(16, 4, 0xff8a3c);
+  g.outline(0x0c0806);
+  return g;
+}
+
+// A tripod of branches over the fire with an iron pot hanging from it.
+function tripodPot() {
+  const g = new PixelGrid(20, 24);
+  g.line(2, 23, 10, 1, 1); g.line(18, 23, 10, 1, 1); g.line(10, 1, 11, 23, 1);
+  g.line(10, 3, 10, 11, 2);
+  g.ellipse(10, 15, 5, 4, 3); g.rect(5, 11, 11, 2, 3);
+  shade(g, 1, [0x2a1a10, 0x5a3a20, 0x8a6038], { r: 1, base: 0.5 });
+  shade(g, 2, [0x3a3a40, 0x6a6a74], { r: 1, base: 0.5 });
+  shade(g, 3, [0x141418, 0x2a2a32, 0x4a4a56, 0x7a7a88], { r: 2, base: 0.45 });
+  g.rect(6, 11, 9, 1, 0xd8a050);
+  g.outline(0x0c0806);
+  return g;
+}
+
+// A drying rack: two posts, a pole across, fish and bunches of herbs.
+function dryingRack() {
+  const g = new PixelGrid(26, 22);
+  g.rect(2, 3, 2, 19, 1); g.rect(22, 3, 2, 19, 1); g.rect(0, 3, 26, 2, 1);
+  for (let i = 0; i < 4; i++) {
+    const x = 6 + i * 4;
+    g.line(x, 5, x, 7, 2);
+    if (i % 2 === 0) { poly(g, [[x - 1, 7], [x + 1, 7], [x + 1, 15], [x, 17], [x - 1, 15]], 3); }
+    else { g.ellipse(x, 10, 2, 3.5, 4); }
+  }
+  shade(g, 1, [0x2a1a10, 0x5a3a20, 0x8a6038], { r: 1, base: 0.5 });
+  shade(g, 2, [0xb8a888, 0xe8dcc0], { r: 1, base: 0.5 });
+  shade(g, 3, [0x5a6a7a, 0x9ab0c0, 0xd8e8f0], { r: 1, base: 0.6 });
+  shade(g, 4, [0x3a5a1a, 0x6a8a2a, 0xa8c858], { r: 1, base: 0.55 });
+  g.outline(0x0c0806);
+  return g;
+}
+
 // ---------------------------------------------------------------- effects
 // A shaft of light: a long soft beam, brightest in its core, fading at both
 // ends. Drawn white, tinted and added (ADD) in use.
@@ -329,6 +420,12 @@ export function buildFarTextures(scene) {
   add(scene, 'far_stone', st.g);
   add(scene, 'far_stone_glow', st.glow);
   add(scene, 'far_tlantern', stoneLantern());
+  const hut = hideHut();
+  add(scene, 'far_hut', hut.g);
+  add(scene, 'far_hut_glow', hut.glow);
+  addFrames(scene, 'far_keeper', [0, 1].map(keeperFrame));
+  add(scene, 'far_tripod', tripodPot());
+  add(scene, 'far_rack', dryingRack());
 }
 
 export { lerpColor, makeRamp };
