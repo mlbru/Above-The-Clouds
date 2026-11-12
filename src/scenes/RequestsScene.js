@@ -4,7 +4,9 @@ import { PixelText, COLORS } from '../ui/PixelText.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { ensureRequests, collectRequests, whoOf, REQUEST_BY_ID } from '../data/requests.js';
 import { Audio } from '../systems/AudioSystem.js';
-import { SeededRandom } from '../utils/seededRandom.js';
+import { SeededRandom, makeNoise2D } from '../utils/seededRandom.js';
+import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { rampAt, makeRamp, shade } from '../render/pixelKit.js';
 
 // Camp requests: the corkboard on its post at base camp, under a little
 // roof, lit by a lantern swinging on a hook. Three notes hang from a string
@@ -50,7 +52,7 @@ export class RequestsScene extends Phaser.Scene {
     this.wallet = this.prog.gems;
 
     // Dusk over camp, a lantern on a hook top left.
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0812, 0.88).setOrigin(0, 0).setInteractive();
+    this.add.image(0, 0, paintNight(this)).setOrigin(0, 0).setInteractive();
     this.lanternGlow = this.add.image(40, 26, 'glow').setBlendMode('ADD').setTint(0xffb050).setScale(4.5, 3.5).setAlpha(0.22);
     this.lanternG = this.add.graphics().setDepth(6);
 
@@ -64,8 +66,7 @@ export class RequestsScene extends Phaser.Scene {
     this.bx = Math.round((GAME_WIDTH - bw) / 2);
     this.by = IS_PORTRAIT ? 60 : Math.max(28, Math.floor((GAME_HEIGHT - bh - 60) / 2) + 10);
     this.bw = bw; this.bh = bh;
-    this.boardG = this.add.graphics();
-    this.drawBoard();
+    this.add.image(this.bx - 12, this.by - 14, paintBoard(this, this.bw, this.bh)).setOrigin(0, 0);
     this.stringG = this.add.graphics().setDepth(4);
     new PixelText(this, GAME_WIDTH / 2, this.by - 22, 'REQUESTS', { color: '#f4dca0', shadow: '#16141f' }).setOrigin(0.5, 0).setScale(2).setDepth(6);
     this.walletText = new PixelText(this, GAME_WIDTH - 10, 8, '', { color: '#9fe8ff', shadow: '#16141f' }).setOrigin(1, 0).setDepth(6);
@@ -94,29 +95,6 @@ export class RequestsScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- the board
-  drawBoard() {
-    const g = this.boardG, x = this.bx, y = this.by, w = this.bw, h = this.bh;
-    // Post down to the ground, roof on top.
-    g.fillStyle(0x3a2414, 1).fillRect(GAME_WIDTH / 2 - 5, y + h, 10, GAME_HEIGHT - y - h);
-    g.fillStyle(0x5e3c20, 1).fillRect(GAME_WIDTH / 2 - 4, y + h, 3, GAME_HEIGHT - y - h);
-    g.fillStyle(0x3a2414, 1).fillRect(x - 10, y - 8, w + 20, 6);
-    g.fillStyle(0x5a3a22, 1).fillRect(x - 8, y - 10, w + 16, 3);
-    for (let i = 0; i < (w + 16) / 6; i++) g.fillStyle(i % 2 ? 0x6a4428 : 0x4a2e18, 1).fillRect(x - 8 + i * 6, y - 7, 6, 3);
-    // Frame and cork, speckled.
-    g.fillStyle(0x16141f, 1).fillRect(x - 5, y - 3, w + 10, h + 7);
-    g.fillStyle(0x5e3c20, 1).fillRect(x - 4, y - 2, w + 8, h + 5);
-    g.fillStyle(0x8a5a32, 1).fillRect(x - 4, y - 2, w + 8, 1);
-    g.fillStyle(0xb4824a, 1).fillRect(x, y + 2, w, h - 2);
-    const rng = new SeededRandom(1234);
-    for (let i = 0; i < (w * h) / 9; i++) {
-      const c = [0x9a6a3a, 0xc89660, 0xa87440, 0xd4a46a][rng.int(0, 3)];
-      g.fillStyle(c, 1).fillRect(x + rng.int(0, w - 2), y + 2 + rng.int(0, h - 4), rng.chance(0.2) ? 2 : 1, 1);
-    }
-    // Old pin holes and a faded rectangle where a note used to be.
-    for (let i = 0; i < 14; i++) g.fillStyle(0x5a3a1a, 1).fillRect(x + rng.int(4, w - 4), y + rng.int(6, h - 6), 1, 1);
-    g.fillStyle(0xc8a070, 0.5).fillRect(x + w - 30, y + h - 22, 22, 16);
-  }
-
   setWallet(v) { this.walletText.setText(`◆${Math.round(v)}`); }
 
   // A note at slot i. drop: pin it in from above (a new note).
@@ -319,4 +297,77 @@ export class RequestsScene extends Phaser.Scene {
       }
     }
   }
+}
+
+// Behind the board: base camp at night. Stars, the peaks against the sky,
+// the dark meadow, and the campfire's glow rising from below.
+function paintNight(scene) {
+  const key = `req_night_${GAME_WIDTH}_${GAME_HEIGHT}`;
+  if (scene.textures.exists(key)) return key;
+  const W2 = GAME_WIDTH, H2 = GAME_HEIGHT;
+  const g = new PixelGrid(W2, H2);
+  const noise = makeNoise2D(31);
+  const sky = makeRamp(0x05040c, 0x14102a, 0x3a2440, 6);
+  for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) g.set(x, y, rampAt(sky, (y / H2) * 0.85, x, y));
+  const rng = new SeededRandom(12);
+  for (let i = 0; i < 120; i++) g.set(rng.int(0, W2 - 1), rng.int(0, Math.round(H2 * 0.55)), i % 7 ? 0x8a88b0 : 0xffffff);
+  for (const [base, amp, col, cap] of [[H2 * 0.62, 70, 0x1c1830, 0x5a5878], [H2 * 0.72, 40, 0x110e1e, 0x2e2a44]]) {
+    for (let x = 0; x < W2; x++) {
+      const top = Math.round(base - amp * Math.abs(Math.sin(x * 0.013 + base)) * (0.6 + noise(x * 0.02, base) * 0.6));
+      for (let y = top; y < H2; y++) g.set(x, y, y < top + 3 ? cap : col);
+    }
+  }
+  for (let y = Math.round(H2 * 0.8); y < H2; y++) for (let x = 0; x < W2; x++) {
+    const glow = Math.max(0, 1 - Math.hypot((x - W2 * 0.5) / (W2 * 0.6), (y - H2) / (H2 * 0.25)));
+    g.set(x, y, rampAt([0x0a0c08, 0x16180e, 0x3a2410, 0x6a3a14], 0.1 + glow * 0.8, x, y));
+  }
+  const c = makeCanvas(W2, H2); g.drawTo(c.getContext('2d')); scene.textures.addCanvas(key, c);
+  return key;
+}
+
+// The board: a shingled roof on brackets, a heavy frame of grained wood with
+// iron corners, a field of cork full of pores and old pin holes, two posts.
+function paintBoard(scene, bw, bh) {
+  const key = `req_board_${bw}_${bh}_${GAME_HEIGHT}`;
+  if (scene.textures.exists(key)) return key;
+  const W2 = bw + 24, H2 = GAME_HEIGHT;
+  const g = new PixelGrid(W2, H2);
+  const noise = makeNoise2D(4);
+  const wood = makeRamp(0x1e1008, 0x5e3a1e, 0xa8743e, 6);
+  const ox = 12, oy = 14;
+  // Posts down to the ground.
+  for (const px of [ox + 18, ox + bw - 26]) for (let y = oy + bh; y < H2; y++) for (let k = 0; k < 8; k++) g.set(px + k, y, rampAt(wood, (k < 2 ? 0.7 : k > 5 ? 0.15 : 0.42) + (noise(k * 0.5, y * 0.2) - 0.5) * 0.2, px + k, y));
+  // The frame.
+  for (let y = oy - 4; y < oy + bh + 4; y++) for (let x = ox - 4; x < ox + bw + 4; x++) {
+    const inside = x >= ox && x < ox + bw && y >= oy && y < oy + bh;
+    if (inside) continue;
+    const grain = noise(x * 0.06, y * 0.5) - 0.5;
+    const top = y < oy, left = x < ox;
+    g.set(x, y, rampAt(wood, 0.45 + grain * 0.5 + (top || left ? 0.2 : -0.15), x, y));
+  }
+  // Cork: warm brown, mottled, full of tiny pores and old pin holes.
+  const cork = makeRamp(0x6a4222, 0xb4824a, 0xe0b47a, 6);
+  const rng = new SeededRandom(5);
+  for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
+    let k = 0.5 + (noise(x * 0.15, y * 0.15) - 0.5) * 0.5 + (noise(x * 0.6, y * 0.6) - 0.5) * 0.3 - (y - oy) / bh * 0.12;
+    if (x - ox < 3 || y - oy < 3) k -= 0.25;
+    g.set(x, y, rampAt(cork, k, x, y));
+  }
+  for (let i = 0; i < 40; i++) g.set(ox + rng.int(4, bw - 4), oy + rng.int(4, bh - 4), 0x3a2410);
+  // Iron corner plates with rivets.
+  for (const [cx, cy] of [[ox - 4, oy - 4], [ox + bw - 4, oy - 4], [ox - 4, oy + bh - 4], [ox + bw - 4, oy + bh - 4]]) {
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) g.set(cx + x, cy + y, (x + y) % 5 === 0 ? 0x5a5a62 : 0x2e2c34);
+    g.set(cx + 2, cy + 2, 0xa8a8b0); g.set(cx + 5, cy + 5, 0xa8a8b0);
+  }
+  // The roof: two rows of shingles on a ridge beam.
+  for (let y = 0; y < 12; y++) for (let x = 0; x < W2; x++) {
+    const row = Math.floor(y / 6), sx = Math.floor((x + row * 5) / 10), ry = y % 6;
+    let k = 0.5 + (sx % 3 === 0 ? 0.1 : sx % 3 === 1 ? -0.05 : 0) - ry * 0.06;
+    if ((x + row * 5) % 10 === 0) k = 0.1;
+    if (ry === 5) k = 0.05;
+    g.set(x, y, rampAt([0x2a1210, 0x4a2018, 0x6a3020, 0x8a4428], k, x, y));
+  }
+  for (let x = 0; x < W2; x++) g.set(x, 0, 0x1a0a08);
+  const c = makeCanvas(W2, H2); g.drawTo(c.getContext('2d')); scene.textures.addCanvas(key, c);
+  return key;
 }

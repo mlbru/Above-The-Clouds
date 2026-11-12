@@ -3,7 +3,7 @@ import { PixelText, COLORS } from './PixelText.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { cloudPass } from '../utils/transition.js';
 import { lerpColor, darken } from '../utils/color.js';
-import { buildDragonTextures, HEAD_W, HEAD_H, HEAD_NECK } from '../render/dragonArt.js';
+import { buildDragonTextures } from '../render/dragonArt.js';
 import { buildFlyingDragon, FLY } from '../render/flyingDragonArt.js';
 import { buildFlightArt, WATERFALLS, FAR_LEDGE, OLD_GATE } from '../render/flightArt.js';
 
@@ -64,15 +64,15 @@ export class DragonFlight {
     this.farClouds = Array.from({ length: 6 }, (_, i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${i}`).setScale(0.55).setTint(haze(0.45)).setAlpha(0.9), 0.12), x: i * 95, y: H * 0.56 + (i % 3) * 5 }));
     // The two mountains.
     this.oldMtn = add(scene.add.image(0, 0, 'flt_old').setOrigin(0, 0), 0.2);
-    this.newMtn = add(scene.add.image(0, 0, 'flt_new').setOrigin(0.5, 0), 0.2);
-    this.mtnFx = add(scene.add.graphics(), 0.21);
-    this.mtnGlow = add(scene.add.graphics().setBlendMode('ADD'), 0.22);
+    this.newMtn = add(scene.add.image(0, 0, 'flt_new').setOrigin(0.5, 0), 0.29);
+    this.mtnFx = add(scene.add.graphics(), 0.291);
+    this.mtnGlow = add(scene.add.graphics().setBlendMode('ADD'), 0.292);
     // The cloud sea: a far strip and a near one, sliding at their own speeds.
     this.seaFar = add(scene.add.tileSprite(0, 0, W, 70, 'flt_sea_0').setOrigin(0, 0).setTint(haze(0.3)), 0.3);
     this.seaFill = add(scene.add.rectangle(0, 0, W, H, haze(0.2)).setOrigin(0, 0), 0.31);
     this.seaNear = add(scene.add.tileSprite(0, 0, W, 90, 'flt_sea_1').setOrigin(0, 0).setTint(haze(0.12)), 0.32);
     // Mid clouds behind the dragon.
-    this.midClouds = Array.from({ length: 4 }, (_, i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${(i + 2) % 6}`).setTint(haze(0.2)).setAlpha(0.95), 0.4), x: i * 160 + 40, y: H * (0.24 + (i % 2) * 0.26), v: 0.9 + (i % 2) * 0.3 }));
+    this.midClouds = Array.from({ length: 4 }, (_, i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${(i + 2) % 6}`).setTint(haze(0.2)).setAlpha(0.95), 0.25), x: i * 160 + 40, y: H * (0.24 + (i % 2) * 0.26), v: 0.9 + (i % 2) * 0.3 }));
     // A flock of birds far off.
     this.birds = add(scene.add.graphics(), 0.41);
 
@@ -80,8 +80,6 @@ export class DragonFlight {
     const tint = lerpColor(this.light, 0xffffff, 0.35);
     this.body = add(scene.add.sprite(0, 0, 'fdragon', 0).setOrigin(0, 0).setTint(tint), 1);
     this.bodyGlow = add(scene.add.sprite(0, 0, 'fdragon_glow', 0).setOrigin(0, 0).setBlendMode('ADD').setTint(0xff7a2a), 1.01);
-    this.head = add(scene.add.image(0, 0, 'dragon_head_1').setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setTint(tint), 1.1);
-    this.headGlow = add(scene.add.image(0, 0, 'dragon_head_glow_1').setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setBlendMode('ADD').setTint(0xff6a1a), 1.11);
     this.rider = add(scene.add.graphics(), 1.2);
     this.fire = add(scene.add.graphics(), 1.3);
     this.fireGlow = add(scene.add.graphics().setBlendMode('ADD'), 1.31);
@@ -188,11 +186,11 @@ export class DragonFlight {
     const p = ease(clamp01((k - 0.3) / 0.7));
     if (p <= 0) { this.newMtn.setVisible(false); return; }
     // Far off at first, growing as you near it; its feet stay in the clouds.
-    const s = 0.42 + p * 0.2;
-    const nx = Math.round(W + 90 - p * (W * 0.36 + 60)), ny = Math.round(seaY + 34 - 320 * s);
+    const s = 0.45 + p * 0.27;
+    const nx = Math.round(W + 110 - p * (W * 0.26 + 110)), ny = Math.round(seaY + 34 - 320 * s);
     this.newMtn.setVisible(true).setPosition(nx, ny).setScale(s).setTint(lerpColor(this.light, this.skyBottom, 0.55 - p * 0.4));
     // Falling water down the gullies, mist where it meets the clouds.
-    const ox = nx - (280 * s) / 2;
+    const ox = nx - (300 * s) / 2;
     for (const [wx, w0] of WATERFALLS) {
       const x = Math.round(ox + wx * s);
       for (let y = Math.round(ny + w0 * s); y < seaY + 30; y += 1) {
@@ -232,26 +230,21 @@ export class DragonFlight {
     this.lastFrame = frame;
     // The whole dragon rises a little on each downbeat.
     const beat = gliding ? Math.sin(s * 1.4) * 2 : Math.sin((frame / FLY.frames) * Math.PI * 2) * 4;
-    const x0 = Math.round(W * 0.5 - FLY.neck[0] + 26 + Math.sin(s * 0.45) * 8 + swoop * 60);
-    const y0 = Math.round(H * 0.44 - FLY.neck[1] + (1 - lift) * 60 + beat + Math.sin(s * 0.7) * 5 + swoop * 30);
-    this.body.setFrame(frame).setPosition(x0, y0);
+    const x0 = Math.round(W * 0.5 - 236 + Math.sin(s * 0.45) * 8 + swoop * 50);
+    const y0 = Math.round(H * 0.46 - 222 + (1 - lift) * 60 + beat + Math.sin(s * 0.7) * 5 + swoop * 28);
     const roaring = this.breathT !== undefined && this.breathT < 1800;
+    this.body.setTexture(roaring ? 'fdragon_roar' : 'fdragon', frame).setPosition(x0, y0);
     const heat = 0.55 + 0.3 * Math.sin(s * 3.1) + (roaring ? 0.4 : 0);
     this.bodyGlow.setFrame(frame).setPosition(x0, y0).setAlpha(Math.min(1, heat));
-    // The head: nodding with the beat, rearing back as it roars.
-    const jaw = roaring ? 3 : Math.floor(s * 0.6) % 6 === 0 ? 2 : 1;
-    const tilt = -0.06 + beat * 0.012 + swoop * 0.22 - (roaring ? 0.22 : 0);
-    const hx = x0 + FLY.neck[0], hy = y0 + FLY.neck[1];
-    this.head.setTexture(`dragon_head_${jaw}`).setPosition(hx, hy).setRotation(tilt);
-    this.headGlow.setTexture(`dragon_head_glow_${jaw}`).setPosition(hx, hy).setRotation(tilt).setAlpha(Math.min(1, heat * 0.8));
+    const meta = FLY.meta[frame] || { saddle: [260, 220], mouth: [400, 180] };
+    const hx = x0 + meta.mouth[0], hy = y0 + meta.mouth[1];
     // The rider on its back.
-    const sd = FLY.meta[frame] ? FLY.meta[frame].saddle : [FLY.neck[0] - 30, FLY.neck[1] + 10];
-    this.drawRider(x0 + sd[0], y0 + sd[1], t);
+    this.drawRider(x0 + meta.saddle[0], y0 + meta.saddle[1], t);
     // Fire: a plume roaring forward and up out of the jaws, then smoke.
     if (this.breathT !== undefined) {
       this.breathT += delta;
       if (this.breathT < 1600) {
-        const mx = hx + Math.cos(tilt) * 62 - Math.sin(tilt) * 2, my = hy + Math.sin(tilt) * 62 + 4;
+        const mx = hx + 2, my = hy;
         for (let i = 0; i < 4; i++) this.flames.push({ x: mx, y: my, vx: 4.6 + Math.random() * 1.8, vy: -0.5 - Math.random() * 0.9, life: 1, r: 2 + Math.random() * 3 });
       }
     }

@@ -35,3 +35,14 @@ playable ride on the dragon's back (idea B).
 - **Thin Air**: painted moonlit range with a live aurora behind the altimeter.
 - **Title camp**: drifts of wildflowers, swaying grass, mossy stones, mushrooms, pollen.
 - Fix: the key that closes a sub-screen no longer also reaches the camp menu.
+
+## Art pass 2 (2026-11-12)
+
+- The flying dragon is now long and heavy, after Smaug: a thick S-curved neck, a narrow horned
+  head of its own (jaw-open sheet for the roar, fire from its mouth), a deep chest, a long tail
+  with a spade, huge bat wings. One sprite per frame (`fdragon`, `fdragon_roar`, `fdragon_glow`).
+- The Far Range is painted as a natural alpine massif: a jagged midpoint-displaced ridgeline,
+  ridged-noise faces lit from the upper right, snowfields, forest thickening downslope.
+- Requests screen: painted night backdrop and a painted board (roof, frame, cork, iron corners).
+- Camp board and pen sprites repainted with shading.
+- Later: the dragon should drop you at a NEW base camp on the Far Range (not the same ledge).

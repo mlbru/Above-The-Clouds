@@ -156,59 +156,84 @@ function oldMountain() {
   return g;
 }
 
-// The Far Range: the mountain the dragon carries you to.
+// The Far Range: the mountain the dragon carries you to, painted like a real
+// alpine massif. A jagged ridgeline (a main summit, a lower twin, rocky
+// shoulders) built by midpoint displacement; faces shaded from a field of
+// ridges and gullies that run down from the summits, lit from the upper
+// right; snow on the tops and caught in the hollows; scree; dark pine forest
+// thickening down the lower slopes; waterfalls down three gullies.
 function farRange() {
-  const w = 280, h = 320;
-  const noise = makeNoise2D(2400);
+  const w = 300, h = 320;
+  const noise = makeNoise2D(2411), noise2 = makeNoise2D(77);
   const g = new PixelGrid(w, h);
-  const rock = [0x0a1412, 0x12221e, 0x1a3029, 0x264438, 0x38604a, 0x52805c];
-  const moss = [0x1a3a20, 0x24502a, 0x346a34, 0x4a8640];
-  const snow = [0x9aaabc, 0xc8d4e2, 0xeef2f8];
-  const sm = (a0, b0, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (b0 - a0))); return k * k * (3 - 2 * k); };
-  // Twin summits, and flanks that run down and out to the edges.
-  const ridge = (x) => {
-    const a0 = 14 + Math.abs(x - 96) * 1.05, b0 = 40 + Math.abs(x - 190) * 1.15;
-    const flank = h - Math.min(x, w - x) * 2.6;
-    return Math.round(Math.max(Math.min(a0, b0), flank) + (noise(x * 0.08, 5) - 0.5) * 10);
-  };
-  for (let x = 0; x < w; x++) {
-    const top = ridge(x);
-    // Faces turned to the sun (upper right) are lit, the others in shade.
-    const slope = ridge(x + 4) - ridge(x - 4);
-    const face = Math.max(-1, Math.min(1, slope / 7));
-    for (let y = Math.max(0, top); y < h; y++) {
-      const d = y - top;
-      const strata = Math.sin(y * 0.16 + noise(x * 0.02, y * 0.02) * 5);
-      let k = 0.42 + face * 0.24 * (1 - sm(0, 140, d) * 0.5) + (noise(x * 0.09, y * 0.09) - 0.5) * 0.28 + strata * 0.08;
-      let c = rampAt(rock, k, x, y);
-      if (d < 16 + noise(x * 0.2, 9) * 12 && y < 130) c = rampAt(snow, k + 0.25, x, y);
-      else if (y > 120 && strata > 0.86 && noise(x * 0.07, y * 0.07) > 0.5) c = rampAt(moss, k + 0.05, x, y);
-      g.set(x, y, c);
+  const rock = [0x161c20, 0x222a2e, 0x323c3e, 0x46524e, 0x5e6c64, 0x7e8c7e, 0xa4ae9c];
+  const snow = [0x7a88a0, 0xa4b2c6, 0xc8d4e2, 0xe6eef6, 0xffffff];
+  const pine = [0x0a1a10, 0x12281a, 0x1c3a22, 0x2c5430, 0x44743e];
+  // The ridgeline: key points, then midpoint displacement for the jagged detail.
+  let line = [[0, 318], [10, 268], [26, 214], [58, 168], [84, 118], [112, 40], [128, 14], [142, 34], [160, 62], [184, 50], [200, 70], [226, 120], [256, 176], [282, 232], [292, 270], [300, 318]];
+  const rnd = lcg(9);
+  for (let pass = 0, amp = 14; pass < 4; pass++, amp *= 0.55) {
+    const next = [];
+    for (let i = 0; i < line.length - 1; i++) {
+      const [x0, y0] = line[i], [x1, y1] = line[i + 1];
+      next.push(line[i], [(x0 + x1) / 2 + (rnd() - 0.5) * amp * 0.4, (y0 + y1) / 2 + (rnd() - 0.5) * amp]);
     }
-    // A bright rim where the ridge meets the sky on the lit side.
-    if (face > 0.2 && top >= 0) g.set(x, top, top < 130 ? snow[2] : rock[5]);
+    next.push(line[line.length - 1]);
+    line = next;
   }
-  // Forests of dark pines on the lower slopes.
-  const rnd = lcg(77);
-  for (let i = 0; i < 170; i++) {
-    const x = Math.round(rnd() * w), y = Math.round(170 + rnd() * 140);
-    if (g.get(x, y) === null || y < ridge(x) + 8) continue;
-    const t = 4 + Math.round(rnd() * 4);
-    for (let k = 0; k < t; k++) for (let j = -Math.floor(k / 2); j <= Math.floor(k / 2); j++) g.set(x + j, y - t + k, j < 0 ? 0x0c2016 : k === 0 ? 0x3a6a3c : 0x163a22);
+  const top = new Array(w).fill(h);
+  for (let i = 0; i < line.length - 1; i++) {
+    const [x0, y0] = line[i], [x1, y1] = line[i + 1];
+    for (let x = Math.floor(x0); x <= Math.ceil(x1); x++) if (x >= 0 && x < w) top[x] = Math.min(top[x], Math.round(y0 + (y1 - y0) * ((x - x0) / Math.max(1, x1 - x0))));
+  }
+  // Ridges and gullies: ridged noise stretched down the slope.
+  const ridged = (x, y) => {
+    const a = 1 - Math.abs(noise(x * 0.045, y * 0.014) * 2 - 1);
+    const b = 1 - Math.abs(noise2(x * 0.11, y * 0.035) * 2 - 1);
+    return a * 0.7 + b * 0.3;
+  };
+  const sm = (a0, b0, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (b0 - a0))); return k * k * (3 - 2 * k); };
+  for (let x = 0; x < w; x++) {
+    for (let y = top[x]; y < h; y++) {
+      // Light from the upper right: faces whose field rises to the left are lit.
+      const dx = ridged(x - 1, y) - ridged(x + 1, y);
+      const dy = ridged(x, y - 1) - ridged(x, y + 1);
+      const d = y - top[x];
+      let k = 0.46 + dx * 2.6 + dy * 1.2 - sm(120, 300, y) * 0.22;
+      // The skyline catches the light along its sunward edges.
+      if (d < 2 && top[x + 1] !== undefined && top[x - 1] > top[x + 1]) k += 0.3;
+      const flat = Math.abs(dy) < 0.02 && Math.abs(dx) < 0.03;
+      const snowLine = 150 + (noise(x * 0.03, 3) - 0.5) * 50;
+      const isSnow = y < snowLine && (d < 9 + noise(x * 0.2, y * 0.1) * 10 || (flat && ridged(x, y) < 0.55) || (dx < -0.01 && y < snowLine - 40 && noise(x * 0.08, y * 0.08) > 0.42));
+      if (isSnow) { g.set(x, y, rampAt(snow, k + 0.25, x, y)); continue; }
+      // Scree fans at the foot of the cliffs.
+      g.set(x, y, rampAt(rock, k, x, y));
+    }
+  }
+  // Forest: clumps of pines, sparse at the treeline and solid below it.
+  for (let i = 0; i < 900; i++) {
+    const x = Math.round(rnd() * w), y = Math.round(196 + Math.pow(rnd(), 0.7) * 124);
+    if (y < top[x] + 10 || noise(x * 0.04, y * 0.04) < 0.32 - (y - 196) / 400) continue;
+    const t = 5 + Math.round(rnd() * 5 + (y - 196) / 40);
+    for (let k = 0; k < t; k++) {
+      const half = Math.floor(k / 2.2);
+      for (let j = -half; j <= half; j++) g.set(x + j, y - t + k, rampAt(pine, (j > 0 ? 0.25 : 0.6) + (k === 0 ? 0.3 : 0) - k / t * 0.25, x + j, y - t + k));
+    }
+    g.set(x, y, 0x0a1008);
   }
   // Waterfall gullies (the falling water itself is animated by the scene).
-  for (const [fx, f0] of WATERFALLS) for (let y = f0; y < h; y++) { const xx = fx + Math.round(Math.sin(y * 0.05) * 1.5); g.set(xx - 1, y, 0x08100e); g.set(xx, y, 0x08100e); g.set(xx + 1, y, 0x08100e); }
-  // The ledge with its lamp and a flag: where the dragon will land.
+  for (const [fx, f0] of WATERFALLS) for (let y = f0; y < h; y++) { const xx = fx + Math.round(Math.sin(y * 0.05) * 1.5); g.set(xx - 1, y, 0x0e1416); g.set(xx, y, 0x0a1012); g.set(xx + 1, y, 0x0e1416); }
+  // The ledge where the dragon will land: a lamp on a post and a red flag.
   const [lx, ly] = FAR_LEDGE;
   g.rect(lx - 18, ly, 38, 3, rock[4]);
-  g.rect(lx - 18, ly, 38, 1, moss[3]);
+  g.rect(lx - 18, ly, 38, 1, rock[6]);
   g.rect(lx + 12, ly - 14, 1, 14, 0x2a2018); g.rect(lx + 13, ly - 14, 7, 4, 0xc8463b); g.rect(lx + 13, ly - 14, 7, 1, 0xe8745a);
   g.rect(lx - 9, ly - 7, 3, 7, 0x2a2018); g.set(lx - 8, ly - 6, 0xffe0a0);
   return g;
 }
 
-export const WATERFALLS = [[70, 120], [168, 150], [236, 190]];
-export const FAR_LEDGE = [118, 200];
+export const WATERFALLS = [[92, 140], [176, 110], [238, 170]];
+export const FAR_LEDGE = [134, 196];
 export const OLD_GATE = { x: 0, y: 0 };
 
 export function buildFlightArt(scene) {

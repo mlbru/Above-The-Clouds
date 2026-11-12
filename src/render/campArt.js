@@ -4,6 +4,7 @@ import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
 import { darken, lighten } from '../utils/color.js';
 import { SeededRandom } from '../utils/seededRandom.js';
 import { BIOMES } from '../data/biomes.js';
+import { shade, makeRamp } from './pixelKit.js';
 
 const OUT = 0x16141f;
 const WOOD = 0x8a5a32, WOOD_D = 0x5e3c20, WOOD_L = 0xa8744a, END = 0xd8b07a, RING = 0x9a6a3a;
@@ -253,21 +254,30 @@ function chalkGrid(v) {
 
 export const HUT_SIZE = { w: 54, h: 40, chimney: { x: 40, y: 0 }, lantern: { x: 36, y: 28 } };
 
-// The camp requests board: a cork board on a post with a little roof,
-// three paper notes pinned on it (data/requests.js, scenes/RequestsScene.js).
+// The camp requests board: a shingled roof, a framed cork board on two
+// posts, three notes pinned on it (cream, blue-lined, a child's yellow one).
 function boardGrid() {
-  const g = new PixelGrid(26, 34);
-  g.rect(12, 14, 3, 20, WOOD_D); g.rect(12, 14, 1, 20, WOOD);
-  // A little shingle roof against the rain.
-  g.rect(1, 1, 24, 3, 0x5a3a22); g.rect(2, 0, 22, 1, 0x7a5232); g.rect(1, 3, 24, 1, 0x3a2414);
-  // Frame and cork.
-  g.rect(2, 4, 22, 15, WOOD_D);
-  g.rect(3, 5, 20, 13, 0xb4824a);
-  for (let i = 0; i < 26; i++) g.set(3 + ((i * 7) % 20), 5 + ((i * 5) % 13), i % 3 ? 0x9a6a3a : 0xc89660);
-  // Three notes: cream, blue-lined, and a child's yellow one; red pins.
-  g.rect(4, 7, 5, 6, 0xf0e6cc); g.rect(5, 9, 3, 1, 0xa8a090); g.rect(5, 11, 3, 1, 0xa8a090); g.set(6, 7, 0xd83a22);
-  g.rect(10, 6, 6, 7, 0xe8eef4); g.rect(11, 8, 4, 1, 0x7a9ac8); g.rect(11, 10, 4, 1, 0x7a9ac8); g.set(12, 6, 0xd83a22);
-  g.rect(17, 8, 5, 7, 0xf8e080); g.set(18, 10, 0xd84a3a); g.set(20, 11, 0x4a8ad8); g.set(19, 13, 0x4ab84a); g.set(19, 8, 0xd83a22);
+  const g = new PixelGrid(30, 38);
+  const POST = 1, FRAME = 2, CORK = 3, ROOF = 4;
+  g.rect(6, 18, 3, 20, POST); g.rect(21, 18, 3, 20, POST);
+  g.rect(1, 5, 28, 17, FRAME);
+  g.rect(3, 7, 24, 13, CORK);
+  for (let y = 0; y < 5; y++) g.rect(0 + Math.max(0, 2 - y), y + 1, 30 - Math.max(0, 2 - y) * 2, 1, ROOF);
+  shade(g, POST, makeRamp(0x2a160c, 0x5e3a1e, 0x8a5e38, 4), { r: 1, base: 0.5 });
+  shade(g, FRAME, makeRamp(0x2a160c, 0x6a4422, 0xa8743e, 5), { r: 1, base: 0.5, bias: (x, y) => ((x * 3 + y) % 7 === 0 ? -0.15 : 0) });
+  shade(g, CORK, makeRamp(0x7a4a24, 0xb4824a, 0xd8a868, 5), { r: 2, base: 0.55, bias: (x, y) => ((x * 7 + y * 5) % 6 === 0 ? -0.2 : (x + y * 3) % 5 === 0 ? 0.12 : 0) });
+  shade(g, ROOF, [0x2a1210, 0x4a2018, 0x6a3020, 0x8a4428], { r: 1, base: 0.55, bias: (x, y) => ((x + y * 4) % 6 === 0 ? -0.3 : 0) });
+  // The notes: shaded paper, writing lines, red pins.
+  const note = (x, y, w, h, paper, shadow, line) => {
+    g.rect(x + 1, y + 1, w, h, 0x5a3418);
+    g.rect(x, y, w, h, paper);
+    g.rect(x, y + h - 1, w, 1, shadow); g.rect(x + w - 1, y, 1, h, shadow);
+    for (let ly = y + 2; ly < y + h - 1; ly += 2) g.rect(x + 1, ly, w - 3, 1, line);
+    g.set(x + Math.floor(w / 2), y, 0xd83a22); g.set(x + Math.floor(w / 2), y - 1, 0xff8a7a);
+  };
+  note(4, 9, 6, 8, 0xf0e6cc, 0xc8b894, 0xa89878);
+  note(12, 8, 7, 9, 0xe8eef4, 0xb8c4d0, 0x7a9ac8);
+  note(21, 10, 5, 7, 0xf8e080, 0xd0b050, 0xd84a3a);
   g.outline(OUT);
   return g;
 }
@@ -301,14 +311,21 @@ function personFrame(id, f) {
   return g;
 }
 
-// The pets' pen at base camp: a low split-rail fence round a bed of straw.
+// The pets' pen at base camp: split rails on posts round a bed of straw,
+// a little water trough in the corner.
 function penGrid() {
-  const g = new PixelGrid(40, 16);
-  g.rect(1, 12, 38, 3, 0xc8a050);
-  for (let x = 2; x < 38; x += 3) g.set(x, 11 + (x % 2), 0xe8c870);
-  for (const px of [1, 13, 26, 38]) { g.rect(px, 3, 2, 12, WOOD_D); g.set(px, 3, WOOD_L); }
-  g.rect(1, 5, 39, 2, WOOD); g.rect(1, 5, 39, 1, WOOD_L);
-  g.rect(1, 9, 39, 2, WOOD); g.rect(1, 9, 39, 1, WOOD_L);
+  const g = new PixelGrid(44, 18);
+  const POST = 1, RAIL = 2, STRAW = 3, TROUGH = 4;
+  g.rect(1, 13, 42, 4, STRAW);
+  for (const px of [1, 15, 29, 41]) g.rect(px, 3, 3, 14, POST);
+  g.rect(1, 6, 43, 2, RAIL); g.rect(1, 10, 43, 2, RAIL);
+  g.rect(31, 12, 8, 4, TROUGH);
+  shade(g, STRAW, makeRamp(0x8a6020, 0xd8b048, 0xf8e088, 5), { r: 1, base: 0.55, bias: (x, y) => ((x * 3 + y * 5) % 4 === 0 ? 0.2 : (x + y) % 5 === 0 ? -0.2 : 0) });
+  shade(g, POST, makeRamp(0x2a160c, 0x5e3a1e, 0x9a6a3a, 4), { r: 1, base: 0.5 });
+  shade(g, RAIL, makeRamp(0x3a2010, 0x7a5028, 0xb8844a, 4), { r: 1, base: 0.55 });
+  shade(g, TROUGH, makeRamp(0x2a1a10, 0x5a3a20, 0x7a5a38, 3), { r: 1, base: 0.5 });
+  g.rect(32, 12, 6, 1, 0x6ab8e8); g.set(33, 12, 0xd8f0ff);
+  for (const px of [1, 15, 29, 41]) { g.set(px, 3, 0xc89a5a); g.set(px + 1, 3, 0xc89a5a); }
   g.outline(OUT);
   return g;
 }
