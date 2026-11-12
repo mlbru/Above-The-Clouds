@@ -3,7 +3,10 @@ import { GAME_WIDTH, GAME_HEIGHT, IS_PORTRAIT, IS_TOUCH } from '../config/gameCo
 import { PixelText, COLORS } from '../ui/PixelText.js';
 import { measureLine } from '../utils/pixelFont.js';
 import { PETS, STAGES, petState, petMeters, petStage } from '../data/pets.js';
-import { buildPetTextures } from '../render/petArt.js';
+import { buildPetTextures, buildPenTextures } from '../render/petArt.js';
+import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { rampAt, makeRamp } from '../render/pixelKit.js';
+import { makeNoise2D } from '../utils/seededRandom.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { lerpColor } from '../utils/color.js';
 
@@ -47,19 +50,12 @@ export class PetScene extends Phaser.Scene {
     this.texts = [];
     this.gate = 0;
 
-    // Dusk: violet overhead, orange at the horizon, the first stars.
-    const sky = this.add.graphics();
-    for (let i = 0; i < 20; i++) sky.fillStyle(lerpColor(0x241a40, 0xe0905a, (i / 19) ** 1.6), 1).fillRect(0, Math.floor((i * H) / 20), W, Math.ceil(H / 20) + 1);
-    for (let i = 0; i < 40; i++) sky.fillStyle(0xffffff, 0.3 + (i % 5) * 0.12).fillRect(Math.round((i * 97.1) % W), Math.round((i * 31.7) % (H * 0.35)), 1, 1);
-    // Far hills and the camp's tent and fire far off.
-    for (let x = 0; x < W; x++) {
-      const hy = Math.round(H * 0.5 + Math.sin(x / 37) * 6 + Math.sin(x / 13) * 2);
-      sky.fillStyle(0x3a2a40, 1).fillRect(x, hy, 1, H - hy);
-    }
+    // The painted backdrop: dusk sky, mountains, the shed wall, a straw floor.
+    this.floorY = Math.round(H * 0.55);
+    buildPenTextures(this);
+    this.add.image(0, 0, paintPenBackdrop(this, this.floorY)).setOrigin(0, 0);
     this.add.zone(0, 0, W, H).setOrigin(0, 0).setInteractive();
-    this.floorY = Math.round(H * 0.5);
     this.back = this.add.graphics();
-    this.drawPen();
     this.homesG = this.add.graphics().setDepth(1);
     this.glowG = this.add.graphics().setDepth(1.5).setBlendMode('ADD');
     this.front = this.add.graphics().setDepth(4);
@@ -73,11 +69,14 @@ export class PetScene extends Phaser.Scene {
       const stage = petStage(this.d, p.id);
       const flying = p.id === 'bee' || p.id === 'moth';
       // The bee hovers over its hive roof, the moth beside its lantern.
-      const px = p.id === 'moth' ? x + 14 : x;
-      const py = p.id === 'bee' ? this.floorY - 44 : p.id === 'moth' ? this.floorY - 22 : p.id === 'dragonling' ? this.floorY - 8 : this.floorY - 10;
+      const home = this.add.image(x, this.floorY + 6, `pethome_${p.home}`).setOrigin(0.5, 1).setScale(2).setDepth(1.2);
+      if (!unlocked) home.setTint(0x8a7a8a);
+      // On the bale, at the hive's door, beside the lantern, in the nest.
+      const px = p.id === 'moth' ? x + 30 : p.id === 'bee' ? x + 18 : x;
+      const py = p.id === 'kid' ? this.floorY - 28 : p.id === 'bee' ? this.floorY - 40 : p.id === 'moth' ? this.floorY - 46 : this.floorY - 12;
       const sprite = this.add.sprite(px, py, `pet_${p.id}_${stage}`, 0).setOrigin(0.5, 1).setScale(0).setDepth(3);
       if (!unlocked) sprite.setTintFill(0x1a1020).setAlpha(0.5);
-      const zone = this.add.zone(x - 34, this.floorY - 70, 68, 84).setOrigin(0, 0).setInteractive({ useHandCursor: true }).setDepth(6);
+      const zone = this.add.zone(x - 40, this.floorY - 100, 80, 110).setOrigin(0, 0).setInteractive({ useHandCursor: true }).setDepth(6);
       zone.on('pointerdown', () => { if (this.index === i) this.toggle(); else this.select(i); });
       return { p, x, unlocked, stage, flying, sprite, hop: 0, baseY: sprite.y };
     });
@@ -85,7 +84,7 @@ export class PetScene extends Phaser.Scene {
     this.tweens.add({ targets: this, gate: 1, duration: 600, ease: 'Back.easeOut' });
     Audio.play('creak');
     this.homes.forEach((h, i) => this.time.delayedCall(350 + i * 160, () => {
-      this.tweens.add({ targets: h.sprite, scale: 3, duration: 320, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: h.sprite, scale: 2, duration: 320, ease: 'Back.easeOut' });
       if (h.unlocked) this.puff(h.x, this.floorY - 4);
     }));
 
@@ -119,50 +118,39 @@ export class PetScene extends Phaser.Scene {
     for (const ry of [fy - 28, fy - 16]) { g.fillStyle(0x5e3c20, 1).fillRect(0, ry, W, 4); g.fillStyle(0x8a5a32, 1).fillRect(0, ry, W, 1); }
   }
 
-  // A home for each pet, behind its sprite.
+  // Light and marks round each home: the spotlight on the chosen one, the
+  // lantern's and the embers' glow, a red ribbon on the one coming along, a
+  // chalked "?" on an empty home. And the string of lights along the shed.
   drawHomes() {
     const g = this.homesG.clear(), gl = this.glowG.clear(), fy = this.floorY, t = this.t;
+    for (let x = 6; x < W; x += 22) {
+      const y = Math.round(this.wallTop + 8 + Math.sin(((x % 132) / 132) * Math.PI) * 6);
+      const on = 0.7 + 0.3 * Math.sin(t / 400 + x);
+      gl.fillStyle([0xffc860, 0xff8a6a, 0x9fe8a0, 0x8ac8ff][(x / 22) % 4 | 0], 0.25 * on).fillCircle(x, y + 2, 4);
+      g.fillStyle(0xfff0c0, 1).fillRect(x, y + 1, 1, 2);
+    }
     this.homes.forEach((h, i) => {
       const x = h.x, sel = i === this.index;
-      // The spotlight on the chosen one.
-      if (sel) { gl.fillStyle(0xffd6a0, 0.12).fillEllipse(x, fy, 70, 14); gl.fillStyle(0xffd6a0, 0.08).fillEllipse(x, fy, 46, 8); }
-      if (h.p.home === 'hay') {
-        g.fillStyle(0x6a5020, 1).fillRect(x - 20, fy - 10, 40, 12);
-        g.fillStyle(0xd8b058, 1).fillRect(x - 19, fy - 11, 38, 12);
-        for (let k = 0; k < 9; k++) g.fillStyle(0xb8903c, 1).fillRect(x - 17 + k * 4, fy - 10, 1, 10);
-        g.fillStyle(0x8a3a2a, 1).fillRect(x - 6, fy - 11, 2, 12).fillRect(x + 5, fy - 11, 2, 12);
-      } else if (h.p.home === 'hive') {
-        g.fillStyle(0x3a2414, 1).fillRect(x - 3, fy - 16, 6, 17);
-        g.fillStyle(0x5e3c20, 1).fillRect(x - 13, fy - 34, 26, 19);
-        g.fillStyle(0xa8743e, 1).fillRect(x - 12, fy - 33, 24, 17);
-        g.fillStyle(0x8a5a32, 1).fillRect(x - 12, fy - 27, 24, 1).fillRect(x - 12, fy - 21, 24, 1);
-        g.fillStyle(0x16141f, 1).fillRect(x - 2, fy - 20, 4, 2);
-        g.fillStyle(0x6a3a2a, 1).fillTriangle(x - 16, fy - 33, x + 16, fy - 33, x, fy - 42);
-      } else if (h.p.home === 'lantern') {
-        g.fillStyle(0x3a2414, 1).fillRect(x - 14, fy - 46, 3, 47).fillRect(x - 14, fy - 46, 16, 2);
-        const sw = Math.round(Math.sin(t / 700) * 1.5);
-        g.fillStyle(0x16141f, 1).fillRect(x + 1 + sw, fy - 44, 1, 6).fillRect(x - 3 + sw, fy - 38, 9, 11);
+      if (sel) { gl.fillStyle(0xffd6a0, 0.14).fillEllipse(x, fy + 5, 96, 18); gl.fillStyle(0xffd6a0, 0.08).fillEllipse(x, fy + 5, 60, 10); }
+      if (h.p.home === 'lantern' && h.unlocked !== null) {
         const fl = 0.8 + 0.2 * Math.sin(t / 90);
-        g.fillStyle(0xffd070, 1).fillRect(x - 2 + sw, fy - 37, 7, 9);
-        gl.fillStyle(0xffc060, 0.22 * fl).fillCircle(x + 1 + sw, fy - 33, 18);
-      } else {
-        g.fillStyle(0x16141f, 1).fillEllipse(x, fy - 4, 40, 14);
-        g.fillStyle(0x3a2a2a, 1).fillEllipse(x, fy - 5, 38, 12);
-        for (let k = 0; k < 5; k++) {
-          const glow = 0.5 + 0.5 * Math.sin(t / 300 + k);
-          g.fillStyle(lerpColor(0x8a2a1a, 0xffb040, glow), 1).fillRect(x - 14 + k * 7, fy - 6 + (k % 2), 4, 1);
-        }
-        gl.fillStyle(0xff6a1a, 0.12).fillEllipse(x, fy - 6, 44, 14);
-        // Heat shimmering up off it.
-        for (let k = 0; k < 4; k++) g.fillStyle(0xffffff, 0.08).fillRect(x - 6 + k * 4 + Math.round(Math.sin(t / 200 + k) * 2), fy - 16 - ((t / 30 + k * 7) % 16), 1, 3);
+        gl.fillStyle(0xffc060, 0.16 * fl).fillCircle(x + 3, fy - 52, 26);
+        gl.fillStyle(0xffe0a0, 0.18 * fl).fillCircle(x + 3, fy - 52, 10);
       }
-      // Locked: a chalked "?" over the empty home.
-      if (!h.unlocked) g.fillStyle(0xf4efe4, 0.5).fillRect(x - 1, fy - 52, 3, 1).fillRect(x + 2, fy - 51, 1, 3).fillRect(x, fy - 48, 2, 1).fillRect(x, fy - 46, 1, 1).fillRect(x, fy - 44, 1, 1);
-      // Coming along: a red ribbon tied round the home.
+      if (h.p.home === 'stone') {
+        const fl = 0.7 + 0.3 * Math.sin(t / 260);
+        gl.fillStyle(0xff6a1a, 0.18 * fl).fillEllipse(x, fy - 8, 50, 16);
+        for (let k = 0; k < 3; k++) {
+          const sy = fy - 14 - ((t / 20 + k * 13) % 30);
+          gl.fillStyle(0xffa040, 0.5).fillRect(Math.round(x - 6 + k * 6 + Math.sin(t / 300 + k) * 3), Math.round(sy), 1, 1);
+        }
+      }
+      if (!h.unlocked) g.fillStyle(0xf4efe4, 0.6).fillRect(x - 2, fy - 64, 5, 1).fillRect(x + 3, fy - 63, 1, 4).fillRect(x, fy - 59, 3, 1).fillRect(x, fy - 57, 1, 2).fillRect(x, fy - 54, 1, 1);
       if (this.d.pets.active === h.p.id && h.unlocked) {
-        g.fillStyle(0xc8263a, 1).fillRect(x - 20, fy + 3, 40, 2);
-        g.fillStyle(0xc8263a, 1).fillTriangle(x - 2, fy + 4, x - 8, fy + 11, x - 3, fy + 11).fillTriangle(x + 2, fy + 4, x + 8, fy + 11, x + 3, fy + 11);
-        g.fillStyle(0xff6a7a, 1).fillRect(x - 1, fy + 3, 3, 3);
+        g.fillStyle(0x7a1420, 1).fillRect(x - 24, fy + 8, 48, 1);
+        g.fillStyle(0xc8263a, 1).fillRect(x - 24, fy + 6, 48, 2);
+        g.fillStyle(0xc8263a, 1).fillTriangle(x - 2, fy + 7, x - 9, fy + 15, x - 3, fy + 15).fillTriangle(x + 2, fy + 7, x + 9, fy + 15, x + 3, fy + 15);
+        g.fillStyle(0xff6a7a, 1).fillRect(x - 1, fy + 5, 3, 3);
       }
     });
   }
@@ -300,10 +288,80 @@ export class PetScene extends Phaser.Scene {
       const on = Math.sin(this.t / 500 + ff.ph * 3) > 0.2;
       if (on) f.fillStyle(0xf0ff90, 0.9).fillRect(x, y, 1, 1).fillStyle(0xf0ff90, 0.2).fillRect(x - 1, y - 1, 3, 3);
     }
-    // The gate swinging open at the left, as you came in.
-    const gw = Math.round(40 * (1 - this.gate * 0.85)), gy = this.floorY - 30;
-    f.fillStyle(0x3a2414, 1).fillRect(4, gy - 4, 5, 34);
-    f.fillStyle(0x5e3c20, 1).fillRect(9, gy + 2, gw, 3).fillRect(9, gy + 14, gw, 3);
-    f.fillStyle(0x8a5a32, 1).fillRect(9, gy + 2, gw, 1).fillRect(9, gy + 14, gw, 1);
   }
+}
+
+// The pen's backdrop, painted once per screen size: a dusk sky with stars and
+// a big moon, two ranges of mountains, the plank wall of the pets' shed (with
+// a warm window, a coil of rope and a horseshoe on nails), and a floor of
+// boards under scattered straw. The scene keeps wallTop for the fairy lights.
+function paintPenBackdrop(scene, floorY) {
+  const key = `pen_bg_${W}_${H}_${floorY}`;
+  const wallTop = Math.round(floorY - H * 0.3);
+  scene.wallTop = wallTop;
+  if (scene.textures.exists(key)) return key;
+  const g = new PixelGrid(W, H);
+  const noise = makeNoise2D(611);
+  const sky = makeRamp(0x1c1438, 0x6a3a6a, 0xf0a070, 7);
+  for (let y = 0; y < wallTop + 4; y++) for (let x = 0; x < W; x++) g.set(x, y, rampAt(sky, (y / (wallTop + 4)) ** 1.2, x, y));
+  for (let i = 0; i < 70; i++) { const x = (i * 97) % W, y = (i * 37) % Math.max(1, wallTop - 40); g.set(x, y, i % 4 ? 0xd8d0f0 : 0xffffff); }
+  // The moon.
+  const mx = Math.round(W * 0.18), my = Math.round(wallTop * 0.35);
+  for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9; x++) { const d = Math.hypot(x, y); if (d <= 8.5) g.set(mx + x, my + y, d > 7 ? 0xd8d4c8 : noise(x * 0.4, y * 0.4) > 0.62 ? 0xc8c4b8 : 0xf4f0e4); }
+  // Two ranges of mountains, the near one darker, snow on the tops.
+  for (const [base, amp, col, snow, f] of [[wallTop - 6, 46, 0x4a3a6a, 0x9a90c0, 0.012], [wallTop + 2, 30, 0x2e2244, 0x6a6090, 0.022]]) {
+    for (let x = 0; x < W; x++) {
+      const top = Math.round(base - amp * (0.5 + 0.5 * Math.sin(x * f + base)) * (0.6 + noise(x * f * 2, base) * 0.6));
+      for (let y = top; y < wallTop + 4; y++) g.set(x, y, y < top + 3 + (x % 3) ? snow : col);
+    }
+  }
+  // The shed wall: planks with grain, posts, nails.
+  const plank = makeRamp(0x2a160c, 0x5a3a22, 0x8a5e38, 5);
+  for (let y = wallTop; y < floorY; y++) {
+    const row = Math.floor((y - wallTop) / 7), ry = (y - wallTop) % 7;
+    for (let x = 0; x < W; x++) {
+      const grain = noise(x * 0.05 + row * 9, y * 0.6) - 0.5;
+      let k = 0.5 + grain * 0.5 + (row % 2 ? 0.06 : -0.04) - ((y - wallTop) / (floorY - wallTop)) * 0.25;
+      if (ry === 6) k = 0.05; else if (ry === 0) k += 0.18;
+      g.set(x, y, rampAt(plank, k, x, y));
+    }
+  }
+  for (let x = 30; x < W; x += 96) {
+    for (let y = wallTop - 6; y < floorY; y++) for (let k = 0; k < 6; k++) g.set(x + k, y, rampAt(plank, k === 0 ? 0.8 : k === 5 ? 0.05 : 0.38 + noise(k, y * 0.3) * 0.2, x + k, y));
+    for (let y = wallTop + 3; y < floorY; y += 14) g.set(x + 2, y, 0x9a9090);
+  }
+  // A roof edge with a dark shadow under it.
+  for (let x = 0; x < W; x++) { for (let k = 0; k < 4; k++) g.set(x, wallTop - 4 + k, k === 0 ? 0x8a5e38 : 0x2a160c); g.set(x, wallTop, 0x1a0e08); }
+  // A warm window with four panes.
+  const wx = Math.round(W * 0.76), wy = wallTop + 8, ww = 30, wh = 22;
+  for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
+    const frame = x < 2 || y < 2 || x >= ww - 2 || y >= wh - 2 || x === ww / 2 || y === wh / 2;
+    g.set(wx + x, wy + y, frame ? 0x2a160c : rampAt([0xc86a2a, 0xf0a040, 0xffd890, 0xfff2cc], 0.9 - y / wh * 0.6 - Math.abs(x - ww / 2) / ww * 0.4, x, y));
+  }
+  for (let x = -2; x < ww + 2; x++) g.set(wx + x, wy + wh, 0x8a5e38);
+  // A coil of rope and a horseshoe hanging on nails.
+  const rx = Math.round(W * 0.42), ry = wallTop + 10;
+  for (let a = 0; a < 3; a++) for (let t = 0; t < 40; t++) { const ang = (t / 40) * Math.PI * 2; g.set(Math.round(rx + Math.cos(ang) * (7 - a)), Math.round(ry + 6 + Math.sin(ang) * (6 - a)), (t + a) % 3 ? 0xc8a064 : 0x8a6a3a); }
+  g.set(rx, ry - 1, 0x9a9090);
+  const hx = Math.round(W * 0.6), hy = wallTop + 12;
+  for (let t = 0; t < 30; t++) { const ang = Math.PI * 0.15 + (t / 30) * Math.PI * 1.7; g.set(Math.round(hx + Math.cos(ang) * 4), Math.round(hy + 4 - Math.sin(ang) * 5), t % 4 ? 0x6a6470 : 0xa8a2b0); }
+  // The floor: boards in perspective under scattered straw, darker in front.
+  const board = makeRamp(0x3a2412, 0x7a5228, 0xa8783c, 5);
+  for (let y = floorY; y < H; y++) for (let x = 0; x < W; x++) {
+    const d = (y - floorY) / (H - floorY);
+    const seam = Math.round((x - W / 2) / (18 + d * 30)) !== Math.round((x + 1 - W / 2) / (18 + d * 30));
+    let k = 0.55 - d * 0.35 + (noise(x * 0.08, y * 0.3) - 0.5) * 0.25;
+    if (seam) k -= 0.3;
+    g.set(x, y, rampAt(board, k, x, y));
+  }
+  for (let x = 0; x < W; x++) for (let k = 0; k < 4; k++) g.set(x, floorY + k, rampAt(board, 0.12 + k * 0.05, x, floorY + k));
+  for (let i = 0; i < 520; i++) {
+    const x = (i * 53.7) % W, y = floorY + 3 + ((i * 29.3) % (H - floorY - 3));
+    const c = i % 3 === 0 ? 0xf0d080 : i % 3 === 1 ? 0xd8b058 : 0xa88038;
+    g.set(x, y, c); g.set(x + 1, y + (i % 2), c); if (i % 4 === 0) g.set(x + 2, y + 1, c);
+  }
+  const c = makeCanvas(W, H);
+  g.drawTo(c.getContext('2d'));
+  scene.textures.addCanvas(key, c);
+  return key;
 }

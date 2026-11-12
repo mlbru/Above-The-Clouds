@@ -16,3 +16,22 @@ Status: built, tests (104) and build pass.
 
 Not built: the Far Range's own biomes (after the Far Shore the high loop continues), and the
 playable ride on the dragon's back (idea B).
+
+## Art pass (2026-11-12, after feedback)
+
+- **Flying dragon** redrawn from scratch in side view (`render/flyingDragonArt.js`): tapered
+  scaly body, belly plates, back spines, tucked legs, stable lava cracks with a glow sheet,
+  bat wings with lit finger bones and translucent panels, 12-frame flap.
+- **The flight** (`ui/DragonFlight.js`, scenery in `render/flightArt.js`): letterbox, sun
+  rays, painted cumulus clouds at three depths, a billowing cloud sea, snowy peaks, the Spine
+  with the Gate's fires, the Far Range (snowy twin summits, forests, waterfalls, a lantern on
+  the ledge), a forward fire plume, a detailed rider. Landing swaps the Gate for a lantern and
+  flag on the Far Shore.
+- **Gate pillars** centred on the ledge, painted carved obsidian with bone and horned crowns,
+  a dragon skull on the chain.
+- **Pets** repainted with rounded shading and details (`render/petArt.js`, `render/pixelKit.js`).
+- **The pen**: painted backdrop (dusk, mountains, shed wall, window, fairy lights, straw floor)
+  and painted homes (hay bale, straw skep on a log, iron lantern post, ember nest).
+- **Thin Air**: painted moonlit range with a live aurora behind the altimeter.
+- **Title camp**: drifts of wildflowers, swaying grass, mossy stones, mushrooms, pollen.
+- Fix: the key that closes a sub-screen no longer also reaches the camp menu.

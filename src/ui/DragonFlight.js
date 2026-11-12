@@ -3,27 +3,28 @@ import { PixelText, COLORS } from './PixelText.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { cloudPass } from '../utils/transition.js';
 import { lerpColor, darken } from '../utils/color.js';
-import { makeNoise2D } from '../utils/seededRandom.js';
-import { buildDragonTextures, HEAD_W, HEAD_H, HEAD_NECK, WING_W, WING_H, WING_SHOULDER, WING_FLAP, SEG_RADII, dirIndex } from '../render/dragonArt.js';
+import { buildDragonTextures, HEAD_W, HEAD_H, HEAD_NECK } from '../render/dragonArt.js';
+import { buildFlyingDragon, FLY } from '../render/flyingDragonArt.js';
+import { buildFlightArt, WATERFALLS, FAR_LEDGE, OLD_GATE } from '../render/flightArt.js';
 
 const DEPTH = 8000; // under the cloud wipe (9000), over everything in the run
-const FLIGHT_MS = 10500;
+const FLIGHT_MS = 11500;
 const W = GAME_WIDTH, H = GAME_HEIGHT;
 const INK = 0x16141f;
-const SEGS = 36;
-const nearR = (r) => SEG_RADII.reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a));
+const BAR = 22;
 const ease = (t) => t * t * (3 - 2 * t);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 // The Dragon's Gate, part two: the dragon carries you across the sea of
-// clouds to the next mountain. Side on, flying right: the old mountain (with
-// the Gate's braziers still burning on it) falls away on the left, peaks
-// poke through the cloud sea below, clouds stream past in front, and the
-// Far Range rises on the right, green-black rock with waterfalls falling
-// into the clouds and one lit ledge waiting. The dragon is built from the
-// same scales, wings and head as the one coiled round the Spine; you sit at
-// the base of its neck, one hand on a spine, scarf streaming. It roars once
-// over the sea and breathes a plume of fire into the sky. Any key skips.
+// clouds to the next mountain. A wide, letterboxed shot, side on, flying
+// right: the Spine falls away on the left with the Gate's fires still
+// burning; snowy peaks poke through the cloud sea; clouds drift past at
+// three depths (the nearest rush by in front); sun rays fan through the sky.
+// The dragon (render/flyingDragonArt.js) beats its great wings, its lava
+// cracks smoulder, you sit at the base of its neck with your scarf
+// streaming. Over the open sea it roars and breathes a plume of fire, then
+// glides; the Far Range rises on the right, waterfalls pouring into the
+// clouds, a lamp lit on the ledge where it sets you down. Any key skips.
 // opts: { meters, jacket, day, farName, onDone }
 export class DragonFlight {
   constructor(scene, opts) {
@@ -33,70 +34,71 @@ export class DragonFlight {
     this.done = false;
     this.parts = [];
     buildDragonTextures(scene);
+    buildFlyingDragon(scene);
+    buildFlightArt(scene);
     const add = (o, d = 0) => { o.setScrollFactor(0).setDepth(DEPTH + d); this.parts.push(o); return o; };
     const day = opts.day || { skyTop: 0x2a3a78, skyBottom: 0xf0b0a0, light: 0xffffff, night: 0 };
     this.night = day.night || 0;
-    // Dusk-warm whatever the hour: the flight always feels like an evening.
-    this.skyTop = lerpColor(day.skyTop, 0x2a2458, 0.35);
-    this.skyBottom = lerpColor(day.skyBottom, 0xffb48a, 0.35 * (1 - this.night));
-    this.light = lerpColor(day.light || 0xffffff, 0xffd0a0, 0.25);
-    this.noise = makeNoise2D(9091);
+    // Always a golden, late light for the crossing, deepened at night.
+    this.skyTop = lerpColor(lerpColor(day.skyTop, 0x2c2a6a, 0.4), 0x0a0c24, this.night * 0.6);
+    this.skyBottom = lerpColor(lerpColor(day.skyBottom, 0xffb88a, 0.45), 0x5a4a7a, this.night * 0.6);
+    this.light = lerpColor(lerpColor(day.light || 0xffffff, 0xffd8b0, 0.35), 0x8a90c8, this.night * 0.7);
+    const haze = (k) => lerpColor(this.light, this.skyBottom, k);
 
-    // Sky.
-    const g = add(this.scene.add.graphics(), 0);
-    for (let i = 0; i < 28; i++) g.fillStyle(lerpColor(this.skyTop, this.skyBottom, (i / 27) ** 1.4), 1).fillRect(0, Math.floor((i * H) / 28), W, Math.ceil(H / 28) + 1);
-    if (this.night > 0.25) {
-      for (let i = 0; i < 110; i++) g.fillStyle(0xffffff, (0.25 + ((i * 17) % 10) / 14) * (this.night - 0.2)).fillRect(Math.round((i * 89.7) % W), Math.round((i * 41.3) % (H * 0.55)), 1, 1);
-    }
-    // The sun or moon low over the sea, with a long glitter path.
-    this.bodyX = W * 0.68; this.bodyY = H * 0.36;
-    this.sunG = add(this.scene.add.graphics().setBlendMode('ADD'), 0.1);
-    const sun = this.night < 0.5;
-    const c = sun ? 0xffc890 : 0xc8d4ff;
-    [[48, 0.05], [30, 0.09], [18, 0.15]].forEach(([r, a]) => this.sunG.fillStyle(c, a).fillCircle(this.bodyX, this.bodyY, r));
-    this.sunG.fillStyle(sun ? 0xfff2d8 : 0xf2f0e6, 1).fillCircle(this.bodyX, this.bodyY, sun ? 9 : 7);
+    // Sky: fine bands from the zenith down to a glowing horizon.
+    const sky = add(scene.add.graphics(), 0);
+    for (let i = 0; i < 48; i++) sky.fillStyle(lerpColor(this.skyTop, this.skyBottom, (i / 47) ** 1.5), 1).fillRect(0, Math.floor((i * H) / 48), W, Math.ceil(H / 48) + 1);
+    if (this.night > 0.25) for (let i = 0; i < 120; i++) sky.fillStyle(0xffffff, (0.25 + ((i * 17) % 10) / 14) * (this.night - 0.2)).fillRect(Math.round((i * 89.7) % W), Math.round((i * 41.3) % (H * 0.5)), 1, 1);
+    // The sun (or moon) low ahead, with rays fanning out from it.
+    this.sunX = W * 0.74; this.sunY = H * 0.42;
+    this.rays = add(scene.add.graphics().setBlendMode('ADD'), 0.05);
+    const sunG = add(scene.add.graphics().setBlendMode('ADD'), 0.06);
+    const sc = this.night < 0.5 ? 0xffc890 : 0xc8d4ff;
+    [[70, 0.04], [46, 0.07], [28, 0.12], [16, 0.2]].forEach(([r, a]) => sunG.fillStyle(sc, a).fillCircle(this.sunX, this.sunY, r));
+    const disc = add(scene.add.graphics(), 0.07);
+    disc.fillStyle(this.night < 0.5 ? 0xfff4dc : 0xf2f0e6, 1).fillCircle(this.sunX, this.sunY, this.night < 0.5 ? 9 : 7);
 
-    this.far = add(this.scene.add.graphics(), 0.2);      // distant peaks through the sea
-    this.oldMtn = add(this.scene.add.graphics(), 0.3);   // the mountain you leave
-    this.newMtn = add(this.scene.add.graphics(), 0.3);   // the Far Range
-    this.sea = add(this.scene.add.graphics(), 0.4);
-    this.glow = add(this.scene.add.graphics().setBlendMode('ADD'), 0.45);
-    this.cloudTint = lerpColor(lerpColor(this.light, 0xffffff, 0.3), this.skyBottom, 0.2);
-    // Near clouds rush past in front, but above and below the dragon, never over it.
-    this.nearBand = (i) => (i % 2 ? H * (0.04 + Math.random() * 0.1) : H * (0.74 + Math.random() * 0.12));
-    this.clouds = Array.from({ length: 11 }, (_, i) => {
-      const near = i < 3;
-      const img = add(this.scene.add.image(0, 0, `cloud${i % 4}`), near ? 3 : 0.42);
-      img.setScale(near ? 2.6 + (i % 2) * 0.6 : 1.2 + (i % 3) * 0.35).setTint(near ? this.cloudTint : lerpColor(this.cloudTint, this.skyBottom, 0.4)).setAlpha(near ? 0.6 : 0.75);
-      return { img, near, x: (i * 157.3) % (W + 220) - 110, y: near ? this.nearBand(i) : H * (0.48 + (i % 4) * 0.06), v: near ? 0.42 : 0.07 + (i % 3) * 0.02, i };
-    });
+    // Far: peaks through the sea, small hazy clouds on the horizon.
+    this.peaks = [0, 1, 2, 0, 1].map((k, i) => add(scene.add.image(0, 0, `flt_peak_${k}`).setOrigin(0.5, 1).setTint(haze(0.55 - i * 0.04)).setScale(0.7 + (i % 3) * 0.25), 0.1));
+    this.peakX = [40, 150, 280, 390, 520];
+    this.farClouds = Array.from({ length: 6 }, (_, i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${i}`).setScale(0.55).setTint(haze(0.45)).setAlpha(0.9), 0.12), x: i * 95, y: H * 0.56 + (i % 3) * 5 }));
+    // The two mountains.
+    this.oldMtn = add(scene.add.image(0, 0, 'flt_old').setOrigin(0, 0), 0.2);
+    this.newMtn = add(scene.add.image(0, 0, 'flt_new').setOrigin(0.5, 0), 0.2);
+    this.mtnFx = add(scene.add.graphics(), 0.21);
+    this.mtnGlow = add(scene.add.graphics().setBlendMode('ADD'), 0.22);
+    // The cloud sea: a far strip and a near one, sliding at their own speeds.
+    this.seaFar = add(scene.add.tileSprite(0, 0, W, 70, 'flt_sea_0').setOrigin(0, 0).setTint(haze(0.3)), 0.3);
+    this.seaFill = add(scene.add.rectangle(0, 0, W, H, haze(0.2)).setOrigin(0, 0), 0.31);
+    this.seaNear = add(scene.add.tileSprite(0, 0, W, 90, 'flt_sea_1').setOrigin(0, 0).setTint(haze(0.12)), 0.32);
+    // Mid clouds behind the dragon.
+    this.midClouds = Array.from({ length: 4 }, (_, i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${(i + 2) % 6}`).setTint(haze(0.2)).setAlpha(0.95), 0.4), x: i * 160 + 40, y: H * (0.24 + (i % 2) * 0.26), v: 0.9 + (i % 2) * 0.3 }));
+    // A flock of birds far off.
+    this.birds = add(scene.add.graphics(), 0.41);
 
-    // The dragon: far wing, body (outline, scales, belly, spines), tail tip,
-    // head, near wing, rider. Positioned every frame in drawDragon().
-    const img = (key, d) => add(this.scene.add.image(0, 0, key), d);
-    this.wingFar = img('dragon_wing_3', 1).setTint(0x8a6a6a);
-    this.lines = Array.from({ length: SEGS }, () => img('dragon_segol_10', 1.1));
-    this.segs = Array.from({ length: SEGS }, (_, i) => img('dragon_seg_10', 1.2 + i * 0.0005));
-    this.bellies = Array.from({ length: SEGS }, () => img('dragon_belly_10', 1.25));
-    this.spines = Array.from({ length: SEGS }, () => img('dragon_spine_0', 1.15));
-    this.tip = img('dragon_tip_0', 1.18);
-    this.head = img('dragon_head_1', 1.4);
-    this.headGlow = img('dragon_head_glow_1', 1.41).setBlendMode('ADD').setTint(0xff6a1a);
-    this.rider = add(this.scene.add.graphics(), 1.7);
-    this.wingNear = img('dragon_wing_3', 1.6);
-    this.fire = add(this.scene.add.graphics().setBlendMode('ADD'), 1.45);
-    this.embers = [];
+    // The dragon: body sheet (wings and all), its glowing cracks, the head.
+    const tint = lerpColor(this.light, 0xffffff, 0.35);
+    this.body = add(scene.add.sprite(0, 0, 'fdragon', 0).setOrigin(0, 0).setTint(tint), 1);
+    this.bodyGlow = add(scene.add.sprite(0, 0, 'fdragon_glow', 0).setOrigin(0, 0).setBlendMode('ADD').setTint(0xff7a2a), 1.01);
+    this.head = add(scene.add.image(0, 0, 'dragon_head_1').setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setTint(tint), 1.1);
+    this.headGlow = add(scene.add.image(0, 0, 'dragon_head_glow_1').setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setBlendMode('ADD').setTint(0xff6a1a), 1.11);
+    this.rider = add(scene.add.graphics(), 1.2);
+    this.fire = add(scene.add.graphics(), 1.3);
+    this.fireGlow = add(scene.add.graphics().setBlendMode('ADD'), 1.31);
+    this.flames = [];
+    // Near clouds rushing past in front, above and below the dragon.
+    this.nearClouds = [0, 1].map((i) => ({ img: add(scene.add.image(0, 0, `flt_cloud_${i * 3 + 1}`).setScale(1.7).setTint(lerpColor(this.light, 0xffffff, 0.4)).setAlpha(0.9), 2), x: W + 160 + i * 380, y: i ? H - 6 : BAR + 4 }));
 
-    // Words: where you are, between two gold rules, changing as you fly.
-    this.ui = add(this.scene.add.graphics(), 4);
-    this.lead = add(new PixelText(scene, W / 2, H - 58, '', { color: '#ffffff', shadow: '#16141f' }).setOrigin(0.5, 0), 4);
-    this.name = add(new PixelText(scene, W / 2, H - 47, '', { color: '#ffd6a0', shadow: '#16141f' }).setOrigin(0.5, 0).setScale(2), 4);
-    this.sub = add(new PixelText(scene, W / 2, H - 26, '', { color: COLORS.gold, shadow: '#16141f' }).setOrigin(0.5, 0), 4);
-    if (!IS_TOUCH) add(new PixelText(scene, W - 8, H - 12, 'ANY KEY: SKIP', { color: '#ffffff', shadow: '#16141f' }).setOrigin(1, 0).setAlpha(0.6), 4);
+    // Letterbox and the words.
+    this.bars = [0, 1].map((i) => add(scene.add.rectangle(0, i ? H : 0, W, BAR, 0x07060c).setOrigin(0, i ? 1 : 0), 3.5));
+    this.ui = add(scene.add.graphics(), 4);
+    this.lead = add(new PixelText(scene, W / 2, H - BAR - 46, '', { color: '#ffffff', shadow: '#16141f' }).setOrigin(0.5, 0), 4);
+    this.name = add(new PixelText(scene, W / 2, H - BAR - 36, '', { color: '#ffd6a0', shadow: '#16141f' }).setOrigin(0.5, 0).setScale(2), 4);
+    this.sub = add(new PixelText(scene, W / 2, H - BAR - 16, '', { color: COLORS.gold, shadow: '#16141f' }).setOrigin(0.5, 0), 4);
+    if (!IS_TOUCH) add(new PixelText(scene, W - 8, H - 15, 'ANY KEY: SKIP', { color: '#ffffff', shadow: '#16141f' }).setOrigin(1, 0).setAlpha(0.45), 4);
     add(scene.add.zone(0, 0, W, H).setOrigin(0, 0).setInteractive(), 5).on('pointerdown', () => this.skip());
-    // Fade in from the Gate's flash.
     this.flash = add(scene.add.rectangle(0, 0, W, H, 0xfff0d0).setOrigin(0, 0), 6);
-    scene.tweens.add({ targets: this.flash, alpha: 0, duration: 700 });
+    scene.tweens.add({ targets: this.flash, alpha: 0, duration: 800 });
 
     this.caption = -1;
     this.flapT = 0;
@@ -106,265 +108,200 @@ export class DragonFlight {
     this.draw(16);
   }
 
-  // 0..1 through the flight.
   get k() { return clamp01(this.t / FLIGHT_MS); }
 
   update(delta) {
     if (this.done) return;
     this.t += delta;
     const k = this.k;
-    // The captions: the Gate, the crossing, the arrival.
-    const cap = k < 0.24 ? 0 : k < 0.66 ? 1 : 2;
+    const cap = k < 0.24 ? 0 : k < 0.64 ? 1 : 2;
     if (cap !== this.caption) {
       this.caption = cap;
       const [lead, name, sub] = [
         ['YOU CLIMB ONTO ITS NECK AT', "THE DRAGON'S GATE", `${this.opts.meters} M`],
-        ['THE DRAGON CARRIES YOU', 'ACROSS THE CLOUD SEA', 'HOLD ON'],
-        ['A NEW MOUNTAIN', this.opts.farName, 'THE CLIMB GOES ON'],
+        ['THE DRAGON CARRIES YOU', 'ACROSS THE CLOUD SEA', 'HOLD ON TIGHT'],
+        ['A NEW MOUNTAIN RISES', this.opts.farName, 'THE CLIMB GOES ON'],
       ][cap];
-      this.lead.setText(lead);
-      this.name.setText(name).setScale(2).setAlpha(0);
-      this.sub.setText(sub);
-      this.scene.tweens.add({ targets: this.name, alpha: 1, duration: 500 });
+      this.lead.setText(lead).setAlpha(0);
+      this.name.setText(name).setAlpha(0);
+      this.sub.setText(sub).setAlpha(0);
+      this.scene.tweens.add({ targets: [this.lead, this.name, this.sub], alpha: 1, duration: 600 });
       this.drawRules();
       if (cap === 2) Audio.play('titlecard');
     }
-    // A roar and a plume of fire over the open sea.
-    if (!this.roared && k > 0.42) { this.roared = true; this.breathT = 0; Audio.play('roar', { volume: 0.8 }); Audio.play('flame'); }
+    if (!this.roared && k > 0.4) { this.roared = true; this.breathT = 0; Audio.play('roar', { volume: 0.8 }); Audio.play('flame'); }
     this.draw(delta);
     if (this.t >= FLIGHT_MS) this.finish();
   }
 
   drawRules() {
     const u = this.ui.clear();
-    const rw = 22, gap = 8, nx0 = W / 2 - this.name.displayWidth / 2, nx1 = W / 2 + this.name.displayWidth / 2;
+    const rw = 26, gap = 8, y = H - BAR - 26;
+    const nx0 = W / 2 - this.name.displayWidth / 2, nx1 = W / 2 + this.name.displayWidth / 2;
     for (const [x0, cap] of [[nx0 - gap - rw, nx0 - gap - 1], [nx1 + gap, nx1 + gap]]) {
-      u.fillStyle(INK, 0.8).fillRect(x0, H - 39, rw, 1);
-      u.fillStyle(0xf2c14e, 1).fillRect(x0, H - 40, rw, 1).fillRect(cap, H - 41, 1, 3);
+      u.fillStyle(INK, 0.8).fillRect(x0, y + 1, rw, 1);
+      u.fillStyle(0xf2c14e, 1).fillRect(x0, y, rw, 1).fillRect(cap, y - 1, 1, 3);
     }
   }
 
   draw(delta) {
-    const t = this.t, k = this.k;
-    const f = Math.min(3, delta / 16);
-    const seaY = Math.round(H * 0.66);
-    this.glow.clear();
-    this.drawFar(seaY, t);
-    this.drawOld(seaY, k, t);
-    this.drawNew(seaY, k, t);
-    this.drawSea(seaY, t);
-    for (const c of this.clouds) {
-      c.x -= c.v * 6 * f;
-      if (c.x < -140) { c.x = W + 140; c.y = c.near ? this.nearBand(c.i) : H * (0.48 + Math.random() * 0.2); }
-      c.img.setPosition(Math.round(c.x), Math.round(c.y + (c.near ? Math.sin(t / 900 + c.x / 90) * 3 : 0)));
-    }
-    this.drawDragon(t, k, delta);
-  }
-
-  // Peaks of other mountains poking through the cloud sea, drifting by slowly.
-  drawFar(seaY, t) {
-    const g = this.far.clear();
-    const col = lerpColor(0x4a4868, this.skyBottom, 0.55);
-    const shift = t * 0.006;
-    for (let i = 0; i < 6; i++) {
-      const cx = ((i * 113 - shift * (1 + (i % 3) * 0.4)) % (W + 120) + W + 120) % (W + 120) - 60;
-      const h = 18 + ((i * 37) % 26), w = 30 + ((i * 23) % 30);
-      for (let x = -w; x <= w; x++) {
-        const hy = h * (1 - Math.abs(x) / w) + this.noise(i * 7.1, x * 0.12) * 4;
-        g.fillStyle(col, 1).fillRect(Math.round(cx + x), Math.round(seaY - hy), 1, Math.round(hy) + 2);
-      }
-      g.fillStyle(lerpColor(col, 0xffffff, 0.35), 1).fillRect(Math.round(cx) - 1, Math.round(seaY - h), 3, 2);
-    }
-  }
-
-  // The mountain you came from: the coil of the Spine on the left, its two
-  // Gate braziers still burning on the ledge, sliding away and hazing over.
-  drawOld(seaY, k, t) {
-    const g = this.oldMtn.clear();
-    const x0 = Math.round(W * 0.16 - k * W * 0.55);
-    if (x0 < -160) return;
-    const haze = 0.2 + k * 0.55;
-    const rock = lerpColor(0x2a1a1c, this.skyBottom, haze), lit = lerpColor(0x6a3a2a, this.skyBottom, haze);
-    for (let y = 0; y < seaY + 4; y += 2) {
-      const wy = y / H;
-      const half = 34 + wy * 120 + this.noise(1.3, y * 0.04) * 16;
-      const edge = Math.round(x0 + half * 0.6 + this.noise(2.7, y * 0.09) * 8);
-      g.fillStyle(rock, 1).fillRect(Math.round(x0 - half), y, edge - Math.round(x0 - half), 2);
-      g.fillStyle(lit, 1).fillRect(edge - 2, y, 2, 2);
-    }
-    // The Gate: two pillars and their fires, right at the top edge.
-    const gy = Math.round(H * 0.3), gx = Math.round(x0 + 38);
-    for (const px of [gx - 8, gx + 8]) {
-      g.fillStyle(rock, 1).fillRect(px - 1, gy - 10, 3, 10);
-      const fl = 0.6 + 0.4 * Math.sin(t / 70 + px);
-      this.glow.fillStyle(0xff8a3c, 0.35 * fl * (1 - k * 0.6)).fillCircle(px, gy - 12, 5);
-      g.fillStyle(0xffc860, 1).fillRect(px, gy - 13, 1, 2);
-    }
-  }
-
-  // The Far Range: dark green rock, waterfalls into the clouds, mist, and one
-  // ledge with a lamp. It rises in from the right and grows as you near it.
-  drawNew(seaY, k, t) {
-    const g = this.newMtn.clear();
-    const p = ease(clamp01((k - 0.35) / 0.65));
-    if (p <= 0) return;
-    const cx = Math.round(W + 140 - p * (W * 0.42 + 120));
-    const scale = 0.7 + p * 0.5;
-    const haze = 0.55 - p * 0.4;
-    const rock = lerpColor(0x1c3a34, this.skyBottom, haze), rock2 = lerpColor(0x2e5a48, this.skyBottom, haze), lit = lerpColor(0x8fd1a0, this.skyBottom, haze);
-    const top = Math.round(H * 0.08 + (1 - p) * 40);
-    for (let y = top; y < seaY + 4; y += 2) {
-      const d = (y - top) / (seaY - top);
-      // Twin summits: a notch near the top.
-      const notch = d < 0.18 ? Math.abs(this.noise(4.4, y * 0.1)) * 10 : 0;
-      const half = (18 + d * 150 + this.noise(5.1, y * 0.05) * 18) * scale;
-      const l = Math.round(cx - half + notch), r = Math.round(cx + half * 0.8);
-      g.fillStyle(rock, 1).fillRect(l, y, r - l, 2);
-      g.fillStyle(rock2, 1).fillRect(l + 4, y, Math.max(0, Math.round((r - l) * 0.35)), 2);
-      g.fillStyle(lit, 1).fillRect(l, y, 2, 2);
-      // Moss on the steps.
-      if (this.noise(l * 0.1, y * 0.13) > 0.6) g.fillStyle(lerpColor(0x5aa85a, this.skyBottom, haze), 1).fillRect(l, y - 1, 6, 1);
-    }
-    // Two waterfalls falling into the cloud sea.
-    for (const [fx, fy] of [[-0.25, 0.32], [0.18, 0.45]]) {
-      const x = Math.round(cx + fx * 150 * scale), y0 = Math.round(top + (seaY - top) * fy);
-      for (let y = y0; y < seaY; y += 1) {
-        const on = (Math.floor((y - t / 12) / 3) % 3) !== 0;
-        g.fillStyle(on ? 0xe8f4ff : 0xa8c8e8, 0.85).fillRect(x, y, 2, 1);
-      }
-      this.glow.fillStyle(0xffffff, 0.12).fillCircle(x + 1, seaY, 8);
-    }
-    // The ledge waiting for you, with a lamp.
-    const lx = Math.round(cx - 40 * scale), ly = Math.round(top + (seaY - top) * 0.55);
-    g.fillStyle(rock2, 1).fillRect(lx - 10, ly, 20, 2);
-    g.fillStyle(lit, 1).fillRect(lx - 10, ly, 20, 1);
-    const lamp = 0.6 + 0.4 * Math.sin(t / 200);
-    this.glow.fillStyle(0xffc870, 0.3 * lamp * p).fillCircle(lx + 6, ly - 4, 6);
-    g.fillStyle(0xffe0a0, 1).fillRect(lx + 6, ly - 5, 1, 2);
-  }
-
-  // The sea of clouds: banded, scrolling, brighter where the sun lies on it.
-  drawSea(seaY, t) {
-    const g = this.sea.clear();
-    const top = lerpColor(this.cloudTint, 0xffffff, 0.25), deep = lerpColor(this.cloudTint, this.skyBottom, 0.5);
-    for (let y = seaY; y < H; y += 2) {
-      const d = (y - seaY) / (H - seaY);
-      g.fillStyle(lerpColor(top, deep, d * 0.8), 1).fillRect(0, y, W, 2);
-    }
-    // Billows along the top edge, rolling left.
-    for (let x = -20; x < W + 20; x += 3) {
-      const wx = x + t * 0.07;
-      const b = Math.round(4 + this.noise(wx * 0.02, 0.5) * 9 + Math.sin(wx * 0.11) * 2);
-      g.fillStyle(top, 1).fillRect(x, seaY - b, 3, b);
-      g.fillStyle(0xffffff, 0.5).fillRect(x, seaY - b, 3, 1);
-    }
-    // The light's path on the clouds.
+    const t = this.t, k = this.k, f = Math.min(3, delta / 16);
+    const seaY = Math.round(H * 0.62);
+    // Sun rays turning very slowly.
+    const r = this.rays.clear();
     for (let i = 0; i < 12; i++) {
-      const y = seaY + 4 + i * 3, w = 10 + i * 4;
-      if (Math.sin(t / 220 + i * 2.1) > 0.3) this.glow.fillStyle(0xffe0b0, 0.07 * (1 - i / 12)).fillRect(Math.round(this.bodyX - w / 2 + Math.sin(t / 300 + i) * 4), y, w, 1);
+      const a = (i / 12) * Math.PI * 2 + t / 9000, w = 0.05 + (i % 3) * 0.02, len = 260 + (i % 4) * 60;
+      r.fillStyle(this.night < 0.5 ? 0xffd8a8 : 0xc8d4ff, 0.05 + (i % 2) * 0.03).fillTriangle(this.sunX, this.sunY, this.sunX + Math.cos(a - w) * len, this.sunY + Math.sin(a - w) * len, this.sunX + Math.cos(a + w) * len, this.sunY + Math.sin(a + w) * len);
+    }
+    // Peaks and far clouds drift slowly left (we fly right).
+    this.peaks.forEach((p, i) => {
+      const x = ((this.peakX[i] - t * 0.006 * (1 + (i % 3) * 0.3)) % (W + 160) + W + 160) % (W + 160) - 80;
+      p.setPosition(Math.round(x), seaY + 6);
+    });
+    this.farClouds.forEach((c) => { c.x -= 0.08 * f; if (c.x < -80) c.x += W + 160; c.img.setPosition(Math.round(c.x), Math.round(c.y)); });
+    this.drawMountains(seaY, t, k);
+    // The cloud sea.
+    this.seaFar.setY(seaY - 8).setTilePosition(t * 0.012, 0);
+    this.seaNear.setY(seaY + 24).setTilePosition(t * 0.035, 0);
+    this.seaFill.setY(seaY + 30);
+    this.midClouds.forEach((c) => {
+      c.x -= c.v * 0.55 * f;
+      if (c.x < -120) { c.x = W + 120; c.y = H * (0.18 + Math.random() * 0.35); }
+      c.img.setPosition(Math.round(c.x), Math.round(c.y));
+    });
+    this.drawBirds(t);
+    this.drawDragon(t, k, delta);
+    this.nearClouds.forEach((c) => { c.x -= 3.2 * f; if (c.x < -260) c.x = W + 300 + Math.random() * 200; c.img.setPosition(Math.round(c.x), c.y); });
+  }
+
+  // The Spine slides away left; the Far Range rises in on the right.
+  drawMountains(seaY, t, k) {
+    const fx = this.mtnFx.clear(), gl = this.mtnGlow.clear();
+    const oldX = Math.round(-20 - k * 260), oldY = seaY - 250;
+    this.oldMtn.setPosition(oldX, oldY).setTint(lerpColor(this.light, this.skyBottom, 0.25 + k * 0.5)).setVisible(oldX > -240);
+    // The Gate's two fires still burning up there.
+    for (const dx of [-8, 10]) {
+      const x = oldX + OLD_GATE.x + dx + 1, y = oldY + OLD_GATE.y - 15, fl = 0.6 + 0.4 * Math.sin(t / 70 + dx);
+      gl.fillStyle(0xff8a3c, 0.35 * fl).fillCircle(x, y, 5);
+      gl.fillStyle(0xffd070, 0.5 * fl).fillCircle(x, y, 2);
+    }
+    const p = ease(clamp01((k - 0.3) / 0.7));
+    if (p <= 0) { this.newMtn.setVisible(false); return; }
+    // Far off at first, growing as you near it; its feet stay in the clouds.
+    const s = 0.42 + p * 0.2;
+    const nx = Math.round(W + 90 - p * (W * 0.36 + 60)), ny = Math.round(seaY + 34 - 320 * s);
+    this.newMtn.setVisible(true).setPosition(nx, ny).setScale(s).setTint(lerpColor(this.light, this.skyBottom, 0.55 - p * 0.4));
+    // Falling water down the gullies, mist where it meets the clouds.
+    const ox = nx - (280 * s) / 2;
+    for (const [wx, w0] of WATERFALLS) {
+      const x = Math.round(ox + wx * s);
+      for (let y = Math.round(ny + w0 * s); y < seaY + 30; y += 1) {
+        const on = (Math.floor((y - t / 10) / 3) % 4) !== 0;
+        fx.fillStyle(on ? 0xe8f4ff : 0xa8c8e8, 0.85).fillRect(x, y, 1, 1);
+      }
+      gl.fillStyle(0xffffff, 0.12).fillEllipse(x, seaY + 26, 22, 8);
+    }
+    // The lamp on the landing ledge.
+    const lx = Math.round(ox + (FAR_LEDGE[0] - 8) * s), ly = Math.round(ny + (FAR_LEDGE[1] - 6) * s);
+    const lamp = 0.7 + 0.3 * Math.sin(t / 180);
+    gl.fillStyle(0xffc870, 0.35 * lamp * p).fillCircle(lx, ly, 7 * s);
+    gl.fillStyle(0xffe8b0, 0.6 * lamp * p).fillCircle(lx, ly, 2);
+  }
+
+  drawBirds(t) {
+    const g = this.birds.clear();
+    const bx = ((W + 60 - t * 0.02) % (W + 120) + W + 120) % (W + 120) - 60;
+    const col = lerpColor(0x3a3048, this.skyBottom, 0.4);
+    for (let i = 0; i < 6; i++) {
+      const x = Math.round(bx + Math.ceil(i / 2) * 7), y = Math.round(H * 0.3 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 3);
+      const up = Math.floor(t / 180 + i) % 2;
+      g.fillStyle(col, 1).fillRect(x, y, 1, 1).fillRect(x - 1, y - up, 1, 1).fillRect(x + 1, y - up, 1, 1);
     }
   }
 
   drawDragon(t, k, delta) {
-    this.glow.lineStyle(0);
     const s = t / 1000;
-    // It climbs off the ledge, glides across, then swoops down to the far ledge.
+    const lift = ease(clamp01(k / 0.14));
     const swoop = ease(clamp01((k - 0.82) / 0.18));
-    const lift = ease(clamp01(k / 0.12));
-    const hx = Math.round(W * 0.5 + Math.sin(s * 0.5) * 10 + swoop * 70);
-    const beat = Math.sin(s * 5.2);
-    const hy = Math.round(H * 0.4 + (1 - lift) * 50 - beat * 4 + swoop * 26 + Math.sin(s * 0.8) * 6);
-    // Body: from the neck joint back to the tail, a travelling wave along it.
-    const L = 210;
-    const pts = [];
-    for (let i = 0; i < SEGS; i++) {
-      const u = i / (SEGS - 1);
-      const neck = Math.min(1, u / 0.2);
-      const x = hx - 8 - u * L;
-      let y = hy + 22 * ease(neck) + Math.sin(u * Math.PI * 2.4 - s * 3.4) * 7 * u + beat * 3 * (1 - u) * 0.5;
-      y += swoop * u * 10;
-      pts.push([x, y]);
-    }
-    const tint = lerpColor(this.light, 0xffffff, 0.5);
-    for (let i = 0; i < SEGS; i++) {
-      const u = i / (SEGS - 1);
-      const [x, y] = pts[i];
-      const [ax, ay] = pts[Math.max(0, i - 1)], [bx, by] = pts[Math.min(SEGS - 1, i + 1)];
-      let tx = bx - ax, ty = by - ay;
-      const len = Math.hypot(tx, ty) || 1; tx /= len; ty /= len;
-      let nx = -ty, ny = tx;
-      if (ny < 0) { nx = -nx; ny = -ny; } // the belly faces down
-      const rad = u < 0.2 ? 7 + u * 25 : u < 0.4 ? 12 : 12 - (u - 0.4) * 16;
-      const r = nearR(Math.max(3, rad));
-      const px = Math.round(x), py = Math.round(y);
-      this.lines[i].setTexture(`dragon_segol_${r}`).setPosition(px, py);
-      this.segs[i].setTexture(`dragon_seg_${r}`).setPosition(px, py).setTint(tint);
-      this.bellies[i].setTexture(`dragon_${i % 3 === 0 ? 'bellyl' : 'belly'}_${r}`).setPosition(Math.round(px + nx * r * 0.42), Math.round(py + ny * r * 0.42)).setTint(tint);
-      const sp = this.spines[i];
-      sp.setVisible(i % 3 === 0 && i > 2 && i < SEGS - 2);
-      if (sp.visible) sp.setTexture(`dragon_spine_${dirIndex(Math.atan2(-ny, -nx))}`).setPosition(Math.round(px - nx * (r + 2)), Math.round(py - ny * (r + 2))).setTint(tint);
-    }
-    const [lx, ly] = pts[SEGS - 1], [px2, py2] = pts[SEGS - 2];
-    this.tip.setTexture(`dragon_tip_${dirIndex(Math.atan2(ly - py2, lx - px2))}`).setPosition(Math.round(lx), Math.round(ly)).setTint(tint);
-    // Head: facing the way it flies, nodding with the wingbeat; it roars once.
-    const roaring = this.breathT !== undefined && this.breathT < 1600;
-    const jaw = roaring ? 3 : Math.floor(s * 0.7) % 5 === 0 ? 2 : 1;
-    const tilt = -0.08 + beat * 0.04 + swoop * 0.25 - (roaring ? 0.18 : 0);
-    this.head.setTexture(`dragon_head_${jaw}`).setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setRotation(tilt).setTint(tint);
-    this.headGlow.setTexture(`dragon_head_glow_${jaw}`).setOrigin(HEAD_NECK.x / HEAD_W, HEAD_NECK.y / HEAD_H).setPosition(hx, hy).setRotation(tilt).setAlpha(0.45 + 0.25 * Math.sin(s * 3) + (roaring ? 0.4 : 0));
-    // Wings at the shoulders: they beat slow and deep while it climbs, then glide.
-    const gliding = k > 0.5 && k < 0.8;
-    this.flapT += delta * (gliding ? 0.45 : 1);
-    const frame = gliding && Math.sin(this.flapT / 400) > -0.3 ? 4 : WING_FLAP[Math.floor(this.flapT / 120) % WING_FLAP.length];
-    if (frame !== this.lastFrame && frame === WING_FLAP[0] && !gliding) Audio.play('wing');
+    // Flap: a strong beat climbing away from the Gate, a long glide over the
+    // middle of the sea, beating again as it nears the Far Range.
+    const gliding = k > 0.48 && k < 0.78;
+    this.flapT += delta * (gliding ? 0.25 : 1);
+    const frame = gliding ? (Math.sin(this.flapT / 500) > 0 ? 2 : 3) : Math.floor(this.flapT / 75) % FLY.frames;
+    if (frame !== this.lastFrame && frame === 6 && !gliding) Audio.play('wing');
     this.lastFrame = frame;
-    const [sx, sy] = pts[9];
-    const ox = WING_SHOULDER.x / WING_W, oy = WING_SHOULDER.y / WING_H;
-    this.wingFar.setTexture(`dragon_wing_${frame}`).setOrigin(ox, oy).setPosition(Math.round(sx + 6), Math.round(sy - 6)).setScale(0.9).setTint(lerpColor(tint, 0x3a2028, 0.45));
-    this.wingNear.setTexture(`dragon_wing_${frame}`).setOrigin(ox, oy).setPosition(Math.round(sx - 2), Math.round(sy - 2)).setScale(1.05).setTint(tint);
-    // The rider at the base of the neck, scarf streaming back.
-    const [rx0, ry0] = pts[3];
-    this.drawRider(Math.round(rx0), Math.round(ry0 - 9), t);
-    // Fire: a plume into the sky over the sea.
-    const fg = this.fire.clear();
+    // The whole dragon rises a little on each downbeat.
+    const beat = gliding ? Math.sin(s * 1.4) * 2 : Math.sin((frame / FLY.frames) * Math.PI * 2) * 4;
+    const x0 = Math.round(W * 0.5 - FLY.neck[0] + 26 + Math.sin(s * 0.45) * 8 + swoop * 60);
+    const y0 = Math.round(H * 0.44 - FLY.neck[1] + (1 - lift) * 60 + beat + Math.sin(s * 0.7) * 5 + swoop * 30);
+    this.body.setFrame(frame).setPosition(x0, y0);
+    const roaring = this.breathT !== undefined && this.breathT < 1800;
+    const heat = 0.55 + 0.3 * Math.sin(s * 3.1) + (roaring ? 0.4 : 0);
+    this.bodyGlow.setFrame(frame).setPosition(x0, y0).setAlpha(Math.min(1, heat));
+    // The head: nodding with the beat, rearing back as it roars.
+    const jaw = roaring ? 3 : Math.floor(s * 0.6) % 6 === 0 ? 2 : 1;
+    const tilt = -0.06 + beat * 0.012 + swoop * 0.22 - (roaring ? 0.22 : 0);
+    const hx = x0 + FLY.neck[0], hy = y0 + FLY.neck[1];
+    this.head.setTexture(`dragon_head_${jaw}`).setPosition(hx, hy).setRotation(tilt);
+    this.headGlow.setTexture(`dragon_head_glow_${jaw}`).setPosition(hx, hy).setRotation(tilt).setAlpha(Math.min(1, heat * 0.8));
+    // The rider on its back.
+    const sd = FLY.meta[frame] ? FLY.meta[frame].saddle : [FLY.neck[0] - 30, FLY.neck[1] + 10];
+    this.drawRider(x0 + sd[0], y0 + sd[1], t);
+    // Fire: a plume roaring forward and up out of the jaws, then smoke.
     if (this.breathT !== undefined) {
       this.breathT += delta;
       if (this.breathT < 1600) {
-        const mx = hx + Math.cos(tilt) * 52, my = hy + Math.sin(tilt) * 52 - 2;
-        for (let i = 0; i < 3; i++) this.embers.push({ x: mx, y: my, vx: 3 + Math.random() * 1.8, vy: -0.9 - Math.random() * 0.9, life: 1, r: 1.5 + Math.random() * 2.5 });
+        const mx = hx + Math.cos(tilt) * 62 - Math.sin(tilt) * 2, my = hy + Math.sin(tilt) * 62 + 4;
+        for (let i = 0; i < 4; i++) this.flames.push({ x: mx, y: my, vx: 4.6 + Math.random() * 1.8, vy: -0.5 - Math.random() * 0.9, life: 1, r: 2 + Math.random() * 3 });
       }
     }
-    this.embers = this.embers.filter((e) => (e.life -= delta / 900) > 0);
-    for (const e of this.embers) {
-      e.x += e.vx * (delta / 16); e.y += e.vy * (delta / 16); e.vx *= 0.985;
-      const c = e.life > 0.75 ? 0xfff4c0 : e.life > 0.5 ? 0xffb040 : e.life > 0.25 ? 0xf05a1a : 0x6a2a18;
-      const r = Math.max(1, Math.round(e.r * (2.2 - e.life * 1.2)));
-      fg.fillStyle(c, Math.min(1, e.life * 1.3)).fillRect(Math.round(e.x - r / 2), Math.round(e.y - r / 2), r, r);
+    const fg = this.fire.clear(), fgl = this.fireGlow.clear();
+    this.flames = this.flames.filter((e) => (e.life -= delta / 750) > 0);
+    for (const e of this.flames) {
+      e.x += e.vx * (delta / 16); e.y += e.vy * (delta / 16); e.vx *= 0.96; e.vy -= 0.01;
+      const rr = Math.max(1, Math.round(e.r * (2.6 - e.life * 1.6)));
+      if (e.life > 0.35) {
+        const c = e.life > 0.8 ? 0xfff6c8 : e.life > 0.6 ? 0xffc040 : 0xf0601a;
+        fgl.fillStyle(c, 0.5 * e.life).fillCircle(e.x, e.y, rr * 1.6);
+        fg.fillStyle(c, 1).fillRect(Math.round(e.x - rr / 2), Math.round(e.y - rr / 2), rr, rr);
+      } else {
+        fg.fillStyle(lerpColor(0x3a2a2a, this.skyBottom, 0.4), e.life * 1.6).fillRect(Math.round(e.x - rr / 2), Math.round(e.y - rr / 2), rr, rr);
+      }
     }
   }
 
+  // The climber astride the neck, side on: boots, legs, jacket, pack, one
+  // hand on a spine, a bobble hat, and a scarf streaming back in the wind.
   drawRider(x, y, t) {
     const g = this.rider.clear();
-    const jacket = this.opts.jacket || 0xc8463b;
-    // Legs astride the neck, body leaning forward into the wind.
-    g.fillStyle(INK, 1).fillRect(x - 4, y - 1, 9, 9);
-    g.fillStyle(0x2c3448, 1).fillRect(x - 3, y + 5, 3, 4).fillRect(x + 2, y + 5, 2, 3);
-    g.fillStyle(jacket, 1).fillRect(x - 3, y, 7, 6);
-    g.fillStyle(darken(jacket, 0.7), 1).fillRect(x - 3, y + 4, 7, 1);
-    // Pack.
-    g.fillStyle(0xe8762a, 1).fillRect(x - 6, y, 3, 5);
-    // Arm reaching to the spine ahead.
-    g.fillStyle(jacket, 1).fillRect(x + 4, y + 1, 4, 2);
-    g.fillStyle(0xf0c8a0, 1).fillRect(x + 8, y + 1, 1, 2);
-    // Head, hat.
-    g.fillStyle(INK, 1).fillRect(x - 1, y - 6, 6, 6);
-    g.fillStyle(0xf0c8a0, 1).fillRect(x, y - 5, 4, 4);
-    g.fillStyle(0x3b6ea5, 1).fillRect(x - 1, y - 7, 6, 3);
-    // The scarf, streaming back and fluttering.
-    for (let i = 0; i < 9; i++) {
-      const fl = Math.round(Math.sin(t / 60 - i * 0.8) * (i / 9) * 2);
-      g.fillStyle(Math.floor(i / 2) % 2 ? 0xf0e6d0 : 0xc8463b, 1).fillRect(x - 2 - i, y - 1 + fl + Math.round(i * 0.15), 1, 2);
+    x = Math.round(x); y = Math.round(y);
+    const jacket = this.opts.jacket || 0xc8463b, jd = darken(jacket, 0.65), jl = lerpColor(jacket, 0xffffff, 0.3);
+    const skin = 0xf0c8a0, pants = 0x2c3448, ink = 0x14101a;
+    for (let i = 0; i < 14; i++) {
+      const fl = Math.round(Math.sin(t / 55 - i * 0.7) * (i / 14) * 2.5);
+      g.fillStyle(ink, 1).fillRect(x - 3 - i, y - 10 + fl + Math.round(i * 0.12), 1, 3);
+      g.fillStyle(Math.floor(i / 2) % 2 ? 0xf0e6d0 : 0xc8463b, 1).fillRect(x - 3 - i, y - 9 + fl + Math.round(i * 0.12), 1, 2);
     }
+    g.fillStyle(ink, 1).fillRect(x - 8, y - 11, 6, 9);
+    g.fillStyle(0xe8762a, 1).fillRect(x - 7, y - 10, 4, 7);
+    g.fillStyle(0xffa050, 1).fillRect(x - 7, y - 10, 4, 1);
+    g.fillStyle(ink, 1).fillRect(x - 2, y - 3, 7, 5);
+    g.fillStyle(pants, 1).fillRect(x - 1, y - 2, 5, 3);
+    g.fillStyle(ink, 1).fillRect(x + 3, y + 1, 4, 3);
+    g.fillStyle(0x5a3a22, 1).fillRect(x + 4, y + 1, 2, 2);
+    g.fillStyle(ink, 1).fillRect(x - 3, y - 12, 8, 10);
+    g.fillStyle(jacket, 1).fillRect(x - 2, y - 11, 6, 8);
+    g.fillStyle(jl, 1).fillRect(x - 2, y - 11, 6, 1);
+    g.fillStyle(jd, 1).fillRect(x - 2, y - 5, 6, 2);
+    g.fillStyle(ink, 1).fillRect(x + 3, y - 9, 6, 3);
+    g.fillStyle(jacket, 1).fillRect(x + 4, y - 8, 4, 1);
+    g.fillStyle(skin, 1).fillRect(x + 8, y - 8, 1, 2);
+    g.fillStyle(ink, 1).fillRect(x - 1, y - 18, 7, 7);
+    g.fillStyle(skin, 1).fillRect(x, y - 16, 5, 4);
+    g.fillStyle(ink, 1).fillRect(x + 4, y - 15, 1, 1);
+    g.fillStyle(0x3b6ea5, 1).fillRect(x - 1, y - 19, 7, 3);
+    g.fillStyle(0x6a9ad0, 1).fillRect(x, y - 19, 5, 1);
+    g.fillStyle(0xf0e6d0, 1).fillRect(x - 2, y - 20, 2, 2);
   }
 
   skip() {
@@ -376,6 +313,6 @@ export class DragonFlight {
     if (this.done) return;
     this.done = true;
     Audio.play('land');
-    cloudPass(this.scene, () => { this.parts.forEach((o) => o.destroy()); this.parts = []; }, () => this.opts.onDone());
+    cloudPass(this.scene, () => { this.parts.forEach((o) => o.destroy()); this.parts = []; if (this.opts.onLand) this.opts.onLand(); }, () => this.opts.onDone());
   }
 }

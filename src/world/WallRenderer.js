@@ -11,6 +11,8 @@ import { BIOMES } from '../data/biomes.js';
 import { PEOPLE } from '../data/requests.js';
 import { PETS, activePet, petStage } from '../data/pets.js';
 import { buildPetTextures } from '../render/petArt.js';
+import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { stroke, shade } from '../render/pixelKit.js';
 import { MASTERY_BIOMES, STARS } from '../data/mastery.js';
 
 // Decorations that give light at night: [texture key part, colour, size, strength].
@@ -72,6 +74,47 @@ function tentVariant(scene, i) {
   return key;
 }
 
+// The Dragon's Gate pillar and the skull on its chain (see placeGate).
+function buildGateTextures(scene) {
+  if (scene.textures.exists('gate_pillar')) return;
+  const W = 22, H = 74;
+  const g = new PixelGrid(W, H);
+  const OB = 1, BONE = 2, CROWN = 3, IRON = 4, PLINTH = 5;
+  // Plinth, shaft (slightly tapered), capital.
+  g.rect(1, H - 7, W - 2, 7, PLINTH); g.rect(2, H - 9, W - 4, 2, PLINTH);
+  for (let y = 12; y < H - 9; y++) { const w = 12 + Math.round((y - 12) / (H - 21) * 2); g.rect(Math.round(W / 2 - w / 2), y, w, 1, OB); }
+  g.rect(3, 9, W - 6, 4, PLINTH);
+  // Bone spiralling up the shaft.
+  for (let y = 14; y < H - 10; y++) {
+    const x = Math.round(W / 2 + Math.sin(y * 0.32) * 6.5);
+    if (Math.cos(y * 0.32) > -0.2) { g.set(x, y, BONE); g.set(x + 1, y, BONE); }
+  }
+  // Horned crown and an iron brazier bowl.
+  stroke(g, [4, 10], [0, 5], [2, 0], 3, 1, CROWN);
+  stroke(g, [W - 5, 10], [W - 1, 5], [W - 3, 0], 3, 1, CROWN);
+  g.rect(5, 5, W - 10, 4, IRON); g.rect(4, 4, W - 8, 1, IRON);
+  shade(g, OB, [0x0a0610, 0x160c1c, 0x24142c, 0x3a2244, 0x6a3a7a], { r: 3, base: 0.42, light: [0.83, -0.55], bias: (x, y) => ((y % 9) === 0 ? -0.2 : 0) });
+  shade(g, PLINTH, [0x120c14, 0x22182a, 0x34283c, 0x4c3c54], { r: 2, base: 0.5, light: [0.83, -0.55] });
+  shade(g, BONE, [0x8a7a62, 0xc8bca0, 0xece2cc], { r: 1, base: 0.6 });
+  shade(g, CROWN, [0x8a7a62, 0xc8bca0, 0xf4ecd8], { r: 1, base: 0.6 });
+  shade(g, IRON, [0x1a1416, 0x3a3236, 0x6a5e60], { r: 1, base: 0.5 });
+  // Glowing cracks in the obsidian.
+  for (const [x, y0] of [[8, 30], [13, 48], [10, 58]]) for (let k = 0; k < 6; k++) g.set(x + (k % 3 === 2 ? 1 : 0), y0 + k, k % 2 ? 0xc84a1a : 0xff9a3c);
+  g.outline(0x08040a);
+  const c = makeCanvas(W, H); g.drawTo(c.getContext('2d')); scene.textures.addCanvas('gate_pillar', c);
+  // A dragon skull: brow, eye sockets, a row of teeth.
+  const k = new PixelGrid(15, 12);
+  k.ellipse(7.5, 4.5, 6.5, 4.5, BONE);
+  k.rect(4, 7, 7, 4, BONE);
+  stroke(k, [2, 3], [0, 1], [0, 4], 2, 1, BONE); stroke(k, [12, 3], [14, 1], [14, 4], 2, 1, BONE);
+  shade(k, BONE, [0x7a6a52, 0xb8ac90, 0xe8dec8], { r: 2, base: 0.6 });
+  k.rect(4, 4, 2, 2, 0x0a0406); k.rect(9, 4, 2, 2, 0x0a0406); k.set(5, 5, 0xff7a2a); k.set(9, 5, 0xff7a2a);
+  for (let x = 5; x < 11; x += 2) k.set(x, 10, 0xf4ecd8);
+  k.rect(5, 9, 6, 1, 0x2a1a14);
+  k.outline(0x08040a);
+  const c2 = makeCanvas(15, 12); k.drawTo(c2.getContext('2d')); scene.textures.addCanvas('gate_skull', c2);
+}
+
 export class WallRenderer {
   constructor(scene, mountain, seed) {
     this.scene = scene;
@@ -123,6 +166,7 @@ export class WallRenderer {
       if (a.type === 'flags') a.obj.setFrame(Math.floor(t / 350 + a.phase) % 2);
       if (a.type === 'trader') a.obj.setFrame(Math.floor(t / 140) % 26 === 0 ? 1 : Math.floor(t / 900) % 2 ? 2 : 0);
       if (a.type === 'fire') a.obj.setFrame(Math.floor(t / 110) % 3);
+      if (a.type === 'grass') a.obj.setFrame(Math.sin(t / 900 + a.phase) > 0.2 ? 1 : 0);
       if (a.type === 'person') a.obj.setFrame(Math.floor(t / 1300 + a.phase) % 4 === 0 ? 1 : 0);
       if (a.type === 'pet') {
         if (a.fly) a.obj.setFrame(Math.floor(t / 60 + a.phase) % 2).setY(Math.round(a.y0 + Math.sin(t / 300 + a.phase) * 3));
@@ -377,45 +421,67 @@ export class WallRenderer {
     });
   }
 
-  // The Dragon's Gate (data/gate.js): two black glass pillars wrapped in
-  // bone, a sagging chain between them, braziers burning on top.
-  placeGate(node, bounds, add, si) {
+  // The Dragon's Gate (data/gate.js): two carved obsidian pillars, centred
+  // on the ledge, bone spiralling up them, horned crowns with braziers
+  // burning on top, and a heavy chain sagging between them with a dragon
+  // skull hung in the middle.
+  placeGate(node, bounds, addIn, si) {
+    let add = addIn;
     const sc = this.scene, y = node.y;
-    const half = Math.min(52, Math.max(30, (bounds.r - bounds.l) / 2 - 14));
-    const g = add(sc.add.graphics().setDepth(DEPTH.decor));
-    const OB = 0x1a1220, OB2 = 0x34243a, RIM = 0x8a5aa8, BONE = 0xe8dcc0, BONE_D = 0xa89878;
+    buildGateTextures(sc);
+    const own = add;
+    this.gateObjs = [];
+    add = (o) => { this.gateObjs.push(o); return own(o); };
+    this.gateSpot = { x: Math.round((bounds.l + bounds.r) / 2), y, add: own, si };
+    const mid = Math.round((bounds.l + bounds.r) / 2);
+    const half = Math.round(Math.min(78, Math.max(40, (bounds.r - bounds.l) / 2 - 22)));
+    const tops = [];
     for (const s of [-1, 1]) {
-      const px = Math.round(node.x + s * half), top = y - 52;
-      g.fillStyle(0x0a0608, 1).fillRect(px - 6, top - 2, 13, 54);
-      g.fillStyle(OB, 1).fillRect(px - 5, top, 11, 52);
-      g.fillStyle(OB2, 1).fillRect(px - 5, top, 3, 52);
-      g.fillStyle(RIM, 1).fillRect(px + (s < 0 ? 4 : -5), top + 2, 1, 48);
-      // Ribs of bone curling round it.
-      for (let k = 0; k < 4; k++) {
-        const ry = top + 8 + k * 11;
-        g.fillStyle(BONE_D, 1).fillRect(px - 7, ry + 1, 15, 2);
-        g.fillStyle(BONE, 1).fillRect(px - 7, ry, 15, 1);
-        g.fillStyle(BONE, 1).fillRect(px + s * 7, ry - 2, 2, 3);
-      }
-      // A spike on top, and the brazier bowl.
-      g.fillStyle(BONE, 1).fillTriangle(px - 4, top, px + 4, top, px + s * 2, top - 9);
-      g.fillStyle(0x3a2a20, 1).fillRect(px - 6, top - 4, 13, 3);
-      g.fillStyle(0x6a4a30, 1).fillRect(px - 6, top - 4, 13, 1);
-      const fire = add(sc.add.sprite(px, top - 3, 'camp_fire', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setScale(0.75));
+      const px = mid + s * half;
+      add(sc.add.image(px, y + 2, 'gate_pillar').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(s > 0));
+      const top = y + 2 - sc.textures.get('gate_pillar').getSourceImage().height;
+      tops.push([px, top]);
+      const fire = add(sc.add.sprite(px, top + 4, 'camp_fire', 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + 1));
       this.animated.push({ type: 'fire', obj: fire, seg: si });
-      const glow = add(sc.add.image(px, top - 8, 'glow').setDepth(DEPTH.decor - 1).setBlendMode('ADD').setTint(0xff7a2c).setScale(1.1).setAlpha(0.4));
-      this.animated.push({ type: 'flicker', obj: glow, base: 0.4, phase: s + 2, seg: si });
-      const pool = add(sc.add.image(px, top + 10, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xff6a20).setScale(2.4, 2).setAlpha(0));
+      const glow = add(sc.add.image(px, top - 4, 'glow').setDepth(DEPTH.decor - 1).setBlendMode('ADD').setTint(0xff7a2c).setScale(1.4).setAlpha(0.45));
+      this.animated.push({ type: 'flicker', obj: glow, base: 0.45, phase: s + 2, seg: si });
+      const pool = add(sc.add.image(px, top + 16, 'glow').setDepth(DEPTH.light + 1).setBlendMode('ADD').setTint(0xff6a20).setScale(2.8, 2.4).setAlpha(0));
       this.animated.push({ type: 'nightlight', obj: pool, base: 0.5, phase: s, seg: si });
     }
-    // The chain sagging between them.
-    const x0 = node.x - half + 6, x1 = node.x + half - 6, cy = y - 46;
-    for (let x = x0; x <= x1; x += 3) {
-      const u = (x - x0) / (x1 - x0);
-      const yy = Math.round(cy + Math.sin(u * Math.PI) * 10);
-      g.fillStyle(0x16141f, 1).fillRect(Math.round(x), yy, 3, 2);
-      g.fillStyle((x / 3) % 2 ? 0x6a6470 : 0x9a94a0, 1).fillRect(Math.round(x), yy, 2, 1);
+    // The chain between the crowns, and a skull hung from its lowest link.
+    const g = add(sc.add.graphics().setDepth(DEPTH.decor - 0.5));
+    const [[x0, t0], [x1]] = tops;
+    const cy = t0 + 12;
+    for (let x = x0 + 6; x <= x1 - 6; x += 3) {
+      const u = (x - x0 - 6) / (x1 - x0 - 12);
+      const yy = Math.round(cy + Math.sin(u * Math.PI) * 12);
+      const odd = Math.floor((x - x0) / 3) % 2;
+      g.fillStyle(0x0e0a10, 1).fillRect(x - 1, yy - 1, 4, odd ? 3 : 4);
+      g.fillStyle(odd ? 0x5a5460 : 0x8a8494, 1).fillRect(x, yy, 2, odd ? 1 : 2);
+      g.fillStyle(0xc8c2d0, 1).fillRect(x, yy, 1, 1);
     }
+    add(sc.add.image(mid, cy + 13, 'gate_skull').setOrigin(0.5, 0).setDepth(DEPTH.decor - 0.4));
+  }
+
+  // After the crossing: the Gate is gone (you are on another mountain now);
+  // the Far Shore has a lantern on a post and a red flag, as seen from the air.
+  farShore() {
+    (this.gateObjs || []).forEach((o) => o.active && o.setVisible(false));
+    const sp = this.gateSpot;
+    if (!sp || this.farShoreDone) return;
+    this.farShoreDone = true;
+    const sc = this.scene, g = sp.add(sc.add.graphics().setDepth(DEPTH.decor));
+    const lx = sp.x - 40, fx = sp.x + 44, y = sp.y;
+    g.fillStyle(0x16100c, 1).fillRect(lx - 1, y - 30, 4, 30).fillRect(lx - 1, y - 31, 9, 3);
+    g.fillStyle(0x4a3424, 1).fillRect(lx, y - 30, 2, 30);
+    g.fillStyle(0x16100c, 1).fillRect(lx + 4, y - 27, 7, 9);
+    g.fillStyle(0xffd070, 1).fillRect(lx + 5, y - 26, 5, 7);
+    g.fillStyle(0xfff4d0, 1).fillRect(lx + 6, y - 25, 2, 3);
+    const glow = sp.add(sc.add.image(lx + 7, y - 22, 'glow').setDepth(DEPTH.decor + 1).setBlendMode('ADD').setTint(0xffc060).setScale(1.1).setAlpha(0.4));
+    this.animated.push({ type: 'flicker', obj: glow, base: 0.4, phase: 1, seg: sp.si });
+    g.fillStyle(0x16100c, 1).fillRect(fx, y - 40, 2, 40);
+    const flag = sp.add(sc.add.sprite(fx + 2, y - 40, 'decor_flags', 0).setOrigin(0, 0).setDepth(DEPTH.decor).setTint(0xff8a7a));
+    this.animated.push({ type: 'flags', obj: flag, phase: 0.5, seg: sp.si });
   }
 
   // Halloween and Christmas at base camp (data/seasons.js): carved pumpkins
@@ -504,6 +570,32 @@ export class WallRenderer {
       // Sink into the same shade as the meadow further down.
       img.setTint(lerpColor(0xffffff, 0x1f3326, Math.min(1, dy / 125) * 0.78));
       add(img);
+    }
+    // The meadow in bloom: drifts of wildflowers, tall grass swaying in the
+    // breeze, mossy boulders, mushrooms, and pollen drifting in the sun.
+    if (sc.textures.exists('meadow_flowers_0')) {
+      // Drifts: a handful of patches, each one kind of flower, thinning out.
+      const place = (key, x, dy, grass = false) => {
+        const pathX = node.x + Math.sin(dy / 22) * 16 + Math.sin(dy / 9) * 3;
+        if (Math.abs(x - pathX) < 14 || x < 4 || x > WORLD_WIDTH - 4) return;
+        const img = sc.add.sprite(x, y + dy, key, 0).setOrigin(0.5, 1).setDepth(DEPTH.decor + dy * 0.001).setFlipX(rng.chance(0.5));
+        img.setTint(lerpColor(0xffffff, 0x1f3326, Math.min(1, dy / 125) * 0.7));
+        add(img);
+        if (grass) this.animated.push({ type: 'grass', obj: img, phase: x * 0.07, seg: 0 });
+      };
+      for (let d = 0; d < 11; d++) {
+        const cx = rng.int(20, WORLD_WIDTH - 20), cy = rng.int(10, 92), kind = d % 5;
+        const n = rng.int(3, 6);
+        for (let k = 0; k < n; k++) place(`meadow_flowers_${kind}`, Math.round(cx + rng.range(-16, 16)), Math.round(cy + rng.range(-6, 8)));
+      }
+      for (let i = 0; i < 16; i++) place('meadow_grass', rng.chance(0.5) ? rng.int(4, 120) : rng.int(WORLD_WIDTH - 120, WORLD_WIDTH - 4), rng.int(8, 100), true);
+      for (let i = 0; i < 4; i++) place(i % 2 ? 'meadow_stone' : 'meadow_mush', rng.int(20, WORLD_WIDTH - 20), rng.int(14, 90));
+      const reducedP = sc.effects && sc.effects.reduced;
+      add(sc.add.particles(0, y + 30, 'px2', {
+        x: { min: 0, max: WORLD_WIDTH }, y: { min: -30, max: 50 }, frequency: reducedP ? 900 : 260, lifespan: 6000,
+        speedX: { min: -5, max: 8 }, speedY: { min: -6, max: -1 }, scale: { start: 0.5, end: 0.5 },
+        alpha: { onEmit: () => 0, onUpdate: (p, k, t) => Math.sin(t * Math.PI) * 0.7 }, tint: [0xfff4c8, 0xffffff, 0xf0e8a0],
+      }).setDepth(DEPTH.decor + 3));
     }
     // Pine boughs in the near foreground: they slide away faster than the wall
     // as you leave base camp.

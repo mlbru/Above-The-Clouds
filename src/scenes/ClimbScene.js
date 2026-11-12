@@ -2798,6 +2798,7 @@ export class ClimbScene extends Phaser.Scene {
         farName: GATE.farName,
         jacket: findCosmetic('jacket', this.prog.data.look.jacket).color,
         day: this.dayNight.state(),
+        onLand: () => this.wall.farShore(),
         onDone: () => {
           this.liftRide = null;
           this.gateBusy = false;

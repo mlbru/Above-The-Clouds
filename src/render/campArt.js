@@ -313,7 +313,73 @@ function penGrid() {
   return g;
 }
 
+// ---------------------------------------------------------------- the meadow
+// Clusters of wildflowers on stems with leaves (one kind per variant), tall
+// grass in two sway frames, mossy boulders and a ring of mushrooms.
+const FLOWERS = [
+  { petal: [0xc8263a, 0xf04a4a], eye: 0x1a0a0a, size: 1, n: 6 }, // poppies
+  { petal: [0xe8e4dc, 0xffffff], eye: 0xf2c14e, size: 1, n: 8 }, // daisies
+  { petal: [0x5a6ad8, 0x8a9af0], eye: 0x3a46a8, size: 0, n: 9 }, // bluebells
+  { petal: [0xe8b020, 0xffe060], eye: 0xc88a10, size: 0, n: 9 }, // buttercups
+  { petal: [0x8a4ac8, 0xc08af0], eye: null, size: 2, n: 4 }, // lupines
+];
+function flowerGrid(v) {
+  const f = FLOWERS[v];
+  const g = new PixelGrid(20, 14);
+  const rng = new SeededRandom(500 + v * 13);
+  const leaf = [0x2e5a24, 0x4a8a34, 0x6ab048];
+  // Leaves at the base.
+  for (let i = 0; i < 9; i++) { const x = 3 + rng.int(0, 13), h = rng.int(2, 4); for (let k = 0; k < h; k++) g.set(x + (k > 1 ? (i % 2 ? 1 : -1) : 0), 13 - k, leaf[k % 3]); }
+  for (let i = 0; i < f.n; i++) {
+    const x = 2 + rng.int(0, 15), top = rng.int(f.size === 2 ? 1 : 3, 8);
+    for (let y = top + 1; y < 14; y++) g.set(x + (y < top + 3 && i % 2 ? 1 : 0), y, y % 3 ? leaf[1] : leaf[0]);
+    if (f.size === 2) { for (let k = 0; k < 6; k++) { g.set(x - 1, top + k, f.petal[k % 2]); g.set(x + 1, top + k, f.petal[(k + 1) % 2]); g.set(x, top + k - 1, f.petal[1]); } continue; }
+    const r = f.size;
+    g.set(x, top, f.eye ?? f.petal[1]);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) g.set(x + dx, top + dy, f.petal[dy < 0 || dx < 0 ? 1 : 0]);
+    if (r) for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) if (rng.chance(0.5)) g.set(x + dx, top + dy, f.petal[0]);
+  }
+  g.outline(0x1a2a16);
+  return g;
+}
+function tallGrass(f) {
+  const g = new PixelGrid(14, 16);
+  const cols = [0x2e5a24, 0x4a8a34, 0x6ab048, 0x8ac858];
+  for (let i = 0; i < 9; i++) {
+    const x0 = 2 + i * 1.2, h = 8 + ((i * 5) % 7), lean = (i % 2 ? 1 : -1) * 0.25 + (f ? 0.35 : 0);
+    for (let k = 0; k < h; k++) g.set(Math.round(x0 + lean * k * (k / h)), 15 - k, cols[Math.min(3, Math.floor(k / 4)) ]);
+  }
+  for (const x of [4, 9]) { g.set(x + (f ? 2 : 1), 4, 0xd8c890); g.set(x + (f ? 2 : 1), 3, 0xe8dca0); }
+  return g;
+}
+function mossyStone() {
+  const g = new PixelGrid(16, 10);
+  g.ellipse(8, 6, 7.5, 4.5, 0x6a6a74);
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 16; x++) {
+    const c = g.get(x, y); if (c === null) continue;
+    const k = (x - 8) * -0.06 + (y - 6) * -0.12;
+    g.set(x, y, k > 0.25 ? 0xa8a8b0 : k > 0 ? 0x8a8a94 : k > -0.3 ? 0x6a6a74 : 0x4a4a54);
+    if (y < 5 && ((x * 7 + y * 3) % 4 === 0 || y < 3)) g.set(x, y, (x + y) % 3 ? 0x4a8a34 : 0x6ab048);
+  }
+  g.outline(0x1a1a20);
+  return g;
+}
+function mushrooms() {
+  const g = new PixelGrid(14, 9);
+  for (const [x, h, r] of [[3, 4, 2], [7, 6, 3], [11, 3, 2]]) {
+    g.rect(x, 9 - h, 1, h, 0xf0e6d0);
+    g.ellipse(x + 0.5, 9 - h, r, r * 0.7, 0xc8263a);
+    g.set(x - 1, 9 - h - 1, 0xffffff); g.set(x + 1, 9 - h, 0xffffff);
+  }
+  g.outline(0x2a1a16);
+  return g;
+}
+
 export function buildCampTextures(scene) {
+  FLOWERS.forEach((_, v) => add(scene, `meadow_flowers_${v}`, flowerGrid(v)));
+  addFrames(scene, 'meadow_grass', [tallGrass(0), tallGrass(1)]);
+  add(scene, 'meadow_stone', mossyStone());
+  add(scene, 'meadow_mush', mushrooms());
   add(scene, 'camp_pen', penGrid());
   add(scene, 'camp_board', boardGrid());
   for (const id of Object.keys(PEOPLE_LOOK)) addFrames(scene, `camp_person_${id}`, [personFrame(id, 0), personFrame(id, 1)]);

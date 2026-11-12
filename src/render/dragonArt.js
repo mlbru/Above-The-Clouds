@@ -45,7 +45,7 @@ export const SEG_RADII = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 export const DIRS = 16;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const ramp = (list, t, x, y) => {
+export const ramp = (list, t, x, y) => {
   // Ordered dithering between neighbouring shades keeps the gradient pixel-art.
   const f = clamp(t, 0, 0.999) * (list.length - 1);
   const i = Math.floor(f);
@@ -53,14 +53,14 @@ const ramp = (list, t, x, y) => {
 };
 
 // A tiny seeded generator so the cracks look the same every time.
-function lcg(seed) {
+export function lcg(seed) {
   let s = seed >>> 0;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
 // Lava cracks: short wandering lines over the scales. They are cut dark into
 // the base sprite and drawn white into the glow sprite (lit with ADD).
-function crack(g, glow, isBody, seed, count, len) {
+export function crack(g, glow, isBody, seed, count, len) {
   const rnd = lcg(seed);
   const spots = [];
   for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (isBody(g.get(x, y))) spots.push([x, y]);
@@ -89,7 +89,7 @@ function inPoly(x, y, pts) {
   return inside;
 }
 
-function fillPoly(g, pts, c) {
+export function fillPoly(g, pts, c) {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   for (let y = Math.floor(Math.min(...ys)); y <= Math.ceil(Math.max(...ys)); y++) {
     for (let x = Math.floor(Math.min(...xs)); x <= Math.ceil(Math.max(...xs)); x++) {
@@ -100,7 +100,7 @@ function fillPoly(g, pts, c) {
 
 // A tapering curved stroke (horns, spines, claws): quadratic bezier from a to b
 // bent towards c, w0 wide at a and w1 at b.
-function taper(g, a, c, b, w0, w1, color) {
+export function taper(g, a, c, b, w0, w1, color) {
   const n = 40;
   for (let i = 0; i <= n; i++) {
     const t = i / n, u = 1 - t;

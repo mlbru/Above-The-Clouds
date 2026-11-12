@@ -119,6 +119,8 @@ export class MenuScene extends Phaser.Scene {
       this.wall.destroy();
     });
     this.events.on('resume', () => {
+      // The key that closed the screen above must not reach the camp too.
+      this.resumedAt = performance.now();
       // A new Thin Air tier (or dares that switch it off) means a different mountain.
       const want = activeThinAir(this.prog.data);
       const changed = this.registry.get('campChanged');
@@ -516,6 +518,7 @@ export class MenuScene extends Phaser.Scene {
 
   onKey(event) {
     Audio.init();
+    if (this.resumedAt && performance.now() - this.resumedAt < 120) return;
     if (this.introRunning) { this.endIntro(); return; }
     if (this.stopDemo()) return;
     if (event.repeat) return;

@@ -5,7 +5,9 @@ import { measureLine } from '../utils/pixelFont.js';
 import { THIN_AIR, TIER_RULES, thinAirTop } from '../data/thinAir.js';
 import { frostTextures } from '../world/LensDrops.js';
 import { Audio } from '../systems/AudioSystem.js';
-import { SeededRandom } from '../utils/seededRandom.js';
+import { SeededRandom, makeNoise2D } from '../utils/seededRandom.js';
+import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
+import { rampAt, makeRamp } from '../render/pixelKit.js';
 
 // THIN AIR: Bram's old brass altimeter. ← → turn the bezel one tier at a time
 // (OFF, then 1..10); the needle swings after it, trembling more the higher it
@@ -57,9 +59,9 @@ export class ThinAirScene extends Phaser.Scene {
     frostTextures(this);
 
     // A cold night sky, deep blue to black, with snow blowing across.
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x050814, 0.94).setOrigin(0, 0).setInteractive();
-    const sky = this.add.graphics();
-    for (let i = 0; i < 12; i++) sky.fillStyle(0x0e1834, 0.05 + i * 0.012).fillRect(0, (i * GAME_HEIGHT) / 12, GAME_WIDTH, GAME_HEIGHT / 12 + 1);
+    this.add.image(0, 0, paintThinBackdrop(this)).setOrigin(0, 0).setInteractive();
+    // The aurora, drawn live over the painted sky.
+    this.aurora = this.add.graphics().setBlendMode('ADD');
     this.snow = Array.from({ length: 46 }, (_, i) => ({ x: (i * 97.3) % GAME_WIDTH, y: (i * 53.1) % GAME_HEIGHT, v: 10 + (i % 5) * 6, s: i % 7 === 0 ? 2 : 1 }));
     this.snowG = this.add.graphics().setDepth(1);
     // The screen frosts over from the corners, more with every tier.
@@ -221,6 +223,18 @@ export class ThinAirScene extends Phaser.Scene {
   update(time, delta) {
     this.t += delta;
     const dt = Math.min(delta, 50) / 1000;
+    // Curtains of aurora ripple slowly; brighter the thinner the air.
+    const au = this.aurora.clear();
+    for (let band = 0; band < 3; band++) {
+      const base = GAME_HEIGHT * (0.16 + band * 0.07), col = [0x5af0a0, 0x40c8d8, 0x9a70f0][band];
+      for (let x = 0; x < GAME_WIDTH; x += 2) {
+        const y = base + Math.sin(x * 0.02 + this.t / 1800 + band) * 10 + Math.sin(x * 0.051 - this.t / 1300) * 5;
+        const len = 18 + Math.sin(x * 0.03 + this.t / 900 + band * 2) * 10;
+        const a = (0.08 + 0.05 * Math.sin(x * 0.07 + this.t / 700)) * (0.8 + this.shown * 0.06);
+        au.fillStyle(col, a).fillRect(x, Math.round(y), 2, Math.max(4, Math.round(len)));
+        au.fillStyle(0xffffff, a * 0.5).fillRect(x, Math.round(y + len - 2), 2, 1);
+      }
+    }
     // The bezel eases to the tier; the needle chases it on a spring.
     this.shown += (this.tier - this.shown) * Math.min(1, dt * 12);
     this.needleV += ((this.tier - this.needle) * 90 - this.needleV * 9) * dt;
@@ -339,3 +353,45 @@ export class ThinAirScene extends Phaser.Scene {
     this.btnText.setText(this.tier ? 'STRAP IT ON' : 'CLIMB PLAIN').setPosition(bx + this.btn.w / 2, by + 5).setAlpha(k);
   }
 }
+
+// Behind the altimeter: a deep night over high peaks. Stars, a thin moon,
+// two ranges of snowy mountains lit blue by the moon, mist in the valleys.
+function paintThinBackdrop(scene) {
+  const key = `thin_bg_${GAME_WIDTH}_${GAME_HEIGHT}`;
+  if (scene.textures.exists(key)) return key;
+  const W2 = GAME_WIDTH, H2 = GAME_HEIGHT;
+  const g = new PixelGrid(W2, H2);
+  const sky = makeRamp(0x02040c, 0x0c1638, 0x2a3a6a, 6);
+  for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) g.set(x, y, rampAt(sky, (y / H2) ** 1.3 * 0.9, x, y));
+  const rng = new SeededRandom(88);
+  for (let i = 0; i < 160; i++) { const x = rng.int(0, W2 - 1), y = rng.int(0, Math.round(H2 * 0.6)); g.set(x, y, i % 9 === 0 ? 0xffffff : i % 3 ? 0x8a9ac8 : 0xc8d4f0); if (i % 23 === 0) { g.set(x + 1, y, 0x6a7aa8); g.set(x - 1, y, 0x6a7aa8); g.set(x, y + 1, 0x6a7aa8); g.set(x, y - 1, 0x6a7aa8); } }
+  // A thin crescent moon.
+  const mx = Math.round(W2 * 0.86), my = Math.round(H2 * 0.14);
+  for (let y = -7; y <= 7; y++) for (let x = -7; x <= 7; x++) if (Math.hypot(x, y) <= 6.5 && Math.hypot(x + 3, y - 1) > 5.5) g.set(mx + x, my + y, 0xf2eee0);
+  const noise = makeNoise2D(5);
+  // Two ranges of jagged peaks: each the highest of a row of sharp triangles,
+  // faces turned to the moon (right) lit, the others in blue shade.
+  for (const [base, amp, seed, rock, lit, snow, snowLit] of [[H2 * 0.66, 92, 3, 0x111830, 0x2c3c62, 0x6a7aa8, 0xe4ecfc], [H2 * 0.86, 60, 9, 0x080c1c, 0x1a2444, 0x4a5a84, 0xb8c4e0]]) {
+    const pr = new SeededRandom(seed);
+    const peaks = Array.from({ length: 9 }, (_, i) => ({ x: (i / 8) * W2 + pr.range(-30, 30), h: amp * pr.range(0.45, 1), w: pr.range(40, 80) }));
+    const prof = (x) => Math.max(0, ...peaks.map((p) => p.h * (1 - Math.abs(x - p.x) / p.w))) + (noise(x * 0.08, seed) - 0.5) * 6;
+    for (let x = 0; x < W2; x++) {
+      const top = Math.round(base - prof(x));
+      const facesMoon = prof(x + 2) < prof(x - 2);
+      for (let y = Math.max(0, top); y < H2; y++) {
+        const d = y - top;
+        const snowLine = 5 + (x % 4 === 0 ? 2 : 0) + noise(x * 0.25, y * 0.25) * 8 + Math.max(0, (prof(x) - amp * 0.4)) * 0.35;
+        // Gullies: thin streaks running down the faces.
+        const ridge = d > snowLine && (x + Math.round(noise(x * 0.04, y * 0.015) * 14)) % 7 === 0 && noise(x * 0.3, y * 0.05) > 0.4;
+        g.set(x, y, d < snowLine ? (facesMoon ? snowLit : snow) : facesMoon ? (ridge ? rock : lit) : (ridge ? lit : rock));
+      }
+    }
+  }
+  // Mist lying in the valley.
+  for (let y = Math.round(H2 * 0.74); y < Math.round(H2 * 0.84); y++) for (let x = 0; x < W2; x++) if (bayerish(x, y) < 0.35 - Math.abs(y - H2 * 0.79) / (H2 * 0.2)) g.set(x, y, 0x3a4a70);
+  const c = makeCanvas(W2, H2);
+  g.drawTo(c.getContext('2d'));
+  scene.textures.addCanvas(key, c);
+  return key;
+}
+const bayerish = (x, y) => (((x * 7 + y * 13) % 16) + 0.5) / 16;
