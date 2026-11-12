@@ -1,5 +1,7 @@
 # Above the Clouds: idea sheet 4
 
+*Crossed out = built (build sheet 5, 2026-11-12).*
+
 A long menu of ideas, written against the game as it is now (12 biomes up to the Dragon's
 Spine, Trail Boons, dares, expeditions, mastery, lifts, Golden City). Nothing here is
 agreed. Pick what you like and it goes onto a build sheet.
@@ -17,11 +19,11 @@ Each idea has a size: **S** (an evening), **M** (a few sessions), **L** (a miles
 | 3 | **Crux pitches**: a hand-written "boss song" at the top of every biome (§1.1) | Gives each biome a climax instead of just ending. | L |
 | 4 | **Act II: The Heavens**, what comes after the dragon (§5) | The mountain finally has a story arc and an ending. | L |
 | 5 | **Your own ghost** climbing beside you (§3.1) | Instant replay value, almost free with seeded runs. | M |
-| 6 | **Thin Air tiers**, stacking difficulty after you beat the dragon (§3.2) | Endgame for good players without new content. | M |
-| 7 | **Base camp grows** with your progress (§2.6) | The menu becomes a trophy room. | M |
+| 6 | ~~**Thin Air tiers**, stacking difficulty after you beat the dragon (§3.2)~~ ✓ built | Endgame for good players without new content. | M |
+| 7 | ~~**Base camp grows** with your progress (§2.6)~~ ✓ built | The menu becomes a trophy room. | M |
 | 8 | **Characters with a trade-off** (Elsa, young Bram, the goat...) (§3.3) | Each one makes the same mountain play differently. | M |
 | 9 | **The down arrow** as a new move (bounce, drop, dyno) (§1.2) | A fourth input opens a whole new layer of rhythms. | M |
-| 10 | **Camp requests**: small story quests from people at camp (§3.5) | Gives runs a goal other than "higher". | M |
+| 10 | ~~**Camp requests**: small story quests from people at camp (§3.5)~~ ✓ built | Gives runs a goal other than "higher". | M |
 
 ---
 
@@ -150,14 +152,14 @@ one place.
 Each biome title card arrives with its own wipe: frost growing over the screen, honey
 dripping down, gears turning the screen, lightning cracking it, embers burning it away.
 
-### 2.6 Base camp grows · M
+### ~~2.6 Base camp grows · M~~ ✓ built
 Base camp is the menu, so let it tell your story:
-- A tent appears for every 500 m record.
-- Mastered biomes hang a banner over the trail.
-- Rescued climbers (§1.8) sit at the fire.
+- ~~A tent appears for every 500 m record.~~ ✓
+- ~~Mastered biomes hang a banner over the trail.~~ ✓
+- ~~Rescued climbers (§1.8) sit at the fire.~~ ✓
 - The dragon's tooth (once you pass the Dragon's Gate) hangs over Bram's stall.
 - Night at camp shows the lanterns of other players' flags higher up the mountain.
-- Bram's stall upgrades in three steps as you spend gems.
+- ~~Bram's stall upgrades in three steps as you spend gems.~~ ✓
 
 ### 2.7 Postcards (photo mode upgrade) · S
 Photo mode already exists. Add frames per biome, a stamp with height and date, and a
@@ -184,14 +186,14 @@ Your chalk marks already exist. Add old ones from **other players' runs** (flags
 faded chalk on holds others used, a dropped glove where someone fell, a carved name on a
 ledge. Makes the friends-scale community visible.
 
-### 2.12 Climber feel details · S
-- Hair and scarf that blow in the wind direction.
-- Breath clouds that get bigger with altitude.
-- Hands that get visibly chalkier, then bloodied-red tape after long runs.
-- The climber looks at the next gem before picking a route.
-- A tiny "whoa" wobble on a near-miss (a good, not perfect).
+### ~~2.12 Climber feel details · S~~ ✓ built
+- ~~Hair and scarf that blow in the wind direction.~~ ✓
+- ~~Breath clouds that get bigger with altitude.~~ ✓
+- ~~Hands that get visibly chalkier, then bloodied-red tape after long runs.~~ ✓
+- ~~The climber looks at the next gem before picking a route.~~ ✓
+- ~~A tiny "whoa" wobble on a near-miss (a good, not perfect).~~ ✓
 
-### 2.13 Accessibility and options · S
+### ~~2.13 Accessibility and options · S~~ ✓ built
 Colour-blind sets for note colours (mirror pink, thermal orange), a high-contrast track,
 a "reduce shake" slider for the dragon and storms, and a latency calibration screen (a
 small themed one: Bram tapping a pot with a spoon).
@@ -205,7 +207,7 @@ A see-through climber plays back your best run on this seed (or your record on t
 mode) beside you, with their chalk line. Overtake them and they wave. Friends' ghosts on
 the Daily Climb. Seeded runs make this nearly free: store the inputs, not the positions.
 
-### 3.2 Thin Air tiers · M
+### ~~3.2 Thin Air tiers · M~~ ✓ built
 After you pass the Dragon's Gate once, Normal gets **Thin Air 1 to 10**. Each tier adds one
 permanent rule on top of the previous ones (tier 1: ledges a bit further apart, tier 2: one
 fewer gem per biome, tier 3: the dragon breathes twice from the start...). Each tier has its
@@ -227,12 +229,12 @@ A small editor: pick biomes in any order, set the tempo, write a few crux pitche
 share it as a code. Friends climb each other's mountains. The expedition data format
 already exists, so the editor writes the same kind of data.
 
-### 3.5 Camp requests (small quests) · M
+### ~~3.5 Camp requests (small quests) · M~~ ✓ built
 A notice board (or people at the fire) with three requests at a time:
-- The photographer wants a photo of the dragon **awake**.
-- The geologist wants three storm topazes in one run.
-- The old woman wants you to find her husband's ice axe (the "Old Ice Axe" discovery).
-- A child wants a goat feather (there is no such thing; the joke pays off later).
+- ~~The photographer wants a photo of the dragon **awake**.~~ ✓
+- ~~The geologist wants three storm topazes in one run.~~ ✓
+- ~~The old woman wants you to find her husband's ice axe (the "Old Ice Axe" discovery).~~ ✓
+- ~~A child wants a goat feather (there is no such thing; the joke pays off later).~~ ✓
 Each gives gems, a card and sometimes a story scene. They add goals besides height.
 
 ### 3.6 Mutated mountains · S
@@ -435,8 +437,8 @@ yet. The Hoard (D) and the Sky City (G) can live in Act II as rare secret rooms.
 
 Following the rule that every menu is themed and animated:
 - **Character select**: the climbers sit around the campfire; ← → passes a mug of tea from one to the next, and the one holding it stands up.
-- **Thin Air tiers**: an altimeter dial Bram hands you; turning it frosts the screen more with each tier.
-- **Camp requests**: a corkboard on a post, notes tied on with string; finished ones get a red thumbprint.
+- ~~**Thin Air tiers**: an altimeter dial Bram hands you; turning it frosts the screen more with each tier.~~ ✓
+- ~~**Camp requests**: a corkboard on a post, notes tied on with string; finished ones get a red thumbprint.~~ ✓
 - **Postcard wall**: postcards clipped to a line between two tents, swaying in the wind.
 - **Mountain builder**: Bram's drawing table with a paper mountain you pencil biomes onto; codes print on a luggage tag.
 - **Ghost picker**: a row of lanterns at the trailhead, each with a name; light one to climb with that ghost.
@@ -446,12 +448,12 @@ Following the rule that every menu is themed and animated:
 
 ## 7 · Small polish ideas (each S)
 
-- Bram's lines change with your record ("BACK FROM 1800? SIT. EAT.").
-- A goat that follows you up a few holds before giving up.
+- ~~Bram's lines change with your record ("BACK FROM 1800? SIT. EAT.").~~ ✓
+- ~~A goat that follows you up a few holds before giving up.~~ ✓
 - The record line on the wall shows your old climber pose frozen there, like a statue.
-- Holds you've used 100 times get worn shiny.
-- A rare shooting star you can "wish" on (press ↑ in time) for one gem.
-- Rain on the camera lens in storms (LensDrops exists), frost on it in the Frozen Reach.
-- A distant second climber on a far peak in the backdrop, sometimes waving.
-- Sound: your breathing speeds up as grip goes down.
-- The cloud sea under you gets thicker the higher you are; at night it glows with the town's lights far below.
+- ~~Holds you've used 100 times get worn shiny.~~ ✓
+- ~~A rare shooting star you can "wish" on (press ↑ in time) for one gem.~~ ✓
+- ~~Rain on the camera lens in storms (LensDrops exists), frost on it in the Frozen Reach.~~ ✓
+- ~~A distant second climber on a far peak in the backdrop, sometimes waving.~~ ✓
+- ~~Sound: your breathing speeds up as grip goes down.~~ ✓
+- ~~The cloud sea under you gets thicker the higher you are; at night it glows with the town's lights far below.~~ ✓
