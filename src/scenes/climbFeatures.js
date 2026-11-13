@@ -16,6 +16,7 @@ import { caveMouthKey, creatureFor } from '../render/caveArt.js';
 import { roofBand } from '../render/roofArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
+import { SeededRandom, hashInts } from '../utils/seededRandom.js';
 
 export const ROOF_FX = { drain: 1.4 };
 export const CAVE = {
@@ -78,7 +79,10 @@ export const climbFeatures = {
     const meters = levelToMeters(node.level);
     if (meters < CAVE.minMeters || this.cavesRolled.has(node.level)) return;
     this.cavesRolled.add(node.level);
-    if (!this.runRng.chance(this.caveChance ?? CAVE.chance)) return;
+    // Each level of a seed has its cave or not, whatever way you came up:
+    // the same seed always hides its caves in the same places.
+    const rng = new SeededRandom(hashInts(this.seed, node.level, 4703));
+    if (!rng.chance(this.caveChance ?? CAVE.chance)) return;
     const lv = this.mountain.getLevel(node.level);
     if (!lv) return;
     const left = node.x - lv.bounds.l > lv.bounds.r - node.x;
@@ -87,12 +91,12 @@ export const climbFeatures = {
     if (Math.abs(cx - node.x) < 60) return;
     const base = this.routes.find((r) => r.type === 'normal') || this.routes[0];
     const n = 4 + (meters > 600 ? 1 : 0);
-    const dirs = Array.from({ length: n }, () => (this.runRng.chance(0.7) ? (left ? 'L' : 'R') : (left ? 'R' : 'L')));
-    const kind = this.runRng.pick(CAVE.kinds);
+    const dirs = Array.from({ length: n }, () => (rng.chance(0.7) ? (left ? 'L' : 'R') : (left ? 'R' : 'L')));
+    const kind = rng.pick(CAVE.kinds);
     const target = { id: `cave:${node.level}:${cx}`, level: node.level, x: cx, y: node.y, kind: 'hold', hazard: null, cave: true };
     this.routes.push({
       ...base, type: 'cave', label: 'CAVE', toLedge: false, from: node, target, levels: 0, heightGain: 0,
-      inputs: n, pattern: dirs, notes: dirs.map((dir, i) => ({ dir, gap: i && this.runRng.chance(0.25) ? 0.5 : 1 })),
+      inputs: n, pattern: dirs, notes: dirs.map((dir, i) => ({ dir, gap: i && rng.chance(0.25) ? 0.5 : 1 })),
       tags: ['TRAVERSE'], hazard: null, difficulty: 2, gem: null, thermal: null, mods: null, roof: false,
       cave: { kind, side }, gripCost: base.gripCost * 0.8,
     });
