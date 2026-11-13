@@ -13,10 +13,10 @@ const PARALLAX = 1.7;
 const KIND = {
   green: 'bough', stone: 'crag', frozen: 'icicles', aurora: 'icicles', hive: 'comb', obsidian: 'shards',
   crystal: 'shards', clockwork: 'cog', storm: 'crag', bones: 'ribs', dragon: 'spines', volcano: 'spines',
-  cascade: 'fronds', monastery: 'eaves', moss: 'roots',
+  cascade: 'fronds', monastery: 'eaves', moss: 'roots', reef: 'fan', starfall: 'glassblade',
 };
-const BASE = { bough: 0x1c2a1e, crag: 0x1e1c24, icicles: 0x22304a, comb: 0x3a2410, shards: 0x1a1426, cog: 0x2e2214, ribs: 0x2a2622, spines: 0x2a1410, fronds: 0x0e2216, eaves: 0x2a1410, roots: 0x16200e };
-const RIM = { bough: 0x3a5a34, crag: 0x3a3844, icicles: 0x6a8ab8, comb: 0x7a5420, shards: 0x5a3a8a, cog: 0x6a5228, ribs: 0x5a544a, spines: 0x6a2a1a, fronds: 0x3a6a3a, eaves: 0xb8862a, roots: 0x4a6a2a };
+const BASE = { bough: 0x1c2a1e, crag: 0x1e1c24, icicles: 0x22304a, comb: 0x3a2410, shards: 0x1a1426, cog: 0x2e2214, ribs: 0x2a2622, spines: 0x2a1410, fronds: 0x0e2216, eaves: 0x2a1410, roots: 0x16200e, fan: 0x2a1418, glassblade: 0x07060e };
+const RIM = { bough: 0x3a5a34, crag: 0x3a3844, icicles: 0x6a8ab8, comb: 0x7a5420, shards: 0x5a3a8a, cog: 0x6a5228, ribs: 0x5a544a, spines: 0x6a2a1a, fronds: 0x3a6a3a, eaves: 0xb8862a, roots: 0x4a6a2a, fan: 0xe8806a, glassblade: 0xa898f0 };
 
 function poly(g, pts, c) {
   const ys = pts.map((p) => p[1]);
@@ -148,6 +148,26 @@ function paint(kind, v) {
           g.rect(Math.round(x - ww / 2), y, Math.max(1, Math.round(ww)), 1, c);
           if (y % 17 === 9) g.ellipse(Math.round(x), y, 2.5, 1.5, c);
         }
+      }
+      break;
+    }
+    case 'fan': {
+      // A stone sea fan reaching in from the edge, its lattice against the light.
+      const cy = 30 + rng.range(-6, 6), R = 26 + rng.range(0, 8);
+      for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
+        const r = Math.hypot(x, (y - cy) * 0.9);
+        if (r > R) continue;
+        const a = Math.atan2(y - cy, x);
+        if (Math.abs(Math.sin(a * 8)) < 0.2 || Math.abs(Math.sin(r * 0.55)) < 0.22 || r < 4) g.set(x, y, c);
+      }
+      for (let y = Math.round(cy); y < TH; y++) g.rect(0, y, 3, 1, c);
+      break;
+    }
+    case 'glassblade': {
+      // Blades of black glass thrust in from the edge at angles.
+      for (let i = 0; i < 3; i++) {
+        const y0 = 8 + i * 24 + rng.range(-4, 4), len = 22 + rng.range(0, 16), up = rng.range(-0.5, 0.3);
+        poly(g, [[0, y0], [len, y0 + len * up], [0, y0 + 9 + rng.range(0, 4)]], c);
       }
       break;
     }

@@ -37,6 +37,12 @@ export const SEGMENT_TEMPLATES = [
   { id: 'root-nave', name: 'Root Nave', biomes: ['moss'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['glowcap', 'rootcurtain', 'fern'], features: ['shafts'] },
   { id: 'fallen-giant', name: 'Fallen Giant', biomes: ['moss'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['glowcap', 'fern'], features: ['shafts'] },
   { id: 'moss-chimney', name: 'Moss Chimney', biomes: ['moss'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['rootcurtain', 'glowcap'], features: ['crack'] },
+  { id: 'lifted-reef', name: 'Lifted Reef', biomes: ['reef'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['shells', 'seafan'], features: ['pools'] },
+  { id: 'ammonite-wall', name: 'Ammonite Wall', biomes: ['reef'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['shells', 'seafan'], features: ['pools'] },
+  { id: 'blowhole', name: 'Blowhole', biomes: ['reef'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['seafan'], features: ['crack'] },
+  { id: 'glass-slope', name: 'Glass Slope', biomes: ['starfall'], levels: [11, 13], width: [250, 300], wander: 22, density: 0.85, style: 'balanced', difficulty: 4, decor: ['tektite', 'tektite', 'starmetal'], features: ['craters'] },
+  { id: 'ray-ridge', name: 'Ray Ridge', biomes: ['starfall'], levels: [10, 12], width: [270, 320], wander: 28, density: 0.9, style: 'traverse', difficulty: 4, decor: ['tektite', 'rocks', 'starmetal'], features: ['craters'] },
+  { id: 'shatter-cleft', name: 'Shatter Cleft', biomes: ['starfall'], levels: [11, 13], width: [170, 210], wander: 14, density: 0.6, style: 'crack', difficulty: 4, decor: ['tektite', 'starmetal'], features: ['crack'] },
 ];
 
 export const REST_TYPES = {

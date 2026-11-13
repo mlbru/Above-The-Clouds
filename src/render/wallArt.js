@@ -35,6 +35,8 @@ const FACET = {
   cascade: { cw: 16, ch: 56, jit: 0.4, stagger: true, cut: 0.7 },
   monastery: { cw: 34, ch: 22, jit: 0.3, stagger: true, cut: 0.8 },
   moss: { cw: 50, ch: 40, jit: 0.95, cut: 0.35 },
+  reef: { cw: 44, ch: 24, jit: 0.8, cut: 0.45 },
+  starfall: { cw: 26, ch: 34, jit: 0.9, cut: 0.85 },
 };
 const hash2 = (x, y, s) => {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 2147483647)) | 0;
@@ -654,6 +656,63 @@ export class WallPainter {
         } else if (k < span + 10 && (hsh >> 9) % 2) {
           set(2 + ((k + hsh) % 3 === 0 ? 1 : 0), 0x8a7048);
         }
+      } else if (style === 'coral') {
+        // The Fossil Reef: sea fans and branching coral, long turned to stone,
+        // reach out from the edge; between them, clumps of tube coral.
+        const P = 40, off = side < 0 ? 0 : 20, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 31);
+        if (hsh % 4 === 0) continue;
+        if ((hsh >> 3) % 3) {
+          // A fan: a stalk from the rock, then a lattice spreading out and up.
+          const span = 18 + (hsh >> 6) % 12, reach = 8 + (hsh >> 10) % 8;
+          if (k >= span) continue;
+          const kk = span - 1 - k;
+          const w = Math.round(Math.sin((kk / span) * Math.PI * 0.9 + 0.2) * reach);
+          const col = (hsh >> 14) % 2 ? pal.accentA : lerpColor(pal.accentA, pal.accentC, 0.35);
+          for (let dx = 1; dx <= w; dx++) {
+            const lat = (dx + kk) % 3 === 0 || (dx - kk + 99) % 4 === 0;
+            if (lat || dx === w) set(dx, dx === w ? lerpColor(col, 0xffffff, 0.4) : kk < 3 ? lerpColor(col, pal.rock[1], 0.4) : col);
+          }
+          if (w > 0 && kk % 3 === 0) set(w + 1, pal.outline);
+        } else {
+          // Tube coral: short round pipes pointing up and out.
+          if (k > 12) continue;
+          for (let t = 0; t < 3; t++) {
+            const top = 3 + t * 3 + ((hsh >> (t * 2)) % 3), dx = 2 + t * 3;
+            if (k < 12 - top) continue;
+            const c = k === 12 - top ? pal.accentC : k === 13 - top ? lerpColor(pal.accentA, pal.rock[0], 0.5) : pal.accentB;
+            set(dx, c); set(dx + 1, k === 12 - top ? pal.accentC : lerpColor(pal.accentB, pal.rock[1], 0.4)); set(dx + 2, pal.outline);
+          }
+        }
+      } else if (style === 'glass') {
+        // The Starfall Crater: black glass that ran and froze as it hit:
+        // drips hanging off the edge with a green gleam, blades of glass
+        // flung outward, and now and then a nugget of glowing star-metal.
+        const P = 30, off = side < 0 ? 0 : 15, k = ((wy + off) % P + P) % P;
+        const hsh = hashInts(Math.floor((wy + off) / P), side, seed + 37);
+        const kind = hsh % 4;
+        if (kind === 0) continue;
+        if (kind === 1) {
+          // A drip: a lip, then a narrowing tear with a bright bead.
+          const len = 8 + (hsh >> 3) % 12, dx = 2 + (hsh >> 7) % 3;
+          if (k === 0) { for (let d = 1; d <= dx + 2; d++) set(d, d === dx + 2 ? pal.outline : pal.rock[2]); continue; }
+          if (k > len + 1) continue;
+          if (k >= len) { set(dx, k === len ? 0xd8ffe8 : pal.accentA); set(dx + 1, pal.outline); continue; }
+          set(dx, k % 4 === 1 ? pal.accentA : pal.rock[1]); set(dx + 1, k < len / 2 ? pal.rock[3] : pal.rock[2]); set(dx + 2, pal.outline);
+        } else if (kind === 2) {
+          // A blade of glass flung out and up.
+          const len = 10 + (hsh >> 4) % 10;
+          if (k >= len) continue;
+          const o = Math.round((len - k) * 0.8);
+          set(o, k === 0 ? 0xffffff : pal.accentB); set(o + 1, k < 2 ? pal.accentB : pal.rock[3]); set(o + 2, pal.rock[1]); set(o + 3, pal.outline);
+          if (o > 1) set(o - 1, pal.rock[2]);
+        } else {
+          // A nugget of star-metal, round and lit.
+          if (k > 6) continue;
+          const dy = k - 3, w = Math.round(Math.sqrt(Math.max(0, 10 - dy * dy)));
+          for (let dx = 1; dx <= w; dx++) set(dx, dy < -1 ? 0xfff6d8 : dy > 1 ? 0xb88a3a : 0xf2c252);
+          set(w + 1, pal.outline);
+        }
       } else if (style === 'vines') {
         // Ivy hangs off the edge: a dark strand with bright leaves, now and then.
         const P = 34, k = ((wy + (side < 0 ? 0 : 17)) % P + P) % P;
@@ -712,6 +771,9 @@ export class WallPainter {
     if (id === 'cascade') { set(0, 1, pal.accentC); set(0, 2, 0xffffff); set(1, -1, pal.accentB); return; }
     if (id === 'monastery') { set(1, 0, pal.accentA); set(1, -1, pal.accentB); return; }
     if (id === 'moss') { set(0, -1, pal.accentC); set(1, -1, pal.accentB); set(-1, 0, pal.accentA); return; }
+    // A shell lodged in the crack; a glint of star-metal.
+    if (id === 'reef') { set(0, -1, pal.accentC); set(1, -1, pal.accentC); set(1, 0, pal.accentA); return; }
+    if (id === 'starfall') { set(1, 0, 0xf2c252); set(1, -1, 0xfff6d8); set(2, -2, pal.accentB); return; }
     const leaf = pal.accentC || 0x86ad58, dark = pal.accentA || 0x3f6a3c;
     const side = rng.chance(0.5) ? 1 : -1;
     set(side, 0, dark); set(side * 2, -1, leaf); set(side * 3, -1, leaf); set(side, -2, leaf); set(side * 2, -3, dark);

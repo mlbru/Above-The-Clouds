@@ -26,6 +26,9 @@ export const HOLD_SHAPES = {
   // The Far Range: wet rounded basalt; old stone under moss.
   cascade: { hold: ['sloper', 'round', 'pocket', 'mossy', 'sloper'], jug: ['bucket', 'horn'] },
   moss: { hold: ['mossy', 'mossy', 'round', 'pocket', 'sloper'], jug: ['bucket', 'horn'] },
+  // Stone shells and coral heads; glass and lumps of meteoric iron.
+  reef: { hold: ['shell', 'coralhead', 'pocket', 'shell', 'sloper'], jug: ['bucket', 'shell_jug'] },
+  starfall: { hold: ['glass', 'iron', 'crimp', 'iron', 'glass'], jug: ['iron_jug', 'glass_jug'] },
 };
 export const SHAPED_BIOMES_SKIP = ['hive', 'clockwork', 'bones', 'monastery'];
 export const holdShapeKey = (biomeId, shape) => `holdshape_${biomeId}_${shape}`;
@@ -161,6 +164,55 @@ export function holdShapeGrid(biome, shape) {
       for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (g.get(x, y) === k && g.get(x, y - 1) === null) g.set(x, y, kl);
       for (let x = 3; x < 17; x++) if (g.get(x, 11) !== null || g.get(x, 10) === k) g.set(x, 10, kd);
       g.set(12, 3 - big, 0xffffff);
+      break;
+    }
+    case 'shell': case 'shell_jug': {
+      // An ammonite standing out of the rock: a ribbed coil, lit on top,
+      // the dark eye of the spiral where your fingers go.
+      const big = shape === 'shell_jug' ? 1 : 0;
+      const sc = lerpColor(biome.accentC, biome.rock[3], 0.35), sl = 0xfffaf0, sd = darken(sc, 0.55);
+      g.ellipse(10, 7, 6 + big, 5 + big, sc);
+      for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+        if (g.get(x, y) !== sc) continue;
+        const dx = x - 10, dy = y - 7, a = Math.atan2(dy, dx), r = Math.hypot(dx, dy);
+        const u = (Math.log(Math.max(0.7, r) / 0.6) / 0.42 - a) / (Math.PI * 2);
+        const f = u - Math.floor(u);
+        let c = f < 0.18 ? sd : Math.sin(a * 9) > 0.5 ? lerpColor(sc, 0xffffff, 0.25) : sc;
+        if (dy < -3) c = lerpColor(c, sl, 0.45);
+        if (dy > 3) c = lerpColor(c, sd, 0.5);
+        g.set(x, y, c);
+      }
+      g.set(10, 7, OUT); g.set(11, 7, sd);
+      for (let x = 5; x < 16; x++) if (g.get(x, 13 - (big ? 0 : 1)) === null && g.get(x, 12 - (big ? 0 : 1)) !== null) g.set(x, 13 - (big ? 0 : 1), darken(base, 0.4));
+      chalk([[8, 3 - big], [12, 3 - big]]);
+      break;
+    }
+    case 'coralhead': {
+      // A brain coral dome: winding grooves, coral pink, lit on top.
+      const cc = lerpColor(biome.accentA, biome.rock[4], 0.25), cl = lighten(cc, 0.4), cd = darken(cc, 0.6);
+      g.ellipse(10, 8, 7.5, 4.6, cc);
+      for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+        if (g.get(x, y) !== cc) continue;
+        const gr = Math.sin(x * 1.1 + Math.sin(y * 1.3) * 1.8 + y * 0.4);
+        let c = gr > 0.4 ? cl : gr < -0.55 ? cd : cc;
+        if (y > 10) c = lerpColor(c, cd, 0.5);
+        g.set(x, y, c);
+      }
+      shade(g, cc, cl, cd);
+      chalk([[9, 4], [11, 4]]);
+      break;
+    }
+    case 'iron': case 'iron_jug': {
+      // A lump of meteoric iron: pitted like a thumbprint, the crossed
+      // lattice showing on its cut face, rust in the pits, a gold gleam.
+      const big = shape === 'iron_jug' ? 1 : 0;
+      const ir = 0x6a7088, il = 0xc8d0e4, id = 0x24283a;
+      poly(g, [[2, 9], [4, 5 - big], [8, 3 - big], [13, 3 - big], [17, 5], [18, 9], [14, 11], [6, 11]], ir);
+      shade(g, ir, il, id);
+      for (const [x, y] of [[6, 7], [9, 6], [12, 8], [14, 6], [8, 9]]) { g.set(x, y, 0x3a2a24); g.set(x + 1, y, 0x8a5a34); }
+      for (let x = 9; x < 15; x++) if ((x % 3) === 0) g.set(x, 4 - big, 0xfff2c8);
+      if (big) for (let x = 6; x <= 13; x++) { g.set(x, 6, OUT); g.set(x, 7, id); }
+      g.set(11, 4 - big, 0xffffff);
       break;
     }
     case 'scale': {

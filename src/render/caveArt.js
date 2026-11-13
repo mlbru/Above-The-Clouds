@@ -267,6 +267,8 @@ const CREATURES = {
   bones: { name: 'ASH FOX', fur: [0x3a3634, 0x6a625c, 0x9a928a], belly: 0xc8c0b8 },
   cascade: { name: 'OTTER', fur: [0x2a1a10, 0x5a3a24, 0x8a6040], belly: 0xc8a888 },
   moss: { name: 'MOSS DEER', fur: [0x3a4a20, 0x6a7a34, 0x9aaa5a], belly: 0xd8e0a8 },
+  reef: { name: 'SHORE FOX', fur: [0x6a3a2a, 0xb06a4a, 0xe0a07a], belly: 0xfff0e0 },
+  starfall: { name: 'STAR HARE', fur: [0x2a2a4a, 0x4a4a7a, 0x8a8ac0], belly: 0xe8e8ff },
   monastery: { name: 'TEMPLE CAT', fur: [0x6a4a2a, 0xc89a58, 0xf0d098], belly: 0xfff0d8 },
 };
 export const creatureFor = (biomeId) => CREATURES[biomeId] || { name: 'FOX', fur: [0x8a3a10, 0xd86a20, 0xf0a050], belly: 0xfff0e0 };

@@ -60,3 +60,12 @@ What this sheet built (all of it pushed, the playable files rebuilt).
 ## Dev
 - `?event=avalanche|migration|eclipse|meteors|rival` forces a run's event.
 - `window.__atc.rescueChance = 1` makes the next route choice have a stranded climber.
+
+## Two more Far Range biomes (2026-11-13)
+
+The Far Range now has five biomes of its own before the old high biomes loop: Cascade, Hanging Monastery, Moss Cathedral, then:
+
+- **The Fossil Reef** (from 2392 m). An old seabed lifted into the sky: banded pastel limestone, coral heads, ammonites, coral-fan edges, shell and brain-coral holds. **Twist: the ghost tide.** The old sea comes in and goes out on a cycle, seen as a shimmering waterline climbing the screen with caustics, ghost fish and bubbles. At high tide climbs cost less grip (TIDE tag), but notes waver and fade until they near the line. **Ammonite notes:** hit one perfect for a gem (two at high tide). Gem: Ammolite.
+- **The Starfall Crater** (from 2565 m). The rim of a crater under a violet sky that keeps its stars by day. Black glass, white impact rays, star-metal seams with a meteoric lattice, glass-blade edges, iron holds. **Twist: falling stars.** Every 20–32 s a star comes down onto one climbing route (you watch it land and leave a glowing crater). That route's notes burn like comets. Climbing it pays 1–4 star-metal gems by the streak you bring. Gem: Moldavite.
+
+Code: `systems/mechanics/Tide.js`, `Starfall.js`, `world/ReefStarFx.js`, `scenes/climbReefStar.js`, `render/reefStarArt.js`, plus painters in wallOverlays, wallArt (edges `coral`, `glass`), holdArt, backdropArt, farSideArt. Dev: `?at=2430` (reef) and `?at=2600` (crater).

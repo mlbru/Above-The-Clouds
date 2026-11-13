@@ -70,6 +70,7 @@ import { toCss, lerpColor, warmthOf } from '../utils/color.js';
 import { climbBoons } from './climbBoons.js';
 import { climbRun } from './climbRun.js';
 import { climbFeatures } from './climbFeatures.js';
+import { climbReefStar } from './climbReefStar.js';
 import { biomeMoments } from './biomeMoments.js';
 import { SunRays } from '../world/SunRays.js';
 import { WeatherScenery } from '../world/WeatherScenery.js';
@@ -118,7 +119,7 @@ const GRADE = {
   green: 0xeef8f2, stone: 0xf6f4ee, frozen: 0xeef4ff, clouds: 0xfff8f0, hive: 0xffeac0,
   obsidian: 0xe8dcff, crystal: 0xf8ecff, clockwork: 0xfff0d8, storm: 0xdde4f4,
   aurora: 0xe4fff4, bones: 0xf4ece0, dragon: 0xffe4d0,
-  cascade: 0xe8fbf6, monastery: 0xfff0dc, moss: 0xeef8dc,
+  cascade: 0xe8fbf6, monastery: 0xfff0dc, moss: 0xeef8dc, reef: 0xfff2ea, starfall: 0xe4e0ff,
 };
 const multiplyColor = (a, b) => (((((a >> 16) & 255) * ((b >> 16) & 255)) / 255) << 16) | (((((a >> 8) & 255) * ((b >> 8) & 255)) / 255) << 8) | (((a & 255) * (b & 255)) / 255);
 
@@ -346,6 +347,7 @@ export class ClimbScene extends Phaser.Scene {
     this.initRun();
     // Overhangs and hidden caves (scenes/climbFeatures.js).
     this.initFeatures();
+    this.initReefStar();
 
     this.wall.update(0, RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
     this.wall.flush();
@@ -615,6 +617,7 @@ export class ClimbScene extends Phaser.Scene {
     this.boonRoutes(node);
     this.runRoutes(node);
     this.featureRoutes(node);
+    this.reefStarRoutes();
     if (!this.director) { this.rollGems(); this.runGems(node); }
     // FRAGILE: every hold crumbles under you.
     this.startCrumble(this.dares.includes('fragile') && node.kind !== 'ledge' && !node.hazard ? { ...node, hazard: 'crumbling' } : node);
@@ -1021,6 +1024,7 @@ export class ClimbScene extends Phaser.Scene {
       startTime: this.now(),
     });
     this.comboUI.show(this.combo, route);
+    this.reefStarStart(route);
     if (route.spray) {
       const wb = this.mountain.boundsAt(this.node.level + 1);
       this.farFx.sprayCurtain(route.spray.fromLeft, wb.l, wb.r, this.climber.y, route.spray.sweepBeats * beatMs);
@@ -1063,6 +1067,7 @@ export class ClimbScene extends Phaser.Scene {
     } else if (!(this.prismed && note.result !== 'miss')) this.grip.applyNote(route, note.result);
     this.boonNote(note, route);
     this.runNote(note);
+    this.reefStarNote(note, route);
     const style = this.comboUI.judge(note);
     this.lastJudge = `${note.result.toUpperCase()}${note.reason ? ' ' + note.reason.toUpperCase() : ''} ${Math.round(note.offset)}MS`;
     const n = this.combo.notes.filter((x) => !x.still).length;
@@ -1579,6 +1584,7 @@ export class ClimbScene extends Phaser.Scene {
       }
     }
     if (route.mods && route.mods.discovery) this.discover(route.mods.discovery);
+    this.reefStarDone(route);
     if (s.miss === 1) {
       this.floatText('SHAKY...', COLORS.dim, 10);
       await this.climber.hold('hesitate', 260);
@@ -2672,6 +2678,7 @@ export class ClimbScene extends Phaser.Scene {
   }
 
   onMechanicEvent({ id, event }) {
+    if (id === 'tide' || id === 'starfall') { this.onReefStarEvent(id, event); return; }
     if (id === 'storm') { this.onStormEvent(event); return; }
     if (id === 'dragonEye') { this.onDragonEvent(event); return; }
     if (id !== 'whiteout') return;
@@ -3294,6 +3301,7 @@ export class ClimbScene extends Phaser.Scene {
     {
       const m = biomeMixAt(alt);
       const weightOf = (id) => (m.a.id === id ? 1 - m.t : 0) + (m.b.id === id ? m.t : 0);
+      this.updateReefStar(dt, weightOf, day);
       this.farSides.update(dt, { weightOf, camY: this.camY, camX: this.camX, light: this.background.lastLight || day.light, skyBottom: this.background.lastSkyBottom || day.skyBottom, night: day.night });
     }
     this.showerK = this.scenery.update(dt, {
@@ -3904,4 +3912,4 @@ export class ClimbScene extends Phaser.Scene {
 }
 
 // Trail Boons (scenes/climbBoons.js).
-Object.assign(ClimbScene.prototype, climbBoons, biomeMoments, climbRun, climbFeatures);
+Object.assign(ClimbScene.prototype, climbBoons, biomeMoments, climbRun, climbFeatures, climbReefStar);

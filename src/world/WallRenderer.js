@@ -20,6 +20,7 @@ const LIGHT_OF = [
   ['vent', 0xff7a2a, 1.6, 0.45], ['crystal', 0xd8a6ff, 1.3, 0.35], ['tent', 0xffb060, 1.2, 0.2],
   ['hut', 0xffb060, 2.2, 0.35], ['pipe', 0xffa040, 1.0, 0.25], ['comb', 0xffc040, 1.0, 0.2],
   ['lantern_far', 0xff8a40, 1.5, 0.5], ['glowcap', 0x7af0c8, 1.3, 0.5],
+  ['starmetal', 0xffc860, 1.2, 0.45], ['tektite', 0x6affb0, 0.55, 0.18],
 ];
 
 const DECOR_TEX = {
@@ -29,6 +30,7 @@ const DECOR_TEX = {
   piton: 'decor_piton', nest: 'decor_nest', vent: 'decor_vent', chain: 'decor_chain',
   frostfern: 'decor_frostfern', bones: 'decor_bones', coins: 'decor_coins', comb: 'decor_comb', pipe: 'decor_pipe',
   lantern: 'decor_lantern_far', wheel: 'decor_wheel', glowcap: 'decor_glowcap', rootcurtain: 'decor_rootcurtain',
+  shells: 'decor_shells', seafan: 'decor_seafan', starmetal: 'decor_starmetal', tektite: 'decor_tektite',
 };
 
 // What sits under each hold, per biome: a dark drop shadow (offset down-right)
@@ -49,6 +51,8 @@ const HOLD_SHADOW = {
   cascade: { tint: 0x020606, alpha: 0.55, dx: 1, dy: 3 },
   monastery: { tint: 0x140806, alpha: 0.45, dx: 2, dy: 3 },
   moss: { tint: 0xb8ff6a, alpha: 0.12, dx: 0, dy: 1, glow: true },
+  reef: { tint: 0x3a1a22, alpha: 0.4, dx: 1, dy: 2 },
+  starfall: { tint: 0x9ad8ff, alpha: 0.22, dx: 0, dy: 0, glow: true },
   volcano: { tint: 0xff6a1a, alpha: 0.25, dx: 0, dy: 1, glow: true },
 };
 

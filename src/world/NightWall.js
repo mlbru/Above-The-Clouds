@@ -24,6 +24,9 @@ const LOOK = {
   cascade: { c: [0x9ff8ff, 0xd8ffff, 0x6ae0f0], d: 0.07, sp: 0.7 },
   monastery: { c: [0xffc860, 0xffe8a8, 0xff9a40], d: 0.05, sp: 1.6 },
   moss: { c: [0xb8ff6a, 0x6affc8, 0xe8ff9a], d: 0.11, sp: 0.5 },
+  // The old sea's light in the fossils; star-metal shining like the sky.
+  reef: { c: [0x6af0d8, 0x9afff0, 0x4ac8e8], d: 0.09, sp: 0.6 },
+  starfall: { c: [0xffe090, 0xb8e0ff, 0xffffff, 0x6affb0], d: 0.12, sp: 2.2, star: true },
   volcano: { c: [0xff7a2a, 0xffb040], d: 0.08, sp: 1.4 },
   sky: { c: [0xffffff, 0xfff4c8], d: 0.03, sp: 1 },
 };

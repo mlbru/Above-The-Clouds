@@ -338,11 +338,249 @@ function moss(seed, near) {
   return { base: b, glow };
 }
 
-const PAINT = { cascade, monastery, moss };
+// ---------------------------------------------------------------- the Fossil Reef
+// Back: cliffs of lifted reef, banded cream, coral and sand, stepping out in
+// terraces with scrub on every shelf and holes worn by the old sea. Mid: the
+// reef itself up close, rose-dark stone bulging with brain coral, staghorn
+// branches reaching out over the climb, great ammonites set in the rock.
+// At night the old sea's light comes back: fossils glow a faint sea-green.
+function reef(seed, near) {
+  const rng = new SeededRandom(seed);
+  const n = pnoise(seed);
+  const b = buffer(), glow = buffer();
+  const edge = edgeFn(rng, near ? 108 : 172, near ? 26 : 14);
+  const hsh = (a, c) => { let h = Math.imul(a + 7, 374761393) ^ Math.imul(c + 3, 668265263) ^ seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  if (!near) {
+    // Terraces of lifted reef, each stepping out a little further than the
+    // one above: a green-topped shelf, a shadowed undercut, then a banded
+    // face that lightens as it drops; holes worn by the old sea.
+    const TH = 32, NT = SIDE_H / TH;
+    const face = [0xf4e6d8, 0xecd2c2, 0xe2bcae, 0xf0dccc, 0xd8aaa0, 0xe8cab8];
+    for (let y = 0; y < SIDE_H; y++) {
+      const wob = n(0, y, 1, 40) * 6;
+      const yy = y + wob;
+      const T = ((Math.floor(yy / TH) % NT) + NT) % NT, ty = ((yy % TH) + TH) % TH;
+      const step = (hsh(T, 1) - 0.5) * 34;
+      const e = edge(y) + step - ty * 0.35;
+      for (let x = 0; x < Math.min(SIDE_W, e + 1); x++) {
+        const d = e - x;
+        let c = face[Math.floor((yy + n(x, y, 40, 10) * 4) / 5) % face.length];
+        // Light from the open side: the face lightens toward its edge and down.
+        c = lerpColor(c, 0x8a6474, Math.max(0, 0.28 - ty * 0.008 - Math.min(0.2, d < 30 ? (30 - d) * 0.006 : 0)));
+        if (ty < 2) c = ty === 0 ? 0x9ad0a8 : 0x6aa486;
+        else if (ty < 3 && n(x, y, 3, 3) > 0.4) c = 0x5a9478;
+        else if (ty < 7) c = lerpColor(c, 0x6a4a5a, 0.42 - (ty - 3) * 0.08);
+        // Weathering: fine vertical runnels down each face.
+        if (ty > 8 && n(x, y, 2, 30) > 0.72) c = lerpColor(c, 0xb08a90, 0.3);
+        if (d < 2) c = d < 1 ? 0xfff8f0 : lerpColor(c, 0xfff0e4, 0.5);
+        b.set(x, y, c);
+      }
+    }
+    // Sea-worn holes: dark pockets, lit on their lower lip.
+    for (let i = 0; i < 26; i++) {
+      const cy = rng.int(0, SIDE_H - 1), cx = rng.int(8, Math.max(9, Math.round(edge(cy)) - 30)), rx = rng.range(2, 7), ry = rx * rng.range(0.6, 1.1);
+      for (let dy = -ry - 1; dy <= ry + 1; dy++) for (let dx = -rx - 1; dx <= rx + 1; dx++) {
+        const e2 = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+        if (e2 < 1) b.set(cx + dx, cy + dy, lerpColor(0x5a3a48, 0x2a1a24, 1 - dy / ry * 0.5 - 0.5));
+        else if (e2 < 1.5 && dy > 0) b.set(cx + dx, cy + dy, 0xfff4e8);
+      }
+    }
+    // Arches worn right through, the sky beyond.
+    for (let i = 0; i < 2; i++) {
+      const cy = rng.int(0, SIDE_H - 1), cx = rng.int(60, 140), rx = rng.int(8, 13), ry = rng.int(13, 19);
+      for (let dy = -ry - 2; dy <= ry + 2; dy++) for (let dx = -rx - 2; dx <= rx + 2; dx++) {
+        const e2 = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+        if (cx + dx > edge(cy + dy) - 6) continue;
+        if (e2 < 1) b.set(cx + dx, cy + dy, lerpColor(0x9ad0ec, 0xfff0e4, (dy + ry) / (2 * ry)));
+        else if (e2 < 1.4) b.set(cx + dx, cy + dy, dx > 0 ? 0xfff6ec : 0x8a6474);
+      }
+    }
+    for (let i = 0; i < 90; i++) {
+      const y = rng.int(0, SIDE_H - 1), x = rng.int(0, Math.max(1, Math.round(edge(y)) - 2));
+      glow.set(x, y, 0x5ad8c8);
+    }
+    return { base: b, glow };
+  }
+  // ---- near: the reef itself, close up.
+  const rock = [0x2a181e, 0x3c2228, 0x522e32, 0x6a3e3e, 0x84524c];
+  for (let y = 0; y < SIDE_H; y++) {
+    const e = edge(y);
+    for (let x = 0; x < Math.min(SIDE_W, e + 1); x++) {
+      const d = e - x;
+      // Pitted limestone: big soft lumps, small dark pits in it.
+      const lump = n(x, y, 22, 22);
+      let k = 0.3 + lump * 0.45 + Math.min(0.3, Math.max(0, 10 - d) * 0.03);
+      const pit = n(x, y, 4, 4);
+      if (pit > 0.74) k -= 0.35; else if (pit < 0.2) k += 0.12;
+      let c = ramp(rock, k, x, y);
+      if (((y + Math.round(n(x, y, 50, 60) * 12)) % 13 + 13) % 13 === 0) c = lerpColor(c, 0xa86a5a, 0.35);
+      // Shell hash: tiny cream fans scattered through it.
+      if (hsh(Math.floor(x / 4), Math.floor(y / 3)) < 0.05 && x % 4 === 1) { c = y % 3 === 0 ? 0xf0dcc8 : 0xb88a78; }
+      if (d < 2) c = d < 1 ? 0x140a0e : 0xd88070;
+      b.set(x, y, c);
+    }
+  }
+  // Brain coral heads bulging out of the reef, their grooves winding.
+  for (let i = 0; i < 11; i++) {
+    const y0 = rng.int(0, SIDE_H - 1), R = rng.int(8, 22), x0 = edge(y0) - R * rng.range(0.2, 1.4);
+    const hue = rng.chance(0.5) ? [0x4a2a2e, 0x7a4038, 0xa85e4a, 0xd88a68, 0xf8b890] : [0x34302a, 0x5a5440, 0x8a8056, 0xb8aa72, 0xe0d4a0];
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R * 1.15; dx <= R * 1.15; dx++) {
+      const e2 = (dx * dx) / (R * R * 1.3) + (dy * dy) / (R * R);
+      if (e2 > 1) continue;
+      const mx = x0 + dx, my = y0 + dy;
+      const gv = Math.sin(n(mx, my, 5, 5) * 18 + n(mx, my, 11, 11) * 9);
+      let k = 0.62 - dy / R * 0.3 + dx / R * 0.12 - e2 * 0.2 + (gv > 0.35 ? 0.22 : gv < -0.45 ? -0.32 : 0);
+      let c = ramp(hue, k, mx, my);
+      if (e2 > 0.88) c = dx > 0 && dy < R * 0.3 ? hue[4] : hue[0];
+      b.set(mx, my, c);
+    }
+  }
+  // Great ammonites set into the rock; their sutures glow at night.
+  for (let i = 0; i < 3; i++) {
+    const cy = rng.int(0, SIDE_H - 1), R = rng.int(16, 26), cx = rng.int(R + 4, Math.max(R + 5, Math.round(edge(cy)) - R - 10));
+    for (let dy = -R - 1; dy <= R + 1; dy++) for (let dx = -R - 1; dx <= R + 1; dx++) {
+      const r = Math.hypot(dx, dy);
+      if (r > R + 1) continue;
+      if (r > R) { b.set(cx + dx, cy + dy, 0x1a0e12); continue; }
+      const a = Math.atan2(dy, dx);
+      const u = (Math.log(Math.max(0.7, r) / (R * 0.05)) / 0.19 - a) / TAU, f = u - Math.floor(u);
+      const lightK = -(dx * 0.6 + dy) / R;
+      let c = f < 0.12 ? 0x2a181c : Math.sin(a * (12 + r * 0.5)) > 0.45 ? 0xd8b8a0 : 0xb08878;
+      c = lerpColor(c, lightK > 0 ? 0xfff0e0 : 0x2a1620, Math.min(0.5, Math.abs(lightK) * 0.45));
+      b.set(cx + dx, cy + dy, c);
+      if (f < 0.12 && f > 0.04 && r > 3) glow.set(cx + dx, cy + dy, 0x6affd8);
+    }
+  }
+  // Sea fans spread out past the edge against the sky, lattice and all.
+  for (let i = 0; i < 6; i++) {
+    const y0 = rng.int(0, SIDE_H - 1), R = rng.int(16, 30), x0 = edge(y0) - 4, tilt = rng.range(-0.5, 0.3);
+    const col = rng.chance(0.5) ? [0xe8806a, 0xffb89a, 0x8a3a3a] : [0xc86a8a, 0xf0a8c0, 0x6a2a4a];
+    for (let dy = -R; dy <= R; dy++) for (let dx = 0; dx <= R; dx++) {
+      const r = Math.hypot(dx, dy);
+      if (r > R || r < 2) continue;
+      const a = Math.atan2(dy, dx) - tilt;
+      if (Math.abs(a) > 1.25) continue;
+      const rib = Math.abs(Math.sin(a * 9)) < 0.16, ring = Math.abs(Math.sin(r * 0.8)) < 0.2;
+      if (rib || ring || r > R - 1) b.set(x0 + dx, y0 + dy, r > R - 1 ? col[1] : dy < 0 ? col[0] : col[2]);
+    }
+  }
+  // Staghorn branches reaching out over the climb from the edge.
+  for (let i = 0; i < 5; i++) {
+    const y0 = rng.int(0, SIDE_H - 1);
+    const grow = (x, y, ang, th, depth) => {
+      for (let k = 0; k < 16 - depth * 3 && th > 0.8; k++) {
+        for (let t = -th; t <= th; t++) b.set(x, y + t, t < -th * 0.3 ? 0xf0a088 : t > th * 0.5 ? 0x4a2a2e : 0xb0685a);
+        x += Math.cos(ang); y += Math.sin(ang); ang += (n(x, y, 8, 8) - 0.5) * 0.3; th *= 0.95;
+      }
+      if (depth < 3) { grow(x, y, ang - 0.5, th * 0.85, depth + 1); grow(x, y, ang + 0.45, th * 0.8, depth + 1); }
+      else { b.set(x, y, 0xffe0cc); glow.set(x, y, 0x9afff0); }
+    };
+    grow(edge(y0) - 4, y0, rng.range(-0.7, 0.1), rng.range(2.2, 3.2), 0);
+  }
+  // Polyps: pinpricks of the old sea's light.
+  for (let i = 0; i < 140; i++) {
+    const y = rng.int(0, SIDE_H - 1), x = rng.int(0, Math.max(1, Math.round(edge(y)) - 3));
+    glow.set(x, y, i % 3 ? 0x6af0d8 : 0xb8fff0);
+  }
+  return { base: b, glow };
+}
+
+// ---------------------------------------------------------------- the Starfall Crater
+// Back: the crater's own wall, dark violet rock in thrown-up layers, cracked
+// by fractures that fan out from the impact, gold seams of star-metal in it.
+// Mid: slabs of black glass as big as houses, flung up and frozen at angles,
+// their facets catching violet and cyan, lumps of star-metal wedged between.
+// At night the seams and the metal glow.
+function starfall(seed, near) {
+  const rng = new SeededRandom(seed);
+  const n = pnoise(seed);
+  const b = buffer(), glow = buffer();
+  const rock = near ? [0x05050c, 0x0c0c1a, 0x16142a, 0x22203c, 0x302c52] : [0x1c1a34, 0x262444, 0x322e56, 0x423c6c, 0x58508a];
+  const edge = edgeFn(rng, near ? 104 : 180, near ? 28 : 20);
+  for (let y = 0; y < SIDE_H; y++) {
+    const e = edge(y);
+    for (let x = 0; x < Math.min(SIDE_W, e + 1); x++) {
+      const d = e - x;
+      // Layers thrown up and tilted by the impact.
+      const tilt = y + x * 0.35 + n(x, y, 40, 50) * 14;
+      const layer = Math.floor(tilt / 11);
+      let k = 0.35 + ((layer * 37) % 7) / 18 + (n(x, y, 10, 10) - 0.5) * 0.4 + Math.min(0.35, Math.max(0, 8 - d) * 0.05);
+      let c = ramp(rock, k, x, y);
+      if (((Math.round(tilt) % 11) + 11) % 11 === 0) c = rock[0];
+      // Fractures fanning out.
+      const fr = Math.abs(Math.sin(x * 0.11 + y * 0.045 + n(x, y, 20, 30) * 3));
+      if (fr < 0.04) c = 0x020208;
+      // Star-metal seams, glowing at night.
+      if (d < 2) c = near ? 0x6a5aa8 : 0x9a8ad0;
+      b.set(x, y, c);
+    }
+  }
+  // Seams of star-metal: jagged cracks, a few per strip, glowing at night.
+  for (let i = 0; i < (near ? 7 : 10); i++) {
+    let x = rng.range(4, 150), y = rng.range(0, SIDE_H), ang = rng.range(0, TAU);
+    const len = rng.int(24, 70);
+    for (let k = 0; k < len; k++) {
+      if (x > edge(y) - 3) break;
+      b.set(x, y, k % 9 === 0 ? 0xfff2c8 : 0xe0a848); b.set(x + 1, y, 0x3a2a1a);
+      glow.set(x, y, 0xffd070);
+      if (k % 5 === 0) ang += rng.range(-0.9, 0.9);
+      x += Math.cos(ang); y += Math.sin(ang);
+      if (rng.chance(0.04)) { let bx = x, by = y; const ba = ang + rng.range(-1.4, 1.4); for (let j = 0; j < 8; j++) { b.set(bx, by, 0xc8902a); glow.set(bx, by, 0xffc050); bx += Math.cos(ba); by += Math.sin(ba); } }
+    }
+  }
+  if (near) {
+    // Slabs of black glass jutting from the edge, two facets and a lit ridge.
+    for (let i = 0; i < 10; i++) {
+      const y0 = rng.int(0, SIDE_H - 1), len = rng.int(40, 90), wd = rng.int(8, 18);
+      const ang = rng.range(-0.9, 0.5);
+      const x0 = edge(y0) - wd;
+      for (let s2 = 0; s2 < len; s2++) {
+        const k = s2 / len, hw = wd * (1 - k) + 0.6;
+        const cx = x0 + Math.cos(ang) * s2, cy = y0 + Math.sin(ang) * s2;
+        for (let t = -hw; t <= hw; t++) {
+          const px = cx - Math.sin(ang) * t, py = cy + Math.cos(ang) * t;
+          const f = t / hw;
+          let c = f < 0 ? (f < -0.7 ? 0x3a3470 : 0x1c1a38) : 0x08080f;
+          if (Math.abs(f) < 0.1) c = k > 0.8 ? 0xffffff : 0xa898f0;
+          if (f > 0.85) c = 0x2ab8c0;
+          b.set(px, py, c);
+          if (Math.abs(f) < 0.1 && (s2 % 7 === 0)) glow.set(px, py, 0x9ad8ff);
+        }
+      }
+    }
+    // Lumps of star-metal, lattice-cut and glowing.
+    for (let i = 0; i < 8; i++) {
+      const cy = rng.int(0, SIDE_H - 1), R = rng.int(5, 11), cx = Math.min(SIDE_W - R - 1, edge(cy) - R * 0.6);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const r = Math.hypot(dx, dy * 1.2);
+        if (r > R) continue;
+        const lat = (((dx + 50) % 4) === 0) || (((Math.round(dx * 0.5 + dy * 0.87) + 50) % 4) === 0);
+        let c = r > R - 1 ? 0x5a3a1a : dy < -R * 0.4 ? 0xfff2c8 : lat ? 0xd8a848 : 0xb8863a;
+        b.set(cx + dx, cy + dy, c);
+        if (r < R - 1) glow.set(cx + dx, cy + dy, dy < 0 ? 0xffe090 : 0xffb848);
+      }
+    }
+    // Green splash glass spattered over everything.
+    for (let i = 0; i < 160; i++) {
+      const y = rng.int(0, SIDE_H - 1), x = rng.int(0, Math.max(1, Math.round(edge(y)) - 2));
+      b.set(x, y, 0x3ac88a); b.set(x, y - 1, 0xc8ffd8);
+      if (i % 4 === 0) glow.set(x, y, 0x6affb0);
+    }
+  } else {
+    // Faint far sparks of star-metal.
+    for (let i = 0; i < 120; i++) {
+      const y = rng.int(0, SIDE_H - 1), x = rng.int(0, Math.max(1, Math.round(edge(y)) - 2));
+      b.set(x, y, 0xfff0c0); glow.set(x, y, 0xffe0a0);
+    }
+  }
+  return { base: b, glow };
+}
+
+const PAINT = { cascade, monastery, moss, reef, starfall };
 
 // Builds `far_side_<biome>_<layer>_<side>` (+ `_glow`, `_water`) textures once.
 export function buildFarSideTextures(scene) {
-  if (scene.textures.exists('far_side_moss_mid_r')) return;
+  if (scene.textures.exists('far_side_starfall_mid_r')) return;
   for (const [id, fn] of Object.entries(PAINT)) {
     ['back', 'mid'].forEach((layer, li) => {
       ['l', 'r'].forEach((side, si) => {

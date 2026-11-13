@@ -316,6 +316,171 @@ export const WALL_OVERLAYS = {
     if (d < w) p.c = d < w - 1 ? (p.x < cx ? 0x8a6a40 : 0x4a3220) : 0x2a1c10;
     else if (d < w + 1) p.c = lerpColor(p.c, pal.rock[0], 0.5);
   },
+  // The Fossil Reef: limestone that was a seabed. Soft tide-line bands of
+  // pink, sand and sea green run across it, shell beds speckle it, and
+  // here and there sits a coral head: a brain coral's winding grooves or a
+  // cluster of organ-pipe tubes, each lit from above.
+  reefbeds(p) {
+    const { pal } = p;
+    if (p.dEdge < 2) return;
+    const wob = p.painter.ice(p.x * 0.02, p.wy * 0.004) * 14;
+    const band = Math.floor((p.wy + wob) / 7);
+    const tone = ((band % 9) + 9) % 9;
+    if (tone === 0) p.c = lerpColor(p.c, pal.accentA, 0.22);
+    else if (tone === 3) p.c = lerpColor(p.c, pal.accentB, 0.16);
+    else if (tone === 5) p.c = lerpColor(p.c, pal.rock[4], 0.14);
+    else if (tone === 7 && bayer(p.x, p.wy) < 0.5) p.c = lerpColor(p.c, pal.rock[1], 0.18);
+    // A dark hairline where one bed sits on the next.
+    if (((p.wy + Math.round(wob)) % 7 + 7) % 7 === 0 && tone % 3 === 0 && !p.seam) p.c = lerpColor(p.c, pal.rock[0], 0.35);
+    if (p.seam) return;
+    // Shell beds: little fans of white shell, a dark mouth under each.
+    if (tone >= 6) {
+      const sx = Math.floor(p.x / 5), sy = Math.floor(p.wy / 4);
+      const hs = hashInts(sx, sy, 131);
+      if (hs % 11 === 0) {
+        const cx = sx * 5 + 2, cy = sy * 4 + 1, dx = p.x - cx, dy = p.wy - cy;
+        if (dy === 0 && Math.abs(dx) <= 1) p.c = lerpColor(pal.accentC, pal.rock[3], 0.4);
+        else if (dy === -1 && dx === 0) p.c = lerpColor(pal.accentC, pal.accentA, 0.5);
+        else if (dy === 1 && Math.abs(dx) <= 1) p.c = lerpColor(pal.rock[1], p.c, 0.4);
+      }
+    }
+    // Coral heads.
+    const C = 52, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    const hsh = hashInts(gx, gy, 137);
+    if (hsh % 4) return;
+    const cx = gx * C + 10 + (hsh >> 3) % (C - 20), cy = gy * C + 10 + (hsh >> 9) % (C - 20);
+    const R = 6 + (hsh >> 14) % 5;
+    const dx = p.x - cx, dy = p.wy - cy;
+    const d = Math.sqrt(dx * dx + dy * dy * 1.4);
+    if (d > R + 1) return;
+    if (d > R) { p.c = lerpColor(pal.rock[0], p.c, 0.3); return; }
+    const top = dy < -R * 0.3, under = dy > R * 0.5;
+    if ((hsh >> 18) % 2) {
+      // Brain coral: grooves winding over the dome.
+      const g = Math.sin(dx * 0.9 + Math.sin(dy * 0.7 + (hsh % 7)) * 2.2 + dy * 0.35);
+      const base = (hsh >> 20) % 2 ? pal.accentA : lerpColor(pal.accentB, pal.rock[3], 0.3);
+      p.c = g > 0.35 ? lerpColor(base, 0xffffff, top ? 0.35 : 0.12) : g < -0.5 ? lerpColor(base, pal.rock[0], 0.55) : base;
+      if (under) p.c = lerpColor(p.c, pal.rock[0], 0.35);
+    } else {
+      // Organ-pipe coral: round tube mouths, a dark hole in each.
+      const tx = ((dx % 4) + 4) % 4, ty = ((dy + (Math.floor(dx / 4) % 2) * 2) % 4 + 4) % 4;
+      const base = lerpColor(pal.accentA, pal.accentC, 0.25);
+      p.c = tx === 1 && ty === 1 ? lerpColor(pal.rock[0], pal.accentA, 0.25) : ty === 0 ? lerpColor(base, 0xffffff, 0.35) : tx === 3 ? lerpColor(base, pal.rock[1], 0.4) : base;
+      if (under) p.c = lerpColor(p.c, pal.rock[0], 0.3);
+    }
+  },
+  // Ammonites: stone spirals in the reef rock, the coil ribbed and lit on
+  // top, the sutures between chambers drawn in dark; one in three shows the
+  // fire of ammolite, red through gold to green along the whorl.
+  ammonites(p) {
+    const { pal } = p;
+    if (p.dEdge < 6 || p.seam) return;
+    const C = 84, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    const hsh = hashInts(gx, gy, 139);
+    if (hsh % 5 > 1) return;
+    const R = 5 + (hsh >> 4) % 8;
+    const cx = gx * C + R + 4 + (hsh >> 8) % (C - R * 2 - 8), cy = gy * C + R + 4 + (hsh >> 13) % (C - R * 2 - 8);
+    const dx = p.x - cx, dy = p.wy - cy;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r > R + 1.2) return;
+    if (r > R) { p.c = lerpColor(pal.rock[0], p.c, 0.45); return; }
+    const flip = (hsh >> 17) % 2 ? 1 : -1;
+    const a = Math.atan2(dy, dx * flip);
+    // A log spiral: how far round the coil this pixel is.
+    const b = 0.19, t = Math.log(Math.max(0.6, r) / (R * 0.06)) / b;
+    const u = (t - a) / (Math.PI * 2);
+    const f = u - Math.floor(u);
+    const fire = (hsh >> 19) % 5 === 0;
+    let c;
+    if (f < 0.14) c = lerpColor(pal.rock[0], pal.rock[1], 0.4);
+    else {
+      const rib = Math.sin(a * (10 + Math.round(r))) > 0.55;
+      const lightK = -(dx * 0.5 + dy) / (R + 1);
+      c = fire ? [0xd8402a, 0xf08a3a, 0xf2c252, 0x8ad86a, 0x3ab8a0][Math.max(0, Math.min(4, Math.floor(((a + Math.PI) / (Math.PI * 2)) * 5 + u * 0.7) % 5))] : lerpColor(pal.rock[3], pal.accentC, 0.35);
+      // Stone, half sunk: the shell's colour only partly over the rock's own.
+      c = lerpColor(c, pal.rock[2], fire ? 0.35 : 0.45);
+      c = lerpColor(c, lightK > 0 ? 0xffffff : pal.rock[0], Math.min(0.45, Math.abs(lightK) * 0.4));
+      if (rib) c = lerpColor(c, 0xffffff, 0.18);
+      if (f > 0.9) c = lerpColor(c, pal.rock[1], 0.35);
+      // Wavy sutures between the chambers.
+      if (Math.abs(Math.sin(a * 7 + Math.sin(f * 18) * 0.6)) < 0.08 && f > 0.2) c = lerpColor(c, pal.rock[1], 0.5);
+    }
+    if (r < 1.2) c = pal.rock[0];
+    p.c = c;
+  },
+  // The Starfall Crater: rays of white shattered rock thrown out by the
+  // impact streak across the black glass, with green beads of splash glass
+  // and a glassy sheen on every lit face.
+  impactrays(p) {
+    const { pal } = p;
+    if (p.dEdge < 2) return;
+    // Glass sheen: long diagonal highlights on the lit faces.
+    if (p.lit && ((p.x + p.wy * 2) % 19 === 0 || (p.x + p.wy * 2 + 1) % 19 === 0) && p.ov > 0.45) p.c = lerpColor(p.c, pal.accentB, 0.4);
+    // Rays: each stretch of wall has its own fan of them, from a point far off.
+    const region = Math.floor(p.wy / 260);
+    const hr = hashInts(region, 0, 149);
+    const ox = (hr % 2 ? -1 : 1) * (400 + (hr >> 3) % 300), oy = region * 260 - 300 - (hr >> 9) % 200;
+    const a = Math.atan2(p.wy - oy, p.x - ox);
+    const rayN = 34;
+    const k = (a / (Math.PI * 2)) * rayN * 6;
+    const ray = Math.floor(k);
+    const fr = k - ray;
+    const on = hashInts(ray, region, 151) % 4 === 0;
+    const width = 0.18 + p.painter.ice(p.x * 0.05, p.wy * 0.05) * 0.4;
+    if (on && Math.abs(fr - 0.5) < width * 0.5) {
+      const core = Math.abs(fr - 0.5) < width * 0.18;
+      const broken = p.painter.ice(p.x * 0.3, p.wy * 0.3);
+      if (broken > 0.32) p.c = lerpColor(p.c, core ? 0xe8ecf8 : 0x9aa4c0, core ? 0.75 : 0.45 + (bayer(p.x, p.wy) < 0.4 ? 0.15 : 0));
+      if (broken > 0.32 && (hashInts(p.x, p.wy, 157) & 31) === 0) p.c = pal.rock[0];
+    }
+    // Splash glass: green beads, a bright point on each.
+    if (!p.seam && p.dEdge > 3) {
+      const sx = Math.floor(p.x / 9), sy = Math.floor(p.wy / 9);
+      const hs = hashInts(sx, sy, 163);
+      if (hs % 11 === 0) {
+        const cx = sx * 9 + 2 + (hs >> 4) % 5, cy = sy * 9 + 2 + (hs >> 8) % 5;
+        const dx = p.x - cx, dy = p.wy - cy;
+        if (dx * dx + dy * dy <= 2) p.c = dx < 0 && dy < 0 ? 0xd8ffe8 : dy > 0 ? lerpColor(pal.accentA, pal.rock[0], 0.4) : pal.accentA;
+        else if (dy < -1 && dy > -4 && dx === 0) p.c = lerpColor(pal.accentA, p.c, 0.5);
+      }
+    }
+  },
+  // Star-metal: pale gold seams cracking through the glass, and here and
+  // there a lump of meteoric iron showing its crossed lattice (three sets of
+  // lines at sixty degrees), lit along its top. Sparks of white in the rock.
+  starore(p) {
+    const { pal } = p;
+    if (p.dEdge < 3) return;
+    // Seams only in some stretches of the rock, thin and broken like cracks.
+    const zone = p.painter.ice(p.x * 0.008 + 40, p.wy * 0.006);
+    if (zone > 0.6 && !p.seam) {
+      const v = p.painter.ice(p.x * 0.07, p.wy * 0.05);
+      const dv = Math.abs(v - 0.5);
+      const broken = p.painter.ice(p.x * 0.4, p.wy * 0.4) > 0.35;
+      if (dv < 0.007 && broken) p.c = dv < 0.003 ? 0xfff2c8 : 0xd8a84a;
+      else if (dv < 0.016 && broken) p.c = lerpColor(p.c, 0x4a3a2a, 0.4);
+    }
+    const C = 72, gx = Math.floor(p.x / C), gy = Math.floor(p.wy / C);
+    const hsh = hashInts(gx, gy, 167);
+    if (hsh % 7 === 0 && !p.seam) {
+      const cx = gx * C + 14 + (hsh >> 3) % (C - 28), cy = gy * C + 14 + (hsh >> 8) % (C - 28);
+      const rx = 5 + (hsh >> 12) % 4, ry = 4 + (hsh >> 15) % 3;
+      const dx = p.x - cx, dy = p.wy - cy;
+      const wob = (p.painter.ice(p.x * 0.3, p.wy * 0.3) - 0.5) * 0.5;
+      const e = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) + wob;
+      if (e < 1) {
+        const l1 = ((dx + 100) % 4 + 4) % 4 === 0;
+        const l2 = ((Math.round(dx * 0.5 + dy * 0.866) + 100) % 4 + 4) % 4 === 0;
+        const l3 = ((Math.round(dx * 0.5 - dy * 0.866) + 100) % 4 + 4) % 4 === 0;
+        let c = 0x7a8298;
+        if (l1 || l2 || l3) c = (l1 && l2) || (l2 && l3) ? 0xd8dcea : 0xa8b0c4;
+        if (dy < -ry * 0.55) c = lerpColor(c, 0xffffff, 0.35);
+        if (dy > ry * 0.5) c = lerpColor(c, pal.rock[0], 0.45);
+        p.c = c;
+      } else if (e < 1.35) p.c = lerpColor(p.c, 0x3a2a24, 0.6);
+    }
+    if ((hashInts(p.x, p.wy, 173) & 1023) < 3) p.c = (hashInts(p.x, p.wy, 179) & 1) ? 0xffffff : pal.accentB;
+  },
   // Glowing mineral veins and scattered glints.
   veins(p) {
     const { pal } = p;

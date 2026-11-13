@@ -13,6 +13,8 @@ import { SeededRandom } from '../src/utils/seededRandom.js';
 import { EVENTS, EVENT_IDS, RESCUE, runEvent, avalancheAt, eclipseStretch } from '../src/data/events.js';
 import { BOONS, SYNERGIES, boonEffects } from '../src/data/boons.js';
 import { DARES } from '../src/data/dares.js';
+import { Tide, TIDE } from '../src/systems/mechanics/Tide.js';
+import { Starfall, starGems } from '../src/systems/mechanics/Starfall.js';
 
 const route = (type, notes) => ({ type, notes: notes.map((dir) => ({ dir, gap: 1 })), tags: [], gripCost: 6 });
 
@@ -150,4 +152,40 @@ test('overhangs: some segments jut out over you, and the rest of the mountain is
     }
   }
   assert.ok(roofs / segs > 0.05 && roofs / segs < 0.3, `${roofs} of ${segs}`);
+});
+
+test('ghost tide: comes in and goes out; at high tide climbs cost less and ammonites appear', () => {
+  const t = new Tide(new SeededRandom(4));
+  const seen = new Set();
+  for (let i = 0; i < 4000; i++) { const e = t.update(16, 1); if (e) seen.add(e); }
+  assert.ok(seen.has('rising') && seen.has('falling'));
+  // Force high tide.
+  t.t = TIDE.outMs + TIDE.riseMs + 10; t.update(16, 1);
+  assert.ok(t.high);
+  let shells = 0;
+  for (let i = 0; i < 20; i++) {
+    const rs = [route('normal', ['L', 'U', 'R', 'U'])];
+    t.decorateRoutes(rs);
+    assert.ok(rs[0].tide && rs[0].tags.includes('TIDE') && rs[0].gripCost < 6);
+    if (rs[0].notes.some((n) => n.shell)) shells++;
+  }
+  assert.ok(shells > 4 && shells < 18, `${shells} shells`);
+  const c = new ComboSystem({ notes: [{ dir: 'L', gap: 1, shell: true }], beatMs: 500, perfectMs: 60, goodMs: 120, minGapMs: 260, leadInMs: 0 });
+  assert.ok(c.notes[0].shell);
+});
+
+test('starfall: a star lands on one climbing route now and then, and pays by streak', () => {
+  const s = new Starfall(new SeededRandom(8));
+  let ev = null;
+  for (let i = 0; i < 2000 && !ev; i++) ev = s.update(16, 1);
+  assert.equal(ev, 'ready');
+  const rs = [route('safe', ['L', 'U']), route('normal', ['L', 'U', 'R']), route('risky', ['L', 'U', 'R', 'L'])];
+  rs.forEach((r) => { r.target = { kind: 'hold' }; });
+  s.decorateRoutes(rs);
+  assert.equal(rs.filter((r) => r.star).length, 1);
+  assert.ok(!rs[0].star);
+  assert.ok(rs.find((r) => r.star).notes.every((n) => n.star));
+  assert.equal(starGems(0), 1);
+  assert.ok(starGems(30) > starGems(8));
+  assert.equal(starGems(999), 4);
 });

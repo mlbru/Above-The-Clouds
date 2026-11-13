@@ -7,6 +7,7 @@ import { ROUTE_COLORS } from '../config/balanceConfig.js';
 import { darkAlpha } from '../systems/mechanics/Darkness.js';
 import { gearTicks } from '../systems/mechanics/Gears.js';
 import { Audio } from '../systems/AudioSystem.js';
+import { TIDE } from '../systems/mechanics/Tide.js';
 import { BELLS } from '../systems/mechanics/Bells.js';
 
 const PX_PER_MS = 0.085;
@@ -382,11 +383,24 @@ export class ComboPrompt {
           wet = 1 - Math.abs(x - curtain.x) / (curtain.w / 2);
           alpha *= 0.75 + 0.25 * Math.sin(t / 70 + note.index * 2.1);
         }
-        const wobX = wet ? Math.round(Math.sin(t / 95 + note.index * 1.7) * 1.5 * wet) : 0;
+        // The ghost tide: far out the water bends the light, so a note
+        // wavers and fades; it clears as it nears the line.
+        let murk = 0;
+        if (this.route.tide && !this.minAlpha) {
+          murk = Math.max(0, Math.min(1, ((note.time - now) - TIDE.clearMs) / 520));
+          alpha *= 1 - murk * 0.55;
+        }
+        const wobX = (wet ? Math.round(Math.sin(t / 95 + note.index * 1.7) * 1.5 * wet) : 0) + (murk ? Math.round(Math.sin(t / 160 + note.index * 2.9) * 3 * murk) : 0);
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x) + wobX).setAlpha(alpha);
-        it.big.setY(vy + (note.swap ? swapY : 0) + (wet ? Math.round(Math.sin(t / 80 + note.index * 2.3) * 3 * wet) : 0));
+        it.big.setY(vy + (note.swap ? swapY : 0) + (wet ? Math.round(Math.sin(t / 80 + note.index * 2.3) * 3 * wet) : 0) + (murk ? Math.round(Math.sin(t / 210 + note.index * 1.3) * 2.5 * murk) : 0));
+        // Ammonites and fallen stars sit behind their arrows.
+        if (visible && alpha > 0.1 && note.shell) this.drawShell(g, Math.round(x) + wobX, vy, t, isCur, alpha);
+        if (visible && alpha > 0.1 && note.star) this.drawStarNote(g, Math.round(x) + wobX, vy, t, isCur, alpha, note.index);
         let tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.echo ? (isCur ? 0xfff0a8 : BELL_TINT) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
         if (wet) tint = lerpColor(tint, 0xd8f8ff, 0.35 * wet);
+        if (murk) tint = lerpColor(tint, 0x8ae8e0, 0.5 * murk);
+        if (note.star && !isCur) tint = lerpColor(tint, 0xfff0b0, 0.5);
+        if (note.shell && !isCur) tint = lerpColor(tint, 0xffd8c0, 0.4);
         it.big.setTint(tint);
         // A vine's next note sits in a ring of leaves.
         if (visible && alpha > 0.1 && note.index > 0 && c.notes[note.index - 1].vine) this.drawLeaves(g, Math.round(x), TRACK_Y, t, note.index);
@@ -609,6 +623,36 @@ export class ComboPrompt {
   // ---- The Moss Cathedral: a vine from a held note to the next one. A stem
   // that wanders up and down with leaves along it; the part you are holding
   // glows, and it curls up into the next arrow where it bends.
+  // ---- The Fossil Reef: an ammonite note sits in a stone spiral, coral
+  // and cream, that turns slowly when it is the next to hit.
+  drawShell(g, x, y, t, isCur, alpha) {
+    const spin = isCur ? t / 900 : 0;
+    for (let k = 0; k < 46; k++) {
+      const a = k * 0.32 + spin, r = 1.2 * Math.exp(0.065 * k);
+      if (r < 5) continue;
+      const px = Math.round(x + Math.cos(a) * r), py = Math.round(y + Math.sin(a) * r);
+      g.fillStyle(k % 3 === 0 ? 0xfff0dc : 0xe8806a, (isCur ? 0.95 : 0.7) * alpha).fillRect(px, py, 1, 1);
+    }
+    g.fillStyle(0x2a1418, 0.35 * alpha).fillCircle(x, y, 7);
+  }
+
+  // ---- The Starfall Crater: a star note burns like a falling star, its
+  // tail trailing behind it, brighter and longer the longer your streak.
+  drawStarNote(g, x, y, t, isCur, alpha, i) {
+    const streak = (this.scene.run && this.scene.run.streak) || 0;
+    const k = Math.min(1, 0.25 + streak / 24);
+    const len = Math.round(10 + k * 22);
+    for (let j = 0; j < len; j += 2) {
+      const a = (1 - j / len) * 0.75 * k * alpha;
+      g.fillStyle(j < 6 ? 0xffffff : j < 14 ? 0xfff0b0 : 0xffa860, a).fillRect(x + 7 + j, y - 1 + ((j + i) % 5 === 0 ? 1 : 0), 2, j < 6 ? 2 : 1);
+    }
+    const tw = 0.7 + 0.3 * Math.sin(t / 90 + i * 2);
+    const r = Math.round(9 + k * 4 * tw);
+    g.fillStyle(0xfff0b0, 0.5 * k * tw * alpha).fillRect(x - r, y, r * 2 + 1, 1).fillRect(x, y - r, 1, r * 2 + 1);
+    g.fillStyle(0xffd870, 0.16 * k * alpha).fillCircle(x, y, 9 + k * 3);
+    if (isCur) g.fillStyle(0xffffff, 0.25 * tw * alpha).fillCircle(x, y, 6);
+  }
+
   drawVine(g, note, x, clipR, t) {
     const x0 = Math.max(note.holding ? HIT_X : TRACK_X, Math.round(x));
     const x1 = Math.min(clipR, Math.round(x + note.holdMs * PX_PER_MS));

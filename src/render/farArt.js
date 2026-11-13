@@ -8,6 +8,7 @@ import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
 import { lerpColor } from '../utils/color.js';
 import { SeededRandom } from '../utils/seededRandom.js';
 import { shade, makeRamp, stroke, poly } from './pixelKit.js';
+import { buildReefStarTextures } from './reefStarArt.js';
 
 const OUT = 0x16100c;
 
@@ -426,6 +427,7 @@ export function buildFarTextures(scene) {
   addFrames(scene, 'far_keeper', [0, 1].map(keeperFrame));
   add(scene, 'far_tripod', tripodPot());
   add(scene, 'far_rack', dryingRack());
+  buildReefStarTextures(scene);
 }
 
 export { lerpColor, makeRamp };

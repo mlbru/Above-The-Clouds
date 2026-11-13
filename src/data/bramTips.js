@@ -36,6 +36,9 @@ export const BRAM_TIPS = {
   spray: 'SPRAY! READ THE NOTES THROUGH THE WATER.\nPERFECTS PAINT A RAINBOW: A FREE CLIMB.',
   bells: 'WATCH THE BELLS LIGHT THE ARROWS UP, THEN\nCLIMB THE BLANK BELLS FROM MEMORY.',
   vines: 'HOLD THE ARROW ALONG THE VINE, THEN PRESS\nTHE NEXT ONE WHERE IT BENDS.',
+  tide: 'THE GHOST TIDE! IN THE WATER YOU FLOAT, BUT\nIT BENDS THE ARROWS: READ THEM NEAR THE LINE.',
+  shell: 'AN AMMONITE NOTE! HIT IT PERFECT AND THE\nFOSSIL GIVES YOU A GEM.',
+  star: 'A STAR CAME DOWN ON THAT ROUTE. CLIMB IT ON\nA LONG STREAK: THE STAR-METAL PAYS MORE.',
   roof: 'AN OVERHANG! THE NOTES DRIP DOWN FROM THE\nROCK ABOVE. HANGING HERE TIRES YOU FASTER.',
   cave: 'SEE THAT DARK HOLE? A TRAVERSE LEADS TO A\nHIDDEN CAVE. NO HEIGHT, BUT WHO KNOWS WHAT IS IN IT.',
   tea: 'THE MONK POURS YOU TEA. YOUR NEXT CLIMB\nCOSTS NO GRIP.',
@@ -43,4 +46,4 @@ export const BRAM_TIPS = {
 };
 
 // Route tags (from the segment generator) that have their own tip.
-export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', ROPED: 'roped', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears', SPRAY: 'spray', BELLS: 'bells', VINES: 'vines', RESCUE: 'rescue' };
+export const TAG_TIPS = { OFFBEAT: 'offbeat', HOLD: 'hold', GUST: 'gust', BLIND: 'blind', MIRROR: 'mirror', DOUBLE: 'double', ROLL: 'roll', ROPED: 'roped', SWING: 'swing', SWARM: 'swarm', GEARS: 'gears', SPRAY: 'spray', BELLS: 'bells', VINES: 'vines', TIDE: 'tide', AMMONITE: 'shell', 'STAR-METAL': 'star', RESCUE: 'rescue' };

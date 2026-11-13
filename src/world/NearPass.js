@@ -14,6 +14,7 @@ const KIND = {
   obsidian: ['bats'], crystal: ['shards', 'cloud'], clockwork: ['steam'], storm: ['cloud'], aurora: ['snow', 'cloud'],
   bones: ['embers'], dragon: ['embers'], volcano: ['embers'], sky: ['cloud'],
   cascade: ['spray', 'crane'], monastery: ['lanterns', 'petals'], moss: ['spores', 'leaves'],
+  reef: ['fish', 'bubbles'], starfall: ['meteor', 'stardust'],
 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -74,6 +75,10 @@ export class NearPass {
     if (kind === 'petals') { c.ms = 2600; c.bits = Array.from({ length: 22 }, () => ({ x: rnd(-60, W + 60), y: rnd(-20, H * 0.55), s: rnd(2, 4), v: rnd(0.7, 1.3), ph: rnd(0, 6) })); }
     if (kind === 'spores') { c.ms = 4200; c.bits = Array.from({ length: 30 }, () => ({ x: rnd(0, W), y: rnd(H * 0.1, H * 0.7), s: rnd(1, 3), v: rnd(0.5, 1.2), ph: rnd(0, 6) })); }
     if (kind === 'lanterns') { c.ms = 5200; c.bits = Array.from({ length: 4 }, (_, i) => ({ x: rnd(30, W - 30), y0: H * 0.72 + i * 34 + rnd(0, 20), s: rnd(0.8, 1.4), ph: rnd(0, 6) })); }
+    if (kind === 'fish') { c.ms = 3400; c.bits = Array.from({ length: 26 }, (_, i) => ({ o: rnd(0, 0.3), dy: Math.sin(i * 0.9) * 26 + rnd(-10, 10), s: rnd(0.7, 1.4), ph: rnd(0, 6) })); }
+    if (kind === 'bubbles') { c.ms = 3600; c.bits = Array.from({ length: 24 }, () => ({ x: rnd(10, W - 10), y0: H * 0.7 + rnd(0, 120), s: rnd(1.5, 5), v: rnd(0.6, 1.3), ph: rnd(0, 6) })); }
+    if (kind === 'meteor') { c.ms = 1500; c.y = rnd(H * 0.05, H * 0.2); c.sparks = []; }
+    if (kind === 'stardust') { c.ms = 3800; c.bits = Array.from({ length: 50 }, () => ({ x: rnd(-40, W + 40), y: rnd(-40, H * 0.4), s: rnd(1, 3), v: rnd(0.5, 1.2), ph: rnd(0, 6) })); }
     if (kind === 'steam') { c.ms = 2600; c.bits = Array.from({ length: 7 }, (_, i) => ({ o: i * 0.06, dy: rnd(-14, 14), r: rnd(16, 34) })); }
     this.cur = c;
   }
@@ -254,6 +259,69 @@ export class NearPass {
       const tw = 0.6 + 0.4 * Math.sin(c.t / 250 + b.ph), x = Math.round(b.x), y = Math.round(b.y);
       a.fillStyle(0xb8ff6a, 0.12 * fade * tw).fillCircle(x, y, b.s * 4);
       a.fillStyle(0xe8ffb0, 0.7 * fade * tw).fillRect(x - Math.floor(b.s / 2), y - Math.floor(b.s / 2), Math.ceil(b.s), Math.ceil(b.s));
+    }
+  }
+
+  // A shoal of ghost fish from the old sea swims right past the lens: pale,
+  // see-through, turning together, a glimmer of light along their backs.
+  fish(g, a, c, k) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 2.2);
+    const lead = this.across(c, k, 160);
+    for (const b of c.bits) {
+      const x = Math.round(lead - c.dir * b.o * 300 + Math.sin(c.t / 300 + b.ph) * 6);
+      const y = Math.round(c.y + b.dy + Math.sin(c.t / 220 + b.o * 20) * 5);
+      if (x < -30 || x > W + 30) continue;
+      const s = b.s, len = Math.round(16 * s), ht = Math.max(2, Math.round(5 * s));
+      const flick = Math.sin(c.t / 70 + b.ph) > 0;
+      const head = c.dir > 0 ? x + len / 2 : x - len / 2, tail = c.dir > 0 ? x - len / 2 : x + len / 2;
+      a.fillStyle(0x6af0d8, 0.08 * fade).fillEllipse(x, y, len * 1.6, ht * 3);
+      g.fillStyle(0xd8fff4, 0.38 * fade).fillEllipse(x, y, len, ht);
+      g.fillStyle(0xffffff, 0.5 * fade).fillRect(Math.round(Math.min(head, x)), y - Math.ceil(ht / 2), Math.round(len / 2), 1);
+      g.fillStyle(0xb8f0e8, 0.4 * fade).fillTriangle(tail, y, tail - c.dir * ht * 1.2, y - ht * (flick ? 1 : 0.4), tail - c.dir * ht * 1.2, y + ht * (flick ? 0.4 : 1));
+      g.fillStyle(0x1a4a4a, 0.6 * fade).fillRect(Math.round(head - c.dir * 3), y - 1, 1, 1);
+    }
+  }
+
+  // Bubbles of the ghost sea wobbling up past the lens, rimmed with light.
+  bubbles(g, a, c, k, dt) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 2);
+    for (const b of c.bits) {
+      const y = Math.round(b.y0 - k * H * 0.9 * b.v), x = Math.round(b.x + Math.sin(c.t / 260 + b.ph) * 4);
+      if (y > H * 0.7 || y < -10) continue;
+      g.lineStyle(1, 0xd8fff8, 0.6 * fade).strokeCircle(x, y, b.s);
+      g.fillStyle(0xffffff, 0.8 * fade).fillRect(x - Math.round(b.s * 0.5), y - Math.round(b.s * 0.5), 1, 1);
+      a.fillStyle(0x6af0d8, 0.06 * fade).fillCircle(x, y, b.s * 2.5);
+    }
+  }
+
+  // A star falling close by: a white-hot head with a long burning tail
+  // across the top of the view, shedding sparks.
+  meteor(g, a, c, k, dt) {
+    const x = this.across(c, k, 200), y = c.y + k * 120;
+    const dx = c.dir, ang = Math.atan2(120, (W + 400) * dx);
+    const tx = -Math.cos(ang), ty = -Math.sin(ang);
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 3);
+    for (let j = 0; j < 90; j++) {
+      const w = Math.max(1, Math.round(6 - j * 0.07));
+      const al = (1 - j / 90) * fade;
+      a.fillStyle(j < 8 ? 0xffffff : j < 30 ? 0xfff0b0 : 0xff9a5a, al * 0.8).fillRect(Math.round(x + tx * j * 2.2), Math.round(y + ty * j * 2.2) - Math.floor(w / 2), 2, w);
+    }
+    a.fillStyle(0xfff6d8, 0.35 * fade).fillCircle(Math.round(x), Math.round(y), 16);
+    a.fillStyle(0xffffff, 0.9 * fade).fillCircle(Math.round(x), Math.round(y), 5);
+    if (Math.random() < 0.6) c.sparks.push({ x, y, vx: (Math.random() - 0.5) * 0.08 + tx * 0.05, vy: Math.random() * 0.08, t: 0 });
+    c.sparks = c.sparks.filter((s) => (s.t += dt) < 600);
+    for (const s of c.sparks) { s.x += s.vx * dt; s.y += s.vy * dt; a.fillStyle(0xffd890, 1 - s.t / 600).fillRect(Math.round(s.x), Math.round(s.y), 1, 1); }
+  }
+
+  // Star dust sifting down, every grain twinkling.
+  stardust(g, a, c, k, dt) {
+    const fade = Math.min(1, Math.sin(k * Math.PI) * 1.8);
+    for (const b of c.bits) {
+      b.y += dt * 0.025 * b.v; b.x += Math.sin(c.t / 500 + b.ph) * 0.2 - 0.03 * dt * c.dir;
+      if (b.y > H * 0.66) continue;
+      const tw = Math.max(0, Math.sin(c.t / 120 + b.ph * 3)), x = Math.round(b.x), y = Math.round(b.y);
+      a.fillStyle(0xfff0c8, fade * (0.3 + tw * 0.7)).fillRect(x, y, 1, 1);
+      if (tw > 0.85 && b.s > 2) a.fillStyle(0xb8e0ff, fade * 0.8).fillRect(x - 2, y, 5, 1).fillRect(x, y - 2, 1, 5);
     }
   }
 

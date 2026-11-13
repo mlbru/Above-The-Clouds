@@ -49,6 +49,9 @@ export class ComboSystem {
         vine: !!spec.vine,
         vineEnd: !!spec.vineEnd,
         echo: !!spec.echo,
+        // The Fossil Reef's ammonites and the Starfall Crater's star notes.
+        shell: !!spec.shell,
+        star: !!spec.star,
         chord: spec.chord || null,
         pressed: null,
         hidden: !!spec.hidden,

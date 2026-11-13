@@ -428,6 +428,66 @@ export const BIOMES = {
     sea: 0xd0e8b0,
     overcast: 0.35,
   },
+  reef: {
+    id: 'reef',
+    name: 'THE FOSSIL REEF',
+    far: true,
+    from: 2392,
+    // An old seabed pushed up into the sky: pale limestone in coral pinks,
+    // sea greens and sand, shell beds, ammonite spirals and tide-line bands.
+    rock: [0x2a1e22, 0x4a3438, 0x7a5a58, 0xb08a7c, 0xe2c8b0],
+    outline: 0x140c10,
+    accentA: 0xe0705a, accentB: 0x6ac8b0, accentC: 0xfff0d8,
+    holdTint: 0xf0dcc8,
+    windowScale: 0.82, costMultiplier: 1.3, drainMultiplier: 1.3,
+    hazards: { loose: 0.1, icy: 0 },
+    weather: { wind: 0.4, snow: 0, leaves: 0, mist: 0.25 },
+    ambience: { birds: 0.5, stream: 0, wind: 0.5 },
+    music: { root: 53, scale: [0, 2, 4, 7, 11], instrument: 'marimba', tempo: 80, octave: 12, motif: [[0, 1], [4, 0.5], [7, 0.5], [11, 1], [7, 1], [4, 0.5], [2, 0.5], [0, 2]] },
+    wall: { overlays: ['reefbeds', 'ammonites'], ledgeTop: 'accentB', featureStrata: false, edge: 'coral' },
+    decor: { rocks: 'decor_shells', piton: 'decor_shells', icicles: 'decor_seafan' },
+    rest: { hut: 0.05, viewpoints: ['THE DRY LAGOON', 'AMMONITE SHELF', 'TIDE-LINE TERRACE', 'THE OLD SHORE'] },
+    backdrop: {
+      sky: { top: 0x4a9ad0, bottom: 0xfff0e0, amount: 0.4 },
+      layers: [
+        { key: 'bg_reef_terraces', paint: 'reefTerraces', seed: 431, h: 150, E: 2692, f: 0.1, haze: 0.14, fill: 0xf0dccc, depth: DEPTH.far + 6 },
+        { key: 'bg_reef_heads', paint: 'reefHeads', seed: 441, h: 130, E: 2542, f: 0.16, haze: 0.05, fill: 0x4a3036, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'tide',
+    sea: 0xb8e8e0,
+  },
+  starfall: {
+    id: 'starfall',
+    name: 'THE STARFALL CRATER',
+    far: true,
+    from: 2565,
+    // The rim of a crater where a star came down: black-green glass, white
+    // rays of shattered rock, and star-metal glowing in the seams. The sky
+    // here stays a deep violet, the stars out even by day.
+    rock: [0x08080e, 0x121424, 0x1e2438, 0x343c56, 0x5a6684],
+    outline: 0x020206,
+    accentA: 0x3ac88a, accentB: 0xb8e0ff, accentC: 0xfff6d8,
+    holdTint: 0xb8c4e0,
+    windowScale: 0.8, costMultiplier: 1.35, drainMultiplier: 1.3,
+    hazards: { loose: 0.08, icy: 0 },
+    weather: { wind: 0.3, snow: 0, leaves: 0, mist: 0.15 },
+    ambience: { birds: 0, stream: 0, wind: 0.6 },
+    music: { root: 49, scale: [0, 2, 3, 7, 10], instrument: 'glass', tempo: 74, octave: 24, motif: [[0, 1.5], [7, 0.5], [10, 1], [7, 0.5], [3, 0.5], [2, 1], [0, 2]] },
+    wall: { overlays: ['impactrays', 'starore'], ledgeTop: 'rock4', featureStrata: false, edge: 'glass' },
+    decor: { rocks: 'decor_tektite', piton: 'decor_tektite', crystals: 'decor_starmetal' },
+    rest: { hut: 0.03, viewpoints: ['THE RIM', 'STAR-METAL SEAM', 'THE BLACK GLASS', 'WHERE IT LANDED'] },
+    backdrop: {
+      sky: { top: 0x0a0820, bottom: 0x6a4a8a, amount: 0.8 },
+      layers: [
+        { key: 'bg_starfall_rim', paint: 'craterRim', seed: 451, h: 150, E: 2865, f: 0.1, haze: 0.12, fill: 0x2a2440, depth: DEPTH.far + 6 },
+        { key: 'bg_starfall_glass', paint: 'craterGlass', seed: 461, h: 130, E: 2715, f: 0.16, haze: 0.04, fill: 0x0a0a14, depth: DEPTH.far + 8 },
+      ],
+    },
+    mechanic: 'starfall',
+    sea: 0x8a7ab0,
+    overcast: 0.2,
+  },
   // Expedition themes (special: never part of the endless mountain). An
   // expedition with a `theme` uses that biome for its whole climb.
   volcano: {
@@ -526,11 +586,11 @@ export function biomeTheme() { return THEME; }
 // Order the mountain passes through. After the last entry the high biomes loop.
 // Every high biome is about 173 m long (the four below them are shorter).
 export const SEQUENCE = ['green', 'stone', 'frozen', 'clouds', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
-// The high loop starts on the Far Range: its own three biomes first, then the
+// The high loop starts on the Far Range: its own five biomes first, then the
 // old high biomes come round again (the Far Range has them too).
-export const LOOP = ['cascade', 'monastery', 'moss', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
+export const LOOP = ['cascade', 'monastery', 'moss', 'reef', 'starfall', 'hive', 'obsidian', 'crystal', 'clockwork', 'storm', 'aurora', 'bones', 'dragon'];
 export const LOOP_START = 1873;
-export const FAR_BIOMES = ['cascade', 'monastery', 'moss'];
+export const FAR_BIOMES = ['cascade', 'monastery', 'moss', 'reef', 'starfall'];
 export const LOOP_SPAN = 173;
 export const BLEND_METERS = 18;
 
@@ -602,5 +662,5 @@ export function biomeMixAt(heightMeters) {
 
 // How much of the hour's warmth each biome takes: the Green Rise stays fresh
 // and cool even at sunset; the hive and the dragon soak up every bit of gold.
-export const BIOME_WARMTH = { cascade: 0.6, monastery: 1.15, moss: 0.8, green: 0.5, stone: 0.8, frozen: 0.7, storm: 0.7, aurora: 0.75, hive: 1.15, dragon: 1.15, clockwork: 1.05 };
+export const BIOME_WARMTH = { reef: 0.9, starfall: 0.4, cascade: 0.6, monastery: 1.15, moss: 0.8, green: 0.5, stone: 0.8, frozen: 0.7, storm: 0.7, aurora: 0.75, hive: 1.15, dragon: 1.15, clockwork: 1.05 };
 export const mixWarmth = (mix) => (BIOME_WARMTH[mix.a.id] ?? 1) * (1 - mix.t) + (BIOME_WARMTH[mix.b.id] ?? 1) * mix.t;

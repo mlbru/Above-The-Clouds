@@ -15,8 +15,10 @@ import { BoneGarden } from './BoneGarden.js';
 import { Spray } from './Spray.js';
 import { Bells } from './Bells.js';
 import { Vines } from './Vines.js';
+import { Tide } from './Tide.js';
+import { Starfall } from './Starfall.js';
 
-const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, prismLight: PrismLight, storm: Storm, swing: Swing, dragonEye: DragonEye, swarm: Swarm, gears: Gears, boneGarden: BoneGarden, spray: Spray, bells: Bells, vines: Vines };
+const MECHANICS = { whiteout: Whiteout, rockfall: Rockfall, thermals: Thermals, darkness: Darkness, prismLight: PrismLight, storm: Storm, swing: Swing, dragonEye: DragonEye, swarm: Swarm, gears: Gears, boneGarden: BoneGarden, spray: Spray, bells: Bells, vines: Vines, tide: Tide, starfall: Starfall };
 
 export class BiomeMechanics {
   constructor(rng) {

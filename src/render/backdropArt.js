@@ -1114,7 +1114,223 @@ function mossRoots({ w, h, seed }) {
   return b.canvas();
 }
 
-const PAINTERS = { hiveTowers, clockTowers, boneRidge, glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils, cascadeCliffs, cascadeFalls, monasteryPillars, monasteryHalls, mossArches, mossRoots };
+// The Fossil Reef, far: an old reef lifted into mesas, flat-topped and
+// banded like a layered cake (cream, coral pink, sand), with sea arches cut
+// clean through them, stacks standing apart, a giant ammonite weathered out
+// of one cliff and scrubby sea-green growth along every top.
+function reefTerraces({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const bands = [0xf4e4d4, 0xeccab8, 0xe0b0a0, 0xf0d8c4, 0xd4a49a, 0xe8d0bc, 0xc89890];
+  // Mesas: flat tops at a few levels, steep stepped sides.
+  const top = new Array(w).fill(h);
+  const mesas = [];
+  for (let i = 0; i < 9; i++) mesas.push({ x: rng.range(0, w), half: rng.range(16, 46), y: rng.range(18, 80), step: rng.int(2, 4) });
+  for (const m of mesas) {
+    for (let dx = -Math.ceil(m.half + 30); dx <= m.half + 30; dx++) {
+      const x = ((Math.round(m.x + dx) % w) + w) % w;
+      const out = Math.max(0, Math.abs(dx) - m.half);
+      // Stepped flanks: terraces dropping away from the top.
+      const y = m.y + Math.floor(out / 8) * (6 + m.step * 2) + out * 0.3 + (noise(x * 0.2, 3) - 0.5) * 2;
+      top[x] = Math.min(top[x], y);
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    const t = Math.round(top[x]);
+    const slope = top[(x + 2) % w] - top[(x - 2 + w) % w];
+    for (let y = Math.max(0, t); y < h; y++) {
+      const d = y - t;
+      const bi = Math.floor((y + noise(x * 0.04, y * 0.02) * 6) / 5) % bands.length;
+      let c = bands[bi];
+      // Faces turned away from the light (to the right) in shade; the
+      // undercut at the foot of each band darker still.
+      if (slope < -0.6) c = lerpColor(c, 0xfff8f0, 0.25);
+      else if (slope > 0.6) c = lerpColor(c, 0x8a6a78, 0.35);
+      if ((y + Math.round(noise(x * 0.04, y * 0.02) * 6)) % 5 === 4) c = lerpColor(c, 0x8a6a78, 0.3);
+      if (d < 2) c = d === 0 ? 0x7ab89a : 0x5a9a80;
+      else if (d < 4 && noise(x * 0.5, y) > 0.45) c = 0x6aa88c;
+      // Holes worn by the old sea.
+      if (noise(x * 0.12, y * 0.12) > 0.78 && d > 6) c = lerpColor(c, 0x7a5a64, 0.45);
+      b.set(x, y, c);
+    }
+  }
+  // Sea arches: an ellipse cut clean through a mesa, a lit rim round it.
+  for (let i = 0; i < 3; i++) {
+    const m = mesas[i * 2];
+    const ax = m.x + rng.range(-m.half * 0.4, m.half * 0.4), ay = Math.min(h - 6, m.y + rng.range(26, 40));
+    const rx = rng.range(7, 13), ry = rng.range(9, 16);
+    for (let dy = -ry - 1; dy <= 0; dy++) for (let dx = -rx - 1; dx <= rx + 1; dx++) {
+      const e = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+      const y = Math.round(ay + dy), x = Math.round(ax + dx);
+      if (y < top[((x % w) + w) % w] + 4) continue;
+      if (e < 1) b.set(x, y, null);
+      else if (e < 1.25) b.set(x, y, dx < 0 ? 0xfff4e8 : 0xa07a80);
+    }
+    for (let y = Math.round(ay) + 1; y < h; y++) for (let dx = -rx + 1; dx < rx; dx++) b.set(ax + dx, y, null);
+  }
+  // One great ammonite weathered out of a cliff face.
+  const m = mesas[1];
+  const cx = m.x, cy = m.y + 30, R = 15;
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const r = Math.hypot(dx, dy);
+    if (r > R) continue;
+    const a = Math.atan2(dy, dx);
+    const u = (Math.log(Math.max(0.7, r) / 0.9) / 0.2 - a) / (Math.PI * 2), f = u - Math.floor(u);
+    let c = f < 0.15 ? 0x9a7078 : Math.sin(a * 22) > 0.5 ? 0xfff2e4 : 0xead2c0;
+    if (dy > R * 0.4) c = lerpColor(c, 0xa07a80, 0.4);
+    b.set(cx + dx, cy + dy, r > R - 1 ? 0x8a6470 : c);
+  }
+  // A dry lagoon along the foot: a strip of pale blue water catching the sky.
+  for (let x = 0; x < w; x++) {
+    const y0 = h - 10 + Math.round(noise(x * 0.03, 9) * 6);
+    for (let y = y0; y < h; y++) if (b.get(x, y) !== null || y > y0) b.set(x, y, (x + y * 3) % 11 === 0 ? 0xffffff : y === y0 ? 0xd8f4f0 : 0x8ad0c8);
+  }
+  return b.canvas();
+}
+
+// The Fossil Reef, near: coral grown to the size of houses and turned to
+// stone. Staghorn trees branching up against the sky, brain-coral boulders,
+// sea fans spread like hands, in deep rose and rust with coral-pink rims.
+function reefHeads({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const deep = [0x2a1a20, 0x3e262c, 0x553438, 0x6e4444, 0x8a5a54];
+  const rim = 0xe8806a, rim2 = 0xffb89a;
+  // Staghorn coral: branches forking upward, lit on the left.
+  const branch = (x, y, ang, th, depth) => {
+    let len = 0;
+    const maxLen = rng.range(14, 34) * (1 - depth * 0.15);
+    while (len < maxLen && th > 0.9 && y > 2) {
+      for (let dx = -Math.ceil(th); dx <= th; dx++) {
+        const f = dx / th;
+        const c = f < -0.5 ? rim : f < 0 ? deep[3] : f < 0.6 ? deep[2] : deep[1];
+        b.set(Math.round(x + dx), Math.round(y), c);
+      }
+      x += Math.sin(ang); y -= Math.cos(ang); len++;
+      ang += (noise(x * 0.1, y * 0.1) - 0.5) * 0.12;
+      th *= 0.985;
+    }
+    if (depth < 4 && th > 1.2) {
+      branch(x, y, ang - rng.range(0.3, 0.6), th * 0.8, depth + 1);
+      branch(x, y, ang + rng.range(0.3, 0.6), th * 0.75, depth + 1);
+    } else {
+      // A rounded pale tip.
+      b.set(Math.round(x), Math.round(y), rim2); b.set(Math.round(x) - 1, Math.round(y) + 1, rim);
+    }
+  };
+  for (let i = 0; i < 5; i++) branch(rng.range(0, w), h + 2, rng.range(-0.25, 0.25), rng.range(4, 7), 0);
+  // Sea fans: flat lattices on a short stalk.
+  for (let i = 0; i < 4; i++) {
+    const fx = rng.range(0, w), fy = rng.range(h * 0.35, h * 0.6), R = rng.range(16, 28);
+    for (let y = -R; y <= 0; y++) for (let x = -R; x <= R; x++) {
+      const r = Math.hypot(x, y * 1.2);
+      if (r > R) continue;
+      const a = Math.atan2(y, x);
+      const ribs = Math.abs(Math.sin(a * 9)) < 0.2, rings = Math.abs(Math.sin(r * 0.9)) < 0.25;
+      if (ribs || rings) b.set(fx + x, fy + y, r > R - 2 ? rim2 : x < 0 ? rim : deep[3]);
+    }
+    for (let y = fy; y < h; y++) { b.set(fx, y, deep[2]); b.set(fx + 1, y, deep[1]); }
+  }
+  // Brain-coral boulders along the foot, grooved, a lit crown on each.
+  for (let i = 0; i < 9; i++) {
+    const bx = (i + rng.range(0, 0.8)) * (w / 9), R = rng.range(12, 22), by = h - R * 0.55;
+    for (let y = -R; y <= R; y++) for (let x = -R * 1.3; x <= R * 1.3; x++) {
+      const e = (x * x) / (R * R * 1.69) + (y * y) / (R * R);
+      if (e > 1) continue;
+      const g = Math.sin(x * 0.6 + Math.sin(y * 0.5 + i) * 2.4 + y * 0.3);
+      let k = 2 - y / R * 1.4 - x / R * 0.5;
+      if (g > 0.45) k += 0.8; else if (g < -0.5) k -= 1;
+      let c = deep[Math.max(0, Math.min(4, Math.round(k + (bayer(Math.round(bx + x), Math.round(by + y)) - 0.5) * 0.7)))];
+      if (e > 0.86 && y < 0 && x < 0) c = rim;
+      b.set(bx + x, by + y, c);
+    }
+  }
+  return b.canvas();
+}
+
+// The Starfall Crater, far: the far rim of the crater, a broad wall of
+// dark violet rock cut by gullies running down into the bowl, gold seams of
+// star-metal glinting in it, and the crater floor glowing pale where the
+// star still lies.
+function craterRim({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const noise = makeNoise2D(seed);
+  const b = layerBuffer(w, h);
+  const ridge = ridgeHeights(rng, w, 30, 16, 0.55);
+  const rock = [0x14122a, 0x201c3a, 0x2e2a4e, 0x403a66, 0x5a5284];
+  const floorY = h - 34;
+  for (let x = 0; x < w; x++) {
+    const t = Math.round(ridge[x] + Math.sin((x / w) * Math.PI * 2) * 8);
+    const slope = ridge[(x + 2) % w] - ridge[(x - 2 + w) % w];
+    for (let y = Math.max(0, t); y < floorY; y++) {
+      const d = (y - t) / (floorY - t);
+      // Gullies: dark grooves running down from the rim.
+      const gully = Math.sin(x * 0.35 + noise(x * 0.05, y * 0.02) * 6);
+      let k = 3.2 - d * 2 + (slope < 0 ? 0.6 : -0.4) + (gully > 0.7 ? -1.2 : gully < -0.6 ? 0.5 : 0);
+      k += (noise(x * 0.15, y * 0.15) - 0.5) * 0.8;
+      let c = rock[Math.max(0, Math.min(4, Math.round(k + (bayer(x, y) - 0.5) * 0.6)))];
+      if (y === t) c = 0x8a7ab8;
+      // Star-metal seams, a fine gold zigzag.
+      if (Math.abs(noise(x * 0.03, y * 0.05) - 0.5) < 0.008) c = 0xf2c25a;
+      b.set(x, y, c);
+    }
+  }
+  // The crater floor: a dark bowl with the fallen star glowing in the middle.
+  const cx = rng.range(0, w);
+  for (let x = 0; x < w; x++) {
+    const dxw = Math.min(Math.abs(x - cx), w - Math.abs(x - cx));
+    for (let y = floorY; y < h; y++) {
+      const glow = Math.max(0, 1 - Math.hypot(dxw / 70, (y - floorY - 8) / 18));
+      let c = lerpColor(0x161230, 0x2a2450, (y - floorY) / 34);
+      if (glow > 0) c = lerpColor(c, 0xc8f0ff, glow * glow * (bayer(x, y) < glow ? 1 : 0.6));
+      if (glow > 0.85) c = 0xffffff;
+      // Rings of thrown rock round the impact.
+      if (Math.abs(Math.hypot(dxw / 3, y - floorY - 8) - 34) < 1.4) c = lerpColor(c, 0x9a90c8, 0.6);
+      b.set(x, y, c);
+    }
+  }
+  return b.canvas();
+}
+
+// The Starfall Crater, near: spires and slabs of black glass thrown up by the
+// impact, every facet catching violet and cyan, lumps of star-metal glowing
+// gold among them.
+function craterGlass({ w, h, seed }) {
+  const rng = new SeededRandom(seed);
+  const b = layerBuffer(w, h);
+  const faces = [0x0a0a16, 0x141428, 0x22203e, 0x34305a];
+  for (let i = 0; i < 22; i++) {
+    const x0 = rng.range(0, w), base = h + 4, height = rng.range(30, h - 10), lean = rng.range(-0.45, 0.45), wd = rng.range(6, 16);
+    const tipX = x0 + lean * height, tipY = base - height;
+    for (let y = Math.floor(tipY); y < base; y++) {
+      const k = (y - tipY) / height;
+      const cx = tipX + (x0 - tipX) * k, hw = wd * k + 0.5;
+      for (let x = Math.floor(cx - hw); x <= cx + hw; x++) {
+        const f = (x - cx) / Math.max(1, hw);
+        // Two facets meeting at a ridge: one lit violet, one in shadow.
+        let c = f < -0.05 ? faces[2] : faces[0];
+        if (f < -0.05 && f > -0.25) c = faces[3];
+        if (Math.abs(f + 0.05) < 0.08) c = k < 0.25 ? 0xd8c8ff : 0x8a7ad8;
+        if (f > 0.85) c = 0x3ac8c8;
+        b.set(x, y, c);
+      }
+    }
+  }
+  // Star-metal lumps glowing among the glass.
+  for (let i = 0; i < 7; i++) {
+    const cx = rng.range(0, w), cy = h - rng.range(4, 18), R = rng.range(3, 6);
+    for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) {
+      const r = Math.hypot(x, y);
+      if (r > R) continue;
+      b.set(cx + x, cy + y, r > R - 1 ? 0x8a5a2a : y < -R * 0.3 ? 0xfff2c8 : 0xf2b84a);
+    }
+  }
+  return b.canvas();
+}
+
+const PAINTERS = { hiveTowers, clockTowers, boneRidge, glacier, seracs, valley, forest, granite, pinnacles, cumulus, cloudPeaks, obsidianSpires, emberRidge, crystalClusters, crystalIsles, stormAnvils, stormCrags, auroraPeaks, auroraLake, dragonCoils, cascadeCliffs, cascadeFalls, monasteryPillars, monasteryHalls, mossArches, mossRoots, reefTerraces, reefHeads, craterRim, craterGlass };
 
 export function buildBackdropTextures(scene, biomes) {
   for (const biome of Object.values(biomes)) {
