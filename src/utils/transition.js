@@ -8,6 +8,7 @@ const W = Math.round(GAME_WIDTH / 2) + 34;
 // One bank of cloud, drawn from x=0 to W with a puffy edge on the open side.
 function bank(scene, side) {
   const g = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH_WIPE);
+  g.keepMoving = true; // a Bram tip's freeze must not stop a wipe halfway
   const edgeX = side < 0 ? W - 24 : 24;
   g.fillStyle(0xdfe4f6, 1).fillRect(side < 0 ? 0 : 24, 0, W - 24, GAME_HEIGHT);
   for (let y = -10, i = 0; y < GAME_HEIGHT + 20; y += 17, i++) {

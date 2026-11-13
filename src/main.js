@@ -26,6 +26,31 @@ import { Audio } from './systems/AudioSystem.js';
 // hidden/background tabs where requestAnimationFrame is suspended).
 const params = new URLSearchParams(window.location.search);
 
+// Phaser runs a frame before it asks for the next one, so a single error
+// thrown anywhere in a frame stops the loop for good: the screen freezes on
+// whatever it last drew. Catch it per scene instead, note it (window.__errors,
+// and the last few in localStorage under 'atc_errors' to find them later) and
+// carry on with the next frame.
+const errors = (window.__errors = []);
+function noteError(where, err) {
+  const msg = `${where}: ${err && err.message ? err.message : err}`;
+  if (errors.some((e) => e.msg === msg)) return;
+  const stack = err && err.stack ? String(err.stack).split('\n').slice(0, 6).join('\n') : '';
+  errors.push({ msg, stack, at: Date.now() });
+  console.error('[caught]', msg, err);
+  try { localStorage.setItem('atc_errors', JSON.stringify(errors.slice(-10))); } catch (e) { /* storage off */ }
+}
+for (const fn of ['step', 'render']) {
+  const orig = Phaser.Scenes.Systems.prototype[fn];
+  Phaser.Scenes.Systems.prototype[fn] = function guarded(...args) {
+    try { return orig.apply(this, args); } catch (err) { noteError(`${this.settings.key}.${fn}`, err); }
+  };
+}
+const origStep = Phaser.Game.prototype.step;
+Phaser.Game.prototype.step = function guardedStep(...args) {
+  try { return origStep.apply(this, args); } catch (err) { noteError('game.step', err); }
+};
+
 const game = new Phaser.Game({
   fps: { target: 60, forceSetTimeOut: params.has('timer') },
   type: Phaser.AUTO,

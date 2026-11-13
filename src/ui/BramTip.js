@@ -10,8 +10,10 @@ import { BRAM_TIPS } from '../data/bramTips.js';
 // then waits for a key or tap, or closes by itself after a while. Tips that
 // arrive together queue up.
 export class BramTip {
-  constructor(scene, prog, { onOpen = () => {}, onClose = () => {} } = {}) {
+  constructor(scene, prog, { onOpen = () => {}, onClose = () => {}, wait = () => false } = {}) {
     this.onOpen = onOpen;
+    // While wait() is true (a cutscene covers the screen) tips stay queued.
+    this.wait = wait;
     this.onClose = onClose;
     this.scene = scene;
     this.prog = prog;
@@ -46,7 +48,7 @@ export class BramTip {
     this.seen.push(id);
     this.prog.save();
     this.queue.push(id);
-    if (!this.current) this.next();
+    if (!this.current && !this.wait()) this.next();
     return true;
   }
 
@@ -55,7 +57,25 @@ export class BramTip {
     const id = `!${text}`;
     if (this.queue.includes(id) || this.current === id) return;
     this.queue.push(id);
-    if (!this.current) this.next();
+    if (!this.current && !this.wait()) this.next();
+  }
+
+  // Each frame: a cutscene that starts puts the open tip back in the queue
+  // (it would talk, unseen, under the cutscene and hold the game still);
+  // once it ends the queue carries on.
+  update() {
+    const wait = this.wait();
+    if (wait && this.current) this.stash();
+    else if (!wait && !this.current && this.queue.length) this.next();
+  }
+
+  stash() {
+    if (this.typing) { this.typing.remove(); this.typing = null; }
+    if (this.timer) { this.timer.remove(); this.timer = null; }
+    this.queue.unshift(this.current);
+    this.current = null;
+    this.fade(0);
+    this.onClose();
   }
 
   next() {

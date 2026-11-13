@@ -268,7 +268,7 @@ export class ClimbScene extends Phaser.Scene {
       this.tutorialCard = new TutorialCoach(this);
       this.director = new TutorialDirector(this, this.tutorialCard);
     }
-    this.tips = this.tutorial ? null : new BramTip(this, this.prog, { onOpen: () => this.freezeForTip(), onClose: () => this.unfreezeForTip() });
+    this.tips = this.tutorial ? null : new BramTip(this, this.prog, { onOpen: () => this.freezeForTip(), onClose: () => this.unfreezeForTip(), wait: () => !!this.liftRide || !!this.gateBusy || this.state === STATE.CAVE });
     this.frozenTweens = null;
     this.journal = new JournalCard(this);
     this.city = new GoldenCity(this);
@@ -373,8 +373,8 @@ export class ClimbScene extends Phaser.Scene {
     this.hudFade = this.fromTitle ? this.hud.root.map((o) => { const to = o.alpha; o.setAlpha(0); return { o, to }; }) : null;
     this.hudFadeT = 0;
     if (this.devRun && this.devStart > 0) this.startHigh(this.devStart);
-    if (this.devRun && this.devStart >= LOOP_START - 40) this.farSides.prebuild();
     else if (this.liftTo) this.rideLift();
+    if (this.devRun && this.devStart >= LOOP_START - 40) this.farSides.prebuild();
     if (typeof window !== 'undefined') window.__atc = this;
     wipeIn(this);
   }
@@ -575,7 +575,7 @@ export class ClimbScene extends Phaser.Scene {
     this.frozenTweens = this.frozenTweens || [];
     const own = this.tips ? this.tips.parts : [];
     for (const t of this.tweens.getTweens()) {
-      if (!t.isPlaying() || (t.targets || []).some((o) => own.includes(o))) continue;
+      if (!t.isPlaying() || (t.targets || []).some((o) => own.includes(o) || (o && o.keepMoving))) continue;
       t.pause();
       this.frozenTweens.push(t);
     }
@@ -3209,6 +3209,7 @@ export class ClimbScene extends Phaser.Scene {
       this.hudFade.forEach(({ o, to }) => o.active && o.setAlpha(to * this.hudFadeT));
       if (this.hudFadeT >= 1) this.hudFade = null;
     }
+    if (this.tips) this.tips.update();
     const frozen = this.tipOpen;
     if (frozen) this.freezeForTip();
     // The run waits while a lift ticket's gondola ride plays.
