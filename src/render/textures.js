@@ -872,8 +872,7 @@ export function buildAllTextures(scene, look) {
   addFramesFromGrids(scene, 'critter_goat', goatFrames());
   addFramesFromGrids(scene, 'season_pumpkin', pumpkinFrames());
   const sint = sintGrids();
-  ['shoe', 'gifts', 'letter', 'nuts'].forEach((k) => addGrid(scene, `sint_${k}`, sint[k]));
-  addFramesFromGrids(scene, 'sint_flag', sint.flags);
+  addGrid(scene, 'sint_shoe', sint.shoe);
   addFramesFromGrids(scene, 'sint_ride', sint.ride);
 
   paintRange(scene, 'bg_summits', { w: 480, h: 110, seed: 11, base: 50, amp: 34, rough: 0.55, body: 0xdfe6f2, shadow: 0xc6d0e2, snow: 0xffffff, snowLine: 70 });
