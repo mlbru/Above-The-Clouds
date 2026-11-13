@@ -42,6 +42,8 @@ export const climbFeatures = {
     this.roofK = 0;
     this.roofG = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.weather + 1);
     this.roofDrips = [];
+    // (The scene object is reused between runs: the last run's band is gone.)
+    this.roofBand = null;
     this.cave = null;
     this.caveMouth = null;
     this.cavesRolled = new Set();

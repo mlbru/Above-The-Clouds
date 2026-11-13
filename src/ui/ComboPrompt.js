@@ -433,12 +433,12 @@ export class ComboPrompt {
   splash(hit, perfect) {
     const n = perfect ? 9 : hit ? 6 : 3;
     for (let i = 0; i < n; i++) {
-      const d = this.add.rectangle(HIT_X, TRACK_Y + 4, 1, perfect && i % 3 === 0 ? 2 : 1, hit ? 0xd8f4ff : 0x6a7a8a).setScrollFactor(0).setDepth(DEPTH.hud + 3);
+      const d = this.scene.add.rectangle(HIT_X, TRACK_Y + 4, 1, perfect && i % 3 === 0 ? 2 : 1, hit ? 0xd8f4ff : 0x6a7a8a).setScrollFactor(0).setDepth(DEPTH.hud + 3);
       const ang = Math.PI + (i / (n - 1 || 1)) * Math.PI, sp = perfect ? 14 : 9;
       this.scene.tweens.add({ targets: d, x: HIT_X + Math.cos(ang) * sp, y: TRACK_Y + 4 + Math.sin(ang) * sp * 0.9, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => d.destroy() });
     }
     if (hit) {
-      const ring = this.add.ellipse(HIT_X + 0.5, TRACK_Y + 6, 6, 2).setStrokeStyle(1, 0xbfe8ff, 0.9).setScrollFactor(0).setDepth(DEPTH.hud + 3);
+      const ring = this.scene.add.ellipse(HIT_X + 0.5, TRACK_Y + 6, 6, 2).setStrokeStyle(1, 0xbfe8ff, 0.9).setScrollFactor(0).setDepth(DEPTH.hud + 3);
       this.scene.tweens.add({ targets: ring, scaleX: 3.4, scaleY: 2, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
     }
   }

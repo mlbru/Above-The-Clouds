@@ -70,7 +70,7 @@ export function eclipseStretch(seed, startMeters = 0) {
 // jacket of their own; bring them to a ledge and their flag flies at camp.
 export const RESCUE = {
   // Chance per route choice (above minMeters) that someone hangs on one of the routes.
-  chance: 0.035,
+  chance: 0.012,
   minMeters: 60,
   // Misses they copy before they give up and rope down to camp.
   strikes: 3,
