@@ -13,6 +13,7 @@ import { DEPTH, GAME_WIDTH, GAME_HEIGHT, levelToMeters } from '../config/gameCon
 import { biomeAt } from '../data/biomes.js';
 import { gemForBiome } from '../data/gems.js';
 import { caveMouthKey, creatureFor } from '../render/caveArt.js';
+import { roofBand } from '../render/roofArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
@@ -122,23 +123,40 @@ export const climbFeatures = {
     const g = this.roofG.clear();
     const k = this.roofK;
     if (k > 0.01 && this.state !== 'RUN_OVER') {
-      // A dark ragged band across the top of the view: the underside of the
-      // roof, with water gathering on it and dripping past you.
-      const t = this.clock;
-      for (let x = 0; x < GAME_WIDTH; x += 4) {
-        const h = 26 + Math.sin(x * 0.07) * 6 + Math.sin(x * 0.23 + 1) * 3 + ((x * 37) % 7);
-        g.fillStyle(0x0c0a12, 0.6 * k).fillRect(x, 0, 4, Math.round(h * k));
-        g.fillStyle(0x2a2636, 0.6 * k).fillRect(x, Math.round(h * k) - 2, 4, 2);
+      // The roof's underside, seen from right below, slides into the top of
+      // the view (painted per biome: render/roofArt.js), swaying a hair.
+      const biome = biomeAt(levelToMeters(lvl));
+      if (!this.roofBand || this.roofBand.biome !== biome.id) {
+        if (this.roofBand) this.roofBand.img.destroy();
+        const rb = roofBand(this, biome, GAME_WIDTH);
+        this.roofBand = { biome: biome.id, tips: rb.tips, img: this.add.image(0, 0, rb.key).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.weather + 0.9) };
       }
-      if (Math.random() < dt / 160 * k && this.roofDrips.length < 18) this.roofDrips.push({ x: Math.random() * GAME_WIDTH, y: 24, v: 0 });
+      const t = this.clock;
+      const ease = k * k * (3 - 2 * k);
+      const by = Math.round(-78 + ease * 70 + Math.sin(t / 1800) * 1.2);
+      this.roofBand.img.setVisible(true).setY(by).setAlpha(Math.min(1, k * 1.5)).setTint(this.lightOverlay ? this.lightOverlay.fillColor : 0xffffff);
+      // Water gathering on the tips and falling past you.
+      if (Math.random() < dt / 260 * k && this.roofDrips.length < 14 && this.roofBand.tips.length) {
+        const tip = this.roofBand.tips[Math.floor(Math.random() * this.roofBand.tips.length)];
+        this.roofDrips.push({ x: tip.x, y: by + tip.y, v: 0, grow: 500 });
+      }
       this.roofDrips = this.roofDrips.filter((d) => {
-        d.v += dt * 0.0008; d.y += d.v * dt;
-        g.fillStyle(0xbfe0f0, 0.75 * k).fillRect(Math.round(d.x), Math.round(d.y), 1, 3);
+        if (d.grow > 0) { d.grow -= dt; g.fillStyle(0xbfe0f0, 0.8 * k).fillRect(d.x, Math.round(d.y), 1, 1 + (d.grow < 250 ? 1 : 0)); return true; }
+        d.v += dt * 0.0009; d.y += d.v * dt;
+        g.fillStyle(0xd8f0ff, 0.85 * k).fillRect(Math.round(d.x), Math.round(d.y), 1, 3);
         return d.y < GAME_HEIGHT;
       });
-      // You swing under the rock while you hang there.
-      if (this.state === 'ROUTE_SELECT' && this.climber.sprite) this.climber.sprite.setAngle(Math.sin(t / 650) * 7 * k);
-    } else if (this.climber.sprite && this.climber.sprite.angle && this.state !== 'FALLING' && this.state !== 'SLIPPING') this.climber.sprite.setAngle(0);
+      // You hang under the rock by your hands, legs swinging.
+      if (this.state === 'ROUTE_SELECT' && this.climber.sprite && this.node && this.node.kind !== 'ledge') {
+        const sw = Math.sin(t / 700);
+        const pose = sw < -0.45 ? 'swingL' : sw > 0.45 ? 'swingR' : 'hang';
+        if (this.climber.pose !== pose) this.climber.setPose(pose);
+        this.climber.sprite.setAngle(sw * 5 * k);
+      }
+    } else {
+      if (this.roofBand) this.roofBand.img.setVisible(false);
+      if (this.climber.sprite && this.climber.sprite.angle && this.state !== 'FALLING' && this.state !== 'SLIPPING') this.climber.sprite.setAngle(0);
+    }
     if (this.state === 'CLIMBING_COMBO' && this.climber.sprite && Math.abs(this.climber.sprite.angle) > 0.1 && !this.climber.flailTween) this.climber.sprite.setAngle(this.climber.sprite.angle * 0.9);
   },
 

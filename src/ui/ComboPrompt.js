@@ -243,10 +243,17 @@ export class ComboPrompt {
       if (this.roof) {
         vy = Math.round(TRACK_Y - (x - HIT_X) * (LANE_H / (TRACK_X + TRACK_W - HIT_X)));
         x = HIT_X;
-        if (!note.result && vy > TRACK_Y - LANE_H && vy < TRACK_Y) {
-          // A wet trail above each falling note.
-          g.fillStyle(0x9fd8f0, 0.35).fillRect(HIT_X, vy - 12, 1, 6);
-          g.fillStyle(0x9fd8f0, 0.18).fillRect(HIT_X, vy - 20, 1, 6);
+        if (!note.result && vy > TRACK_Y - LANE_H && vy < TRACK_Y + 4) {
+          // Each note falls as a drop of water: a bead around the arrow,
+          // drawn to a point on top, with a wet trail behind it.
+          const isNext = note === c.current;
+          g.fillStyle(0x9fd8f0, 0.3).fillRect(HIT_X, vy - 16, 1, 5);
+          g.fillStyle(0x9fd8f0, 0.15).fillRect(HIT_X, vy - 24, 1, 5);
+          g.fillStyle(0x0c1a26, 0.75).fillCircle(HIT_X + 0.5, vy + 0.5, 8);
+          g.lineStyle(1, isNext ? 0xd8f4ff : 0x6aa8c8, 0.95).strokeCircle(HIT_X + 0.5, vy + 0.5, 8);
+          g.fillStyle(isNext ? 0xd8f4ff : 0x6aa8c8, 0.95).fillTriangle(HIT_X - 4, vy - 6, HIT_X + 5, vy - 6, HIT_X + 0.5, vy - 13);
+          g.fillStyle(0x0c1a26, 0.75).fillTriangle(HIT_X - 2, vy - 6, HIT_X + 3, vy - 6, HIT_X + 0.5, vy - 10);
+          g.fillStyle(0xffffff, 0.8).fillRect(HIT_X - 4, vy - 3, 1, 2);
         }
       }
       // A roped pair comes in the wrong way round, tied together; a beat and
@@ -419,6 +426,21 @@ export class ComboPrompt {
     });
     if (this.gustIcon) this.gustIcon.setVisible(gustSoon && Math.floor(t / 200) % 2 === 0);
     if (this.glow && !c.current) this.glow.setVisible(false);
+  }
+
+  // A note lands in the pool at the foot of the lane: a crown of droplets
+  // (bigger for a perfect), or a dull plop for a miss.
+  splash(hit, perfect) {
+    const n = perfect ? 9 : hit ? 6 : 3;
+    for (let i = 0; i < n; i++) {
+      const d = this.add.rectangle(HIT_X, TRACK_Y + 4, 1, perfect && i % 3 === 0 ? 2 : 1, hit ? 0xd8f4ff : 0x6a7a8a).setScrollFactor(0).setDepth(DEPTH.hud + 3);
+      const ang = Math.PI + (i / (n - 1 || 1)) * Math.PI, sp = perfect ? 14 : 9;
+      this.scene.tweens.add({ targets: d, x: HIT_X + Math.cos(ang) * sp, y: TRACK_Y + 4 + Math.sin(ang) * sp * 0.9, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => d.destroy() });
+    }
+    if (hit) {
+      const ring = this.add.ellipse(HIT_X + 0.5, TRACK_Y + 6, 6, 2).setStrokeStyle(1, 0xbfe8ff, 0.9).setScrollFactor(0).setDepth(DEPTH.hud + 3);
+      this.scene.tweens.add({ targets: ring, scaleX: 3.4, scaleY: 2, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
+    }
   }
 
   // The overhang's lane: a crack in the rock above the hit line. Stalactites
@@ -650,6 +672,7 @@ export class ComboPrompt {
       // An echo note shows the arrow it was, once judged.
       if (note.echo) it.small.setTexture(`arrow_s_${note.dir}`);
       it.small.setAlpha(0.25);
+      if (this.roof) this.splash(note.result !== 'miss', note.result === 'perfect');
       const pop = this.add.image(HIT_X, TRACK_Y, note.echo ? `arrow_${note.dir}` : bigKey(note)).setScrollFactor(0).setDepth(DEPTH.hud + 3).setTint(style.tint);
       this.scene.tweens.add({ targets: pop, scale: 1.8, alpha: 0, duration: 260, onComplete: () => pop.destroy() });
     } else {

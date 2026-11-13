@@ -10,7 +10,7 @@ import { gemForBiome } from '../data/gems.js';
 import { GEM_INCOME } from '../data/shop.js';
 
 // Overhangs: chance per segment, how many levels, how far the rock juts out (px).
-export const ROOF = { chance: 0.17, levels: [4, 6], jut: 28 };
+export const ROOF = { chance: 0.17, levels: [4, 6], jut: 40 };
 const WALL_MIN_X = 36;
 const WALL_MAX_X = 444;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

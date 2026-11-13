@@ -4,6 +4,7 @@ import { levelToY, LEVEL_PX, yToMeters } from '../config/gameConfig.js';
 import { makeNoise2D, hashInts, SeededRandom } from '../utils/seededRandom.js';
 import { biomeMixAt } from '../data/biomes.js';
 import { overlaysFor, ledgeTopColor } from './wallOverlays.js';
+import { hangKind, hangColor } from './roofArt.js';
 import { rgb, bayer, lerpColor } from '../utils/color.js';
 import { makeCanvas } from '../utils/pixelGrid.js';
 
@@ -413,7 +414,7 @@ export class WallPainter {
     const { img } = job;
     for (const rf of roofs) {
       const d = wy - rf.top;
-      if (d < 0 || d > rf.bottom - rf.top + 46) continue;
+      if (d < 0 || d > rf.bottom - rf.top + 52) continue;
       for (let x = Math.max(0, l); x <= Math.min(W - 1, r); x++) {
         const i = base + x * 4;
         if (!img.data[i + 3]) continue;
@@ -428,16 +429,21 @@ export class WallPainter {
           const band = (wy + Math.round(this.edge(x * 0.04, rf.top * 0.01) * 10)) % 9;
           if (band === 0) c = lerpColor(c, pal.outline, 0.5);
           else if (band === 1) c = lerpColor(c, pal.rock[2], 0.4);
-          // The lip catches the sky's light.
-          if (span - d < 3) c = span - d < 1 ? pal.rock[4] : lerpColor(pal.rock[3], 0xffffff, 0.15);
+          // The lip: a thick edge of rock, its face lit by the sky below.
+          if (span - d < 5) c = span - d < 1 ? lerpColor(pal.rock[4], 0xffffff, 0.25) : span - d < 3 ? pal.rock[3] : lerpColor(pal.rock[2], pal.rock[3], bayer(x, wy) < 0.5 ? 1 : 0);
         } else {
           // Below: drips hanging off the lip, and the roof's shadow on the wall.
+          // Below: the biome's hangings off the lip (icicles, roots, honey,
+          // glass), and the roof's shadow thrown down the wall.
           const k = d - span;
-          if (k >= 34) continue;
-          const h = hashInts(x, rf.top, 31);
-          const drip = h % 9 === 0 ? 3 + (h >> 4) % 10 : 0;
-          if (k < drip) c = k === drip - 1 ? lerpColor(pal.rock[3], 0xd8f0ff, 0.3) : (x % 2 ? pal.rock[1] : pal.rock[2]);
-          else if (bayer(x, wy) < 0.55 * (1 - k / 34)) c = lerpColor(c0, pal.rock[0], 0.55);
+          if (k >= 40) continue;
+          const col = Math.floor(x / 3), h = hashInts(col, rf.top, 31);
+          const kind = hangKind(pal.id);
+          const len = h % 3 === 0 ? 4 + (h >> 4) % (kind === 'root' ? 28 : 20) : 0;
+          const cx = col * 3 + 1 + (kind === 'root' ? Math.round(Math.sin(k * 0.3 + col) * 1) : 0);
+          const half = kind === 'root' ? 0 : Math.max(0, Math.round((1 - k / Math.max(1, len)) * 1.2));
+          if (k < len && Math.abs(x - cx) <= half) c = hangColor(kind, pal, k, len, x, x < cx);
+          else if (bayer(x, wy) < 0.62 * (1 - k / 40)) c = lerpColor(c0, pal.rock[0], 0.6);
           else continue;
         }
         this.put(img, i, c);
