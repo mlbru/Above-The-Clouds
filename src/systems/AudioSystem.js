@@ -738,8 +738,8 @@ class AudioSystemImpl {
     }
     if (this.music.song) { this.songStep(t); return; }
     if (this.dragonLevel) this.dragonStep(t);
-    // While the dragon is awake its war music carries everything.
-    if (this.dragonLevel === 2) return;
+    // While the dragon is awake (or the Gate fight, or the flight) its music carries everything.
+    if (this.dragonLevel >= 2) return;
     const swelling = t < this.music.swellUntil;
     const intensity = swelling ? 1 : this.music.intensity;
     if (t > this.music.nextAt) {
@@ -764,9 +764,12 @@ class AudioSystemImpl {
     g.setValueAtTime(g.value, t);
     g.linearRampToValueAtTime(level ? 1 : 0, t + (level ? 0.4 : 2.5));
     // Waking up: the fury starts on a crash right away.
-    if (level === 2 && from < 2) { this.dragonAt = t + 0.05; this.dragonBar = 0; this.crash(0.05, 1, this.dragonBus); }
+    if (level >= 2 && level !== from) { this.dragonAt = t + 0.05; this.dragonBar = 0; if (level !== 4) this.crash(0.05, 1, this.dragonBus); }
     else if (level && !from) { this.dragonAt = t + 0.3; this.dragonBar = 0; }
   }
+
+  // How close the Gate is during the boss fight (0 at its start, 1 at the Gate).
+  setBossProgress(p) { this.bossP = Math.max(0, Math.min(1, p)); }
 
   dragonStep(t) {
     if ((this.dragonAt || 0) < t) this.dragonAt = t + 0.1;
@@ -775,6 +778,8 @@ class AudioSystemImpl {
     const bus = this.dragonBus;
     const root = 38; // D, under the biome's own key
     const bar = this.dragonBar++;
+    if (this.dragonLevel === 3) { this.bossBar(at, bar, bus); return; }
+    if (this.dragonLevel === 4) { this.soarBar(at, bar, bus); return; }
     if (this.dragonLevel === 1) {
       // Asleep: a heartbeat every two seconds and a drone that comes and goes.
       const beat = 60 / 60;
@@ -805,6 +810,82 @@ class AudioSystemImpl {
     if (phrase === 0 && bar > 0) this.crash(at, 0.6, bus);
     // Ticking hats keep the pace.
     for (let i = 0; i < 8; i++) this.noiseHit({ t: at + i * beat * 0.5, dur: 0.03, type: 'highpass', freq: 8000, peak: i % 2 ? 0.012 : 0.02, bus });
+    this.dragonAt += beat * 4;
+  }
+
+  // THE GATE: the boss fight's own theme, D Phrygian dominant at 132.
+  // Sixteen bars that come round: A (a cello ostinato over driving drums),
+  // B (the dragon's theme in the horns over a dark choir), A again, then C (the
+  // theme an octave up with bells over double-time drums). It thickens as the
+  // Gate gets close: the choir, the high bells and the double drums only come
+  // in once you are well on the way, and in the last stretch every bar ends on
+  // a cymbal.
+  bossBar(at, bar, bus) {
+    const beat = 60 / 132, root = 38, p = this.bossP || 0;
+    const sec = ['A', 'B', 'A', 'C'][Math.floor(bar / 4) % 4], k = bar % 4;
+    // Chords per bar of a section: D, Eb, C, D (the dragon's i, bII, VII, i).
+    const chord = [[0, 4, 7], [1, 5, 8], [-2, 2, 5], [0, 4, 7]][k];
+    // Drums: a heavy one, then eighths that drive; double time in C or near the end.
+    const dbl = sec === 'C' || p > 0.8;
+    for (let i = 0; i < 8; i++) {
+      const v = i === 0 ? 1 : i === 4 ? 0.8 : i % 2 ? 0.35 : 0.55;
+      this.taiko(at + i * beat * 0.5, v * (0.8 + p * 0.25), bus);
+      if (dbl && i % 2) this.taiko(at + i * beat * 0.5 + beat * 0.25, 0.3, bus);
+    }
+    for (let i = 0; i < 16; i++) this.noiseHit({ t: at + i * beat * 0.25, dur: 0.025, type: 'highpass', freq: 8500, peak: i % 4 === 0 ? 0.022 : 0.01, bus });
+    // The cello ostinato in sixteenths: root, root, the flat second, root, ...
+    const ost = k === 1 ? [1, 1, 4, 1, 1, 1, 5, 4] : k === 2 ? [-2, -2, 2, -2, -2, -2, 3, 2] : [0, 0, 1, 0, 0, 0, 4, 5];
+    for (let i = 0; i < 16; i++) this.note('cello', { t: at + i * beat * 0.25, midi: root + 12 + ost[i % 8], dur: beat * 0.24, peak: 0.032, bus });
+    // A throat drone under every section, the chord's root.
+    if (k === 0) this.note('throat', { t: at, midi: root, dur: beat * 16, peak: 0.03, bus });
+    // The dark choir: the chord held through the bar (from a third of the way up).
+    if (p > 0.3 || sec !== 'A') for (const st of chord) this.note('pad', { t: at, midi: root + 24 + st, dur: beat * 4.2, peak: 0.016 + p * 0.01, bus });
+    // The theme: half and quarter notes, falling to the root.
+    const THEME = [
+      [[7, 1.5], [8, 0.5], [7, 1], [5, 1]],
+      [[4, 2], [5, 1], [1, 1]],
+      [[2, 1.5], [4, 0.5], [5, 1], [4, 1]],
+      [[1, 1], [0, 3]],
+    ];
+    if (sec === 'B' || sec === 'C') {
+      const up = sec === 'C' ? 12 : 0;
+      THEME[k].reduce((b, [st, len]) => {
+        this.note('horn', { t: at + b * beat, midi: root + 24 + st + up, dur: len * beat * 1.05, peak: 0.05, bus });
+        if (sec === 'C') this.note('horn', { t: at + b * beat, midi: root + 12 + st + up, dur: len * beat * 1.05, peak: 0.03, bus });
+        return b + len;
+      }, 0);
+    }
+    // Brass stabs in A: on one and on the "and" of three.
+    if (sec === 'A') for (const b of [0, 2.5]) for (const st of chord) this.note('horn', { t: at + b * beat, midi: root + 12 + st, dur: beat * 0.35, peak: 0.03, bus });
+    // High bells over C once the Gate is near: the theme's shape in sparks.
+    if (sec === 'C' && p > 0.45) [12, 19, 17, 13].forEach((st, i) => this.note('bell', { t: at + i * beat, midi: root + 36 + st, peak: 0.02, bus }));
+    // Cymbals: a crash into every section, and on every bar in the last stretch.
+    if (k === 0 || p > 0.85) this.crash(at, k === 0 ? 0.8 : 0.4, bus);
+    if (k === 3) this.noiseHit({ t: at + beat * 2, dur: beat * 2, type: 'highpass', freq: 6000, peak: 0.05, attack: beat * 1.9, bus, reverb: 0.5 });
+    this.dragonAt += beat * 4;
+  }
+
+  // The flight across the cloud sea: the same theme turned to D major and
+  // set free. Slow and wide at 84: open fifths in the strings, the melody on a
+  // flute an octave up, soft drums like wingbeats, a shimmer of glass.
+  soarBar(at, bar, bus) {
+    const beat = 60 / 84, root = 38, k = bar % 8;
+    const chord = [[0, 7, 16], [5, 12, 21], [-3, 4, 12], [7, 14, 23], [0, 7, 16], [-5, 4, 11], [5, 12, 21], [7, 14, 19]][k];
+    for (const st of chord) this.note('pad', { t: at, midi: root + 12 + st, dur: beat * 4.4, peak: 0.022, bus });
+    this.note('cello', { t: at, midi: root + chord[0], dur: beat * 4, peak: 0.03, bus });
+    // Wingbeats: one slow pair of soft drums a bar.
+    this.drum(at, 0.4, bus); this.drum(at + beat * 0.5, 0.2, bus);
+    this.taiko(at + beat * 2, 0.25, bus);
+    const MEL = [
+      [[7, 1.5], [9, 0.5], [7, 1], [4, 1]], [[5, 2], [9, 2]], [[7, 1], [4, 1], [2, 2]], [[2, 1], [4, 1], [7, 2]],
+      [[7, 1.5], [9, 0.5], [11, 1], [12, 1]], [[11, 2], [7, 2]], [[9, 1], [12, 1], [14, 2]], [[12, 3], [null, 1]],
+    ];
+    MEL[k].reduce((b, [st, len]) => {
+      if (st !== null) this.note('flute', { t: at + b * beat, midi: root + 24 + st, dur: len * beat * 1.1, peak: 0.045, bus });
+      return b + len;
+    }, 0);
+    if (k % 2 === 1) [24, 28, 31, 36].forEach((st, i) => this.note('glass', { t: at + beat * (2 + i * 0.25), midi: root + st + 12, peak: 0.012, bus }));
+    if (k === 0) this.noiseHit({ t: at, dur: beat * 3, type: 'highpass', freq: 5000, peak: 0.025, attack: beat * 0.2, bus, reverb: 0.8 });
     this.dragonAt += beat * 4;
   }
 

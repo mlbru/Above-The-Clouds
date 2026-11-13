@@ -70,6 +70,8 @@ export class WallPainter {
       if (lv && lv.nodes.length && lv.nodes[0].kind === 'ledge' && lv.bounds) ledges.push({ y: lv.nodes[0].y, bounds: lv.bounds });
     }
     const cracks = this.makeCracks(segment);
+    // Overhangs whose underside or shadow reaches into this canvas.
+    const roofs = [segment, mountain.getSegment && mountain.getSegment(segment.index + 1)].filter((s) => s && s.roof).map((s) => s.roof);
     let waterfallX = null;
     if (segment.waterfall) {
       const xs = segment.levels.map((lv) => (segment.waterfall.side < 0 ? lv.bounds.l + 14 : lv.bounds.r - 14));
@@ -80,7 +82,7 @@ export class WallPainter {
       ? { x: n.x, top: n.y, rx: 56, depth: 30 }
       : { x: n.x, top: n.y - 5, rx: n.kind === 'jug' ? 17 : 14, depth: 22 })) : null;
     const job = {
-      segment, canvas, ctx, img, top, h, row: 0, done: false, waterfallX, islands,
+      segment, canvas, ctx, img, top, h, row: 0, done: false, waterfallX, islands, roofs,
       // The wall's outline per row, for the rim light (see paintRim).
       edges: new Array(h),
       prevRows: [this.heightRow(top - 3), this.heightRow(top - 2), this.heightRow(top - 1)],
@@ -338,6 +340,7 @@ export class WallPainter {
     }
 
     this.paintEdge(img, base, wy, l, r, mix.a);
+    this.paintRoof(job, base, wy, l, r, mix.a);
 
     // Rest ledges: a real shelf of rock. A walkable top (pebbles, grass or
     // snow), a lit front lip, a shaded face with a ragged underside, ends that
@@ -398,6 +401,48 @@ export class WallPainter {
       }
     }
     job.prevRows = [job.prevRows[1], job.prevRows[2], hRow];
+  }
+
+  // Overhangs (idea sheet 1.3): the rock here juts out over you, so what you
+  // see is its underside. In shadow, crossed by the layers of the ceiling,
+  // the lip at the bottom lit by the sky below and hung with drips, and a
+  // soft shadow thrown onto the wall underneath.
+  paintRoof(job, base, wy, l, r, pal) {
+    const roofs = job.roofs;
+    if (!roofs || !roofs.length) return;
+    const { img } = job;
+    for (const rf of roofs) {
+      const d = wy - rf.top;
+      if (d < 0 || d > rf.bottom - rf.top + 46) continue;
+      for (let x = Math.max(0, l); x <= Math.min(W - 1, r); x++) {
+        const i = base + x * 4;
+        if (!img.data[i + 3]) continue;
+        // A ragged lip: the roof ends a little higher or lower along its length.
+        const span = rf.bottom - rf.top + Math.round((this.edge(x * 0.07, rf.bottom * 0.013) - 0.5) * 12);
+        const c0 = (img.data[i] << 16) | (img.data[i + 1] << 8) | img.data[i + 2];
+        let c = c0;
+        if (d <= span) {
+          const prof = Math.sin(Math.max(0, Math.min(1, d / span)) * Math.PI);
+          c = lerpColor(c0, pal.rock[0], 0.25 + 0.35 * prof);
+          // Ceiling layers seen from below: wavy bands, each lit on its underside.
+          const band = (wy + Math.round(this.edge(x * 0.04, rf.top * 0.01) * 10)) % 9;
+          if (band === 0) c = lerpColor(c, pal.outline, 0.5);
+          else if (band === 1) c = lerpColor(c, pal.rock[2], 0.4);
+          // The lip catches the sky's light.
+          if (span - d < 3) c = span - d < 1 ? pal.rock[4] : lerpColor(pal.rock[3], 0xffffff, 0.15);
+        } else {
+          // Below: drips hanging off the lip, and the roof's shadow on the wall.
+          const k = d - span;
+          if (k >= 34) continue;
+          const h = hashInts(x, rf.top, 31);
+          const drip = h % 9 === 0 ? 3 + (h >> 4) % 10 : 0;
+          if (k < drip) c = k === drip - 1 ? lerpColor(pal.rock[3], 0xd8f0ff, 0.3) : (x % 2 ? pal.rock[1] : pal.rock[2]);
+          else if (bayer(x, wy) < 0.55 * (1 - k / 34)) c = lerpColor(c0, pal.rock[0], 0.55);
+          else continue;
+        }
+        this.put(img, i, c);
+      }
+    }
   }
 
   // How far the wall's outline wanders from its bounds on this row. Each biome

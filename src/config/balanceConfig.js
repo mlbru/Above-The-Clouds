@@ -150,4 +150,6 @@ export const ROUTE_COLORS = {
   ledge: 0x9fd8ff,
   // WILD ROUTE (a Trail Boon): the fourth route.
   wild: 0xc88aff,
+  // A sideways traverse to a hidden cave.
+  cave: 0x7ad8e8,
 };

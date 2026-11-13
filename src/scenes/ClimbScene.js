@@ -69,6 +69,7 @@ import { GEM_TARGET } from '../ui/HUD.js';
 import { toCss, lerpColor, warmthOf } from '../utils/color.js';
 import { climbBoons } from './climbBoons.js';
 import { climbRun } from './climbRun.js';
+import { climbFeatures } from './climbFeatures.js';
 import { biomeMoments } from './biomeMoments.js';
 import { SunRays } from '../world/SunRays.js';
 import { WeatherScenery } from '../world/WeatherScenery.js';
@@ -100,6 +101,8 @@ export const STATE = {
   FALLING: 'FALLING',
   PAUSED: 'PAUSED',
   RUN_OVER: 'RUN_OVER',
+  // Inside a hidden cave (scenes/climbFeatures.js).
+  CAVE: 'CAVE',
 };
 
 const DIR_KEYS = { ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', ArrowUp: 'U', KeyW: 'U' };
@@ -341,6 +344,9 @@ export class ClimbScene extends Phaser.Scene {
     this.initBoons();
     // The run's event, rescues, the rival (scenes/climbRun.js).
     this.initRun();
+    // Overhangs and hidden caves (scenes/climbFeatures.js).
+    this.initFeatures();
+    this.input.on('pointerdown', () => this.caveInput());
 
     this.wall.update(0, RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
     this.wall.flush();
@@ -468,6 +474,7 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
+    if (this.cave) { if (DIR_KEYS[code] || code === 'Space' || code === 'Enter') this.caveInput(); return; }
     if (this.wish && code === 'KeyE') { this.makeWish(); return; }
     if (isDebugKey(event) && this.prog.debugUnlocked) { this.setDebug(!this.debugVisible); return; }
     if (code === 'KeyB' && ((this.debugVisible && this.prog.debugUnlocked) || this.prog.autopilotUnlocked)) {
@@ -609,6 +616,7 @@ export class ClimbScene extends Phaser.Scene {
     if (this.mechanics) this.mechanics.decorateRoutes(this.routes, { mountain: this.mountain });
     this.boonRoutes(node);
     this.runRoutes(node);
+    this.featureRoutes(node);
     if (!this.director) { this.rollGems(); this.runGems(node); }
     // FRAGILE: every hold crumbles under you.
     this.startCrumble(this.dares.includes('fragile') && node.kind !== 'ledge' && !node.hazard ? { ...node, hazard: 'crumbling' } : node);
@@ -1635,6 +1643,8 @@ export class ClimbScene extends Phaser.Scene {
       this.flashHold(t.id);
       await this.climber.hold('grab', 120);
     }
+    // A traverse to a hidden cave: step inside.
+    if (route.cave) { this.enterCave(route); return; }
     const thermal = !!(this.thermalEarned && route.thermal);
     // FEATHERWEIGHT counts clean climbs; a thermal ride already lifts you.
     const feather = this.featherLift(route, s, thermal);
@@ -2868,6 +2878,7 @@ export class ClimbScene extends Phaser.Scene {
     this.time.delayedCall(200, () => this.farSides.prebuild());
     this.time.delayedCall(1300, () => {
       if (!this.sys.isActive()) return;
+      Audio.setDragonMusic(4);
       this.liftRide = new DragonFlight(this, {
         meters: m,
         farName: GATE.farName,
@@ -2987,7 +2998,11 @@ export class ClimbScene extends Phaser.Scene {
     const bones = this.mechanics && this.mechanics.get('boneGarden');
     // In the Bone Garden its heartbeat starts once it grows restless.
     const restless = bones && bones.restless && !this.director && this.state !== STATE.RUN_OVER;
-    Audio.setDragonMusic(near ? (eye.phase === 'watching' || eye.phase === 'opening' ? 2 : 1) : restless ? 1 : 0);
+    // The Gate fight (from GATE.wakeFrom to the Gate ledge) has a theme of its
+    // own that builds as the Gate gets closer; the flight has its own too.
+    const boss = this.run && this.run.gateOn && !this.run.gateDone && near;
+    if (boss) Audio.setBossProgress((levelToMeters(this.node.level) - GATE.wakeFrom) / (GATE.ledgeAt - GATE.wakeFrom));
+    if (!this.gateBusy) Audio.setDragonMusic(boss ? 3 : near ? (eye.phase === 'watching' || eye.phase === 'opening' ? 2 : 1) : restless ? 1 : 0);
     this.updateLullaby(dt, bones);
     // Ash drifts down over the whole Spine, thicker while it is awake.
     if (!this.ash) {
@@ -3224,7 +3239,7 @@ export class ClimbScene extends Phaser.Scene {
         // The Storm Crown: in a storm, hanging around costs grip fast.
         const storm = this.mechanics && this.node.kind !== 'ledge' ? this.mechanics.get('storm').hangScale : 1;
         this.grip.hang(dt / 1000, {
-          drainMultiplier: this.director ? 0 : biome.drainMultiplier * icy * storm * (this.perk === 'irongrip' ? GEAR_FX.ironGrip : 1) * (1 + (this.heat || 0) * 3),
+          drainMultiplier: this.director ? 0 : biome.drainMultiplier * icy * storm * this.roofDrain() * (this.perk === 'irongrip' ? GEAR_FX.ironGrip : 1) * (1 + (this.heat || 0) * 3),
           onJug: this.node.kind === 'jug',
           noGrace: storm > 1,
         });
@@ -3276,6 +3291,7 @@ export class ClimbScene extends Phaser.Scene {
     const shower = this.showerK || 0;
     this.background.update(dt, alt, day, { birds: ambience.birds }, { mix: biomeMixAt(alt), whiteout, storm: Math.max(stormSky, shower * 0.5) });
     this.updateRun(dt, climberAlt, day);
+    this.updateFeatures(dt);
     {
       const m = biomeMixAt(alt);
       const weightOf = (id) => (m.a.id === id ? 1 - m.t : 0) + (m.b.id === id ? m.t : 0);
@@ -3772,7 +3788,9 @@ export class ClimbScene extends Phaser.Scene {
     let guard = 0;
     while (levelToMeters(this.node.level) < meters && guard++ < 5000) {
       if (this.state === STATE.RESTING) this.leaveRest();
-      const route = this.routes[this.routes.length - 1];
+      // The longest climb on offer (never a cave traverse).
+      const route = (this.routes || []).filter((r) => !r.cave).reduce((a, r) => (!a || r.heightGain > a.heightGain ? r : a), null);
+      if (!route) break;
       this.routeUI.hide();
       this.state = STATE.CLIMB_ANIMATION;
       this.climber.setPosition(route.target.x, route.target.y);
@@ -3887,4 +3905,4 @@ export class ClimbScene extends Phaser.Scene {
 }
 
 // Trail Boons (scenes/climbBoons.js).
-Object.assign(ClimbScene.prototype, climbBoons, biomeMoments, climbRun);
+Object.assign(ClimbScene.prototype, climbBoons, biomeMoments, climbRun, climbFeatures);

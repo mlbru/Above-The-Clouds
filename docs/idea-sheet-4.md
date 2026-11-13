@@ -50,12 +50,12 @@ Right now you only press ← ↑ →. Adding **↓** (swipe down on touch) opens
 - **Bounce**: mushroom pads or rope swings that you press ↓ on to spring higher.
 Introduce it in one biome (the Glowcap Hollow, §4.3) before it spreads.
 
-### 1.3 Overhangs and roofs · M
+### ~~1.3 Overhangs and roofs · M~~ ✓ built (notes drip down a lane out of the rock; the camera does not tilt, because the HUD is on the same camera)
 Short sections where the wall leans out over you. The camera tilts, the climber hangs under
 the rock, notes come in from the top of the track instead of the side, and grip drains a bit
 faster. The view under a roof (sky below your feet) is a great screenshot moment.
 
-### 1.4 Traverses and hidden caves · M
+### ~~1.4 Traverses and hidden caves · M~~ ✓ built (gem cache, dragon skull, journal page or a sleeping creature)
 Now and then the routes offer a **sideways traverse** (only ← and → notes). It gains no
 height but leads to a **cave**: a small dark room with a fossil, a journal page, a gem cache
 or a sleeping creature. Risk without reward in height, reward in finds.

@@ -42,6 +42,9 @@ const smallKey = (note, dir = shownDir(note)) => (note.swarm ? 'icon_swarm_s' : 
 export const BELL_TINT = 0xf2c252;
 const VINE = 0x5ab83a, VINE_LIT = 0xb8ff6a, VINE_DARK = 0x2a5a18;
 const TRACK_W = 200;
+// Under an overhang (idea sheet 1.3) the notes drip down a vertical lane out
+// of the rock above instead of sliding in from the side.
+const LANE_H = 150;
 const TRACK_X = Math.round(GAME_WIDTH / 2 - TRACK_W / 2);
 export const HIT_X = TRACK_X + 30;
 export const TRACK_Y = GAME_HEIGHT - 22;
@@ -132,6 +135,7 @@ export class ComboPrompt {
       if (!this.revealMs || late < this.revealMs) this.revealMs = late;
     }
     // The Cascade's spray curtain and the Monastery's bell call (see update).
+    this.roof = !!route.roof;
     this.spray = route.spray || null;
     this.sprayT0 = null;
     this.echo = route.echo ? { t0: null, step: Math.round(BELLS.stepBeats * combo.beatMs), lit: -1, rings: [] } : null;
@@ -163,7 +167,7 @@ export class ComboPrompt {
     const tags = [...(route.tags || []), ...(route.mods ? [route.mods.tag] : []), ...(route.thermal ? ['THERMAL'] : [])];
     let line = `${route.label} ROUTE${tags.length ? '  \u2022 ' + tags.join(' ') : ''}`;
     if (line.length > 40) line = `${line.slice(0, 38).replace(/ \S*$/, '')} ...`;
-    this.label = this.own(new PixelText(this.scene, TRACK_X, TRACK_Y - 33, line, { color: COLORS.dim }).setScrollFactor(0).setDepth(DEPTH.hud + 1));
+    this.label = this.own(new PixelText(this.scene, this.roof ? HIT_X + 18 : TRACK_X, TRACK_Y - 33, line, { color: COLORS.dim }).setScrollFactor(0).setDepth(DEPTH.hud + 1));
   }
 
   showRecovery(combo, { label = 'GRAB THE WALL!', color = COLORS.red } = {}) {
@@ -183,7 +187,9 @@ export class ComboPrompt {
     this.flash = Math.max(0, this.flash - dt);
     if (this.mode === 'recovery') return this.updateRecovery(now);
     const c = this.combo;
+    if (this.roof) this.drawLane(g, c, now);
     // Track
+    else {
     drawFrame(g, TRACK_X - 5, TRACK_Y - 10, TRACK_W + 10, 21, { accent: this.accent, alpha: HIGH_CONTRAST ? 1 : 0.85 });
     if (HIGH_CONTRAST) g.fillStyle(0x000000, 1).fillRect(TRACK_X - 3, TRACK_Y - 8, TRACK_W + 6, 17);
     g.fillStyle(HIGH_CONTRAST ? 0xffffff : 0x3a3450, 1);
@@ -219,6 +225,7 @@ export class ComboPrompt {
         g.fillRect(sx, TRACK_Y - 7 + ((i * 11) % 15), 1, 1);
       }
     }
+    }
     // Sequence row background
     const n = c.notes.length;
     drawFrame(g, Math.round(GAME_WIDTH / 2 - (n * 10) / 2) - 5, TRACK_Y - 27, n * 10 + 8, 14, { accent: this.accent, alpha: 0.75 });
@@ -231,6 +238,17 @@ export class ComboPrompt {
       const note = it.note;
       const isCur = note === c.current;
       let x = HIT_X + (note.time - now) * PX_PER_MS;
+      // Under a roof the same timing runs down the lane instead.
+      let vy = TRACK_Y;
+      if (this.roof) {
+        vy = Math.round(TRACK_Y - (x - HIT_X) * (LANE_H / (TRACK_X + TRACK_W - HIT_X)));
+        x = HIT_X;
+        if (!note.result && vy > TRACK_Y - LANE_H && vy < TRACK_Y) {
+          // A wet trail above each falling note.
+          g.fillStyle(0x9fd8f0, 0.35).fillRect(HIT_X, vy - 12, 1, 6);
+          g.fillStyle(0x9fd8f0, 0.18).fillRect(HIT_X, vy - 20, 1, 6);
+        }
+      }
       // A roped pair comes in the wrong way round, tied together; a beat and
       // a half before the first reaches the line they hop over each other
       // (the first over the top, the second underneath) into their true
@@ -342,7 +360,7 @@ export class ComboPrompt {
         }
       }
       if (!note.result) {
-        const visible = x < clipR && x > TRACK_X - 6;
+        const visible = this.roof ? vy > TRACK_Y - LANE_H - 2 && vy < TRACK_Y + 12 : x < clipR && x > TRACK_X - 6;
         let alpha = isCur ? 1 : 0.8;
         // Blind notes vanish just before the line: you have to feel the beat.
         // In a whiteout they stay visible instead, so a note is never unseen.
@@ -359,7 +377,7 @@ export class ComboPrompt {
         }
         const wobX = wet ? Math.round(Math.sin(t / 95 + note.index * 1.7) * 1.5 * wet) : 0;
         it.big.setVisible(visible && alpha > 0.02).setX(Math.round(x) + wobX).setAlpha(alpha);
-        it.big.setY(TRACK_Y + (note.swap ? swapY : 0) + (wet ? Math.round(Math.sin(t / 80 + note.index * 2.3) * 3 * wet) : 0));
+        it.big.setY(vy + (note.swap ? swapY : 0) + (wet ? Math.round(Math.sin(t / 80 + note.index * 2.3) * 3 * wet) : 0));
         let tint = note.still ? (isCur && Math.floor(t / 120) % 2 ? 0xffffff : stillTint(note)) : note.echo ? (isCur ? 0xfff0a8 : BELL_TINT) : note.mirror ? (isCur ? NOTE_TINT.mirrorCur : NOTE_TINT.mirror) : note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : isCur ? 0xf2c14e : 0xf4efe4;
         if (wet) tint = lerpColor(tint, 0xd8f8ff, 0.35 * wet);
         it.big.setTint(tint);
@@ -386,7 +404,7 @@ export class ComboPrompt {
           g.fillRect(Math.round(x) + 3, TRACK_Y + 6, 1, 3);
         }
         // The next note to hit carries a soft glow.
-        if (isCur && this.glow) this.glow.setVisible(visible && alpha > 0.3).setPosition(Math.round(x), TRACK_Y).setAlpha(0.55 * alpha).setTint(note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : 0xf2c14e);
+        if (isCur && this.glow) this.glow.setVisible(visible && alpha > 0.3).setPosition(Math.round(x), vy).setAlpha(0.55 * alpha).setTint(note.thermal ? NOTE_TINT.thermal : note.gust ? NOTE_TINT.gust : 0xf2c14e);
         // A thermal note trails a small updraft under it.
         if (note.thermal && visible) {
           g.fillStyle(NOTE_TINT.thermal, 0.6);
@@ -401,6 +419,43 @@ export class ComboPrompt {
     });
     if (this.gustIcon) this.gustIcon.setVisible(gustSoon && Math.floor(t / 200) % 2 === 0);
     if (this.glow && !c.current) this.glow.setVisible(false);
+  }
+
+  // The overhang's lane: a crack in the rock above the hit line. Stalactites
+  // hang at its top, water beads run down it, the zones lie across it and
+  // a little pool shivers at the bottom where the notes land.
+  drawLane(g, c, now) {
+    const t = this.scene.time.now;
+    const x0 = HIT_X - 13, top = TRACK_Y - LANE_H - 8;
+    drawFrame(g, x0, top, 27, LANE_H + 19, { accent: this.accent, alpha: 0.9 });
+    g.fillStyle(0x1c1824, 1).fillRect(x0 + 3, top + 3, 21, LANE_H + 13);
+    // Rock grain down the crack, lit on its left wall.
+    for (let y = top + 4; y < TRACK_Y + 8; y += 3) {
+      g.fillStyle(0x2c2638, 1).fillRect(x0 + 3, y, 2, 2);
+      g.fillStyle(0x0e0c14, 1).fillRect(x0 + 22, y + 1, 2, 1);
+    }
+    // Stalactites from the top, a bead of water swelling at the longest.
+    for (const [dx, len] of [[4, 9], [8, 5], [12, 12], [17, 6], [20, 8]]) {
+      for (let k = 0; k < len; k++) g.fillStyle(k < len - 2 ? 0x4a4258 : 0x6a6280, 1).fillRect(x0 + dx, top + 3 + k, Math.max(1, Math.round(2 - k / len * 2)), 1);
+    }
+    const bead = (t / 900) % 1;
+    g.fillStyle(0xbfe8ff, 0.4 + bead * 0.6).fillRect(x0 + 12, top + 15 + Math.round(bead * bead * 8), 1, 1 + Math.round(bead));
+    // A dotted guide down the middle.
+    g.fillStyle(0x3a3450, 1);
+    for (let y = top + 18; y < TRACK_Y - 8; y += 6) g.fillRect(HIT_X, y, 1, 3);
+    // The zones, lying across the lane.
+    const ref = c.current || c.notes[c.notes.length - 1];
+    const k = LANE_H / (TRACK_X + TRACK_W - HIT_X);
+    const goodH = Math.round(ref.goodMs * PX_PER_MS * k), perfH = Math.round(ref.perfectMs * PX_PER_MS * k);
+    g.fillStyle(this.color, HIGH_CONTRAST ? 0.3 : 0.18).fillRect(x0 + 3, TRACK_Y - goodH, 21, goodH * 2 + 1);
+    g.fillStyle(this.color, this.flash > 0 ? 0.75 : HIGH_CONTRAST ? 0.55 : 0.38).fillRect(x0 + 3, TRACK_Y - perfH, 21, perfH * 2 + 1);
+    g.fillStyle(this.color, 0.35).fillRect(x0 + 2, TRACK_Y - 1, 23, 3);
+    g.fillStyle(0xffffff, 1).fillRect(x0 + 1, TRACK_Y, 25, 1);
+    // The pool: a shivering line of water under the hit line.
+    for (let x = x0 + 4; x < x0 + 23; x++) g.fillStyle(0x6ab8e8, 0.5 + 0.3 * Math.sin(t / 120 + x)).fillRect(x, TRACK_Y + 5 + (Math.sin(t / 200 + x * 0.8) > 0.6 ? 1 : 0), 1, 1);
+    // Boons that change beat to beat, and the metronome, still apply.
+    if (this.scene.boonView) this.minAlpha = this.scene.boonView().minAlpha || 0;
+    if (this.metronome) this.drawMetronome(g, now);
   }
 
   // METRONOME (a gift): a little brass metronome left of the track, its arm

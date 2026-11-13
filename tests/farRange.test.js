@@ -133,3 +133,21 @@ test('goat hooves: ledges come twice as often on the same seed', () => {
   };
   assert.ok(count(0.5) > count(1) * 1.4);
 });
+
+test('overhangs: some segments jut out over you, and the rest of the mountain is unchanged', async () => {
+  const { ROOF } = await import('../src/systems/SegmentGenerator.js');
+  let roofs = 0, segs = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const m = new Mountain(seed, BALANCE, 'normal');
+    m.ensureLevel(600);
+    for (const s of m.segments.values()) {
+      segs++;
+      if (!s.roof) continue;
+      roofs++;
+      const lv = s.levels.filter((l) => l.roof);
+      assert.ok(lv.length >= ROOF.levels[0] && lv.length <= ROOF.levels[1]);
+      assert.ok(!lv.some((l) => l.nodes.some((n) => n.kind === 'ledge')));
+    }
+  }
+  assert.ok(roofs / segs > 0.05 && roofs / segs < 0.3, `${roofs} of ${segs}`);
+});

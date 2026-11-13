@@ -9,6 +9,8 @@ import { isGateSegment, isFarShoreSegment } from '../data/gate.js';
 import { gemForBiome } from '../data/gems.js';
 import { GEM_INCOME } from '../data/shop.js';
 
+// Overhangs: chance per segment, how many levels, how far the rock juts out (px).
+export const ROOF = { chance: 0.17, levels: [4, 6], jut: 28 };
 const WALL_MIN_X = 36;
 const WALL_MAX_X = 444;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -153,6 +155,26 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
     decor.push({ type, side, level: lv.level, x: Math.round(edgeX - side * rng.range(2, 10)), y: Math.round(levelToY(lv.level) + rng.range(-10, 10)), v: rng.int(0, 3) });
   }
 
+  // Overhangs (idea sheet 1.3): now and then a short band where the rock
+  // juts out over you like a roof. Its own random stream, so the rest of the
+  // mountain is the same with or without it.
+  let roof = null;
+  {
+    const rr = new SeededRandom(hashInts(seed, index, 4401));
+    const meters = levelToMeters(startLevel);
+    if (index > 2 && !isRest && meters > 40 && levels.length >= 10 && rr.chance(ROOF.chance)) {
+      const len = rr.int(ROOF.levels[0], ROOF.levels[1]);
+      const a = rr.int(3, levels.length - len - 2);
+      for (let k = 0; k < len; k++) {
+        const lv = levels[a + k];
+        const prof = Math.sin(((k + 0.5) / len) * Math.PI);
+        lv.roof = +prof.toFixed(2);
+        lv.bounds = { l: Math.round(clamp(lv.bounds.l - ROOF.jut * prof, 8, WALL_MAX_X)), r: Math.round(clamp(lv.bounds.r + ROOF.jut * prof, WALL_MIN_X, 472)) };
+      }
+      roof = { from: levels[a].level, to: levels[a + len - 1].level, top: levelToY(levels[a + len - 1].level) - 12, bottom: levelToY(levels[a].level) + 12 };
+    }
+  }
+
   const last = levels[levels.length - 1];
   return {
     index,
@@ -168,6 +190,7 @@ export function generateSegment(seed, index, prev, balance = BALANCE, mode = 'no
     rest,
     decor,
     waterfall: hasWaterfall ? { side: waterfallSide } : null,
+    roof,
     exitX: Math.round(x),
     exitBounds: last.bounds,
     viewpointCount: viewpointCount + (rest && rest.type === 'viewpoint' ? 1 : 0),
