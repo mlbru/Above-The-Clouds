@@ -1,7 +1,10 @@
 // Seasons on the real calendar: base camp dresses up for them and Bram sells
-// a seasonal item. ?season=halloween (or christmas, none) overrides the date.
+// a seasonal item. ?season=halloween (or sinterklaas, christmas, none)
+// overrides the date. The first match wins, so Sinterklaas holds camp until
+// the 5th of December and Christmas takes over after.
 export const SEASONS = {
   halloween: { name: 'HALLOWEEN', greeting: 'HAPPY HALLOWEEN', from: [10, 15], to: [11, 3] },
+  sinterklaas: { name: 'SINTERKLAAS', greeting: 'HAPPY SINTERKLAAS', from: [11, 8], to: [12, 5] },
   christmas: { name: 'CHRISTMAS', greeting: 'MERRY CHRISTMAS', from: [12, 1], to: [1, 6] },
 };
 

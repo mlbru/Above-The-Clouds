@@ -1,5 +1,6 @@
 // Procedural pixel-art texture factory. Everything is generated at boot so the
 // game has no external art dependencies; hand-made sheets can replace any key.
+import { sintGrids } from './sintArt.js';
 import { PixelGrid, makeCanvas } from '../utils/pixelGrid.js';
 import { buildFarTextures } from './farArt.js';
 import { darken, lighten, lerpColor, bayer, rgb } from '../utils/color.js';
@@ -870,6 +871,10 @@ export function buildAllTextures(scene, look) {
   addFramesFromGrids(scene, 'critter_bird', perchFrames());
   addFramesFromGrids(scene, 'critter_goat', goatFrames());
   addFramesFromGrids(scene, 'season_pumpkin', pumpkinFrames());
+  const sint = sintGrids();
+  ['shoe', 'gifts', 'letter', 'nuts'].forEach((k) => addGrid(scene, `sint_${k}`, sint[k]));
+  addFramesFromGrids(scene, 'sint_flag', sint.flags);
+  addFramesFromGrids(scene, 'sint_ride', sint.ride);
 
   paintRange(scene, 'bg_summits', { w: 480, h: 110, seed: 11, base: 50, amp: 34, rough: 0.55, body: 0xdfe6f2, shadow: 0xc6d0e2, snow: 0xffffff, snowLine: 70 });
   paintRange(scene, 'bg_far', { w: 480, h: 160, seed: 21, base: 60, amp: 46, rough: 0.56, body: 0xaebbd2, shadow: 0x8e9cb8, snow: 0xf4f8ff, snowLine: 62 });

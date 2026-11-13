@@ -194,6 +194,16 @@ export class WallRenderer {
       if (a.type === 'wheel') a.obj.setFrame(Math.floor(t / 260 + a.phase) % 3);
       if (a.type === 'pennant') a.obj.setY(a.y + (Math.floor(t / 300 + a.phase) % 2)).setScale(1, Math.floor(t / 300 + a.phase) % 2 ? 0.8 : 1);
       if (a.type === 'pumpkin') a.obj.setFrame(Math.floor(t / 140 + a.phase) % 5 === 0 ? 1 : 0);
+      if (a.type === 'sintride') {
+        // Across the sky above camp every 24 s, nine seconds of gallop.
+        const u = (t % 24000) / 9000;
+        const on = u < 1;
+        a.obj.setVisible(on);
+        if (on) {
+          a.obj.setPosition(Math.round(-50 + u * (WORLD_WIDTH + 100)), Math.round(a.y - Math.sin(u * Math.PI) * 26 - Math.abs(Math.sin(t / 110)) * 2));
+          a.obj.setFrame(Math.floor(t / 110) % 4);
+        }
+      }
       if (a.type === 'butterfly') {
         const u = t / 1000 + a.phase;
         a.obj.setPosition(Math.round(a.x + Math.sin(u * 0.7) * 34 + Math.sin(u * 2.3) * 6), Math.round(a.y + Math.sin(u * 1.3) * 8 - Math.abs(Math.sin(u * 4)) * 4));
@@ -661,8 +671,9 @@ export class WallRenderer {
     (this.gateObjs || []).forEach((o) => o.active && o.setVisible(false));
   }
 
-  // Halloween and Christmas at base camp (data/seasons.js): carved pumpkins
-  // and bats, or snow, fairy lights on the tent and baubles in the pines.
+  // Halloween, Sinterklaas and Christmas at base camp (data/seasons.js):
+  // carved pumpkins and bats; a shoe by the fire, presents and mitre bunting
+  // and the Sint riding over camp; or snow, fairy lights and baubles.
   placeSeason(node, side, spot, rng, add) {
     const season = currentSeason();
     if (!season) return;
@@ -678,6 +689,34 @@ export class WallRenderer {
         const b = add(sc.add.sprite(0, 0, 'bird', 0).setDepth(DEPTH.decor + 2).setTint(0x1a1222));
         this.animated.push({ type: 'butterfly', obj: b, x: node.x + (i - 1.5) * 60 + rng.int(-10, 10), y: y - 46 - i * 9, phase: rng.next() * 10, seg: 0 });
       }
+    } else if (season === 'sinterklaas') {
+      const fx = node.x - side * 84;
+      // The shoe set out by the fire, a carrot in it for the horse.
+      add(sc.add.image(fx + side * 16, y + 1, 'sint_shoe').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setFlipX(side > 0));
+      // A bowl of kruidnoten on the bench.
+      add(sc.add.image(fx - side * 18, y - 7, 'sint_nuts').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1));
+      // Presents piled by the woodpile, a chocolate letter against them.
+      const gx = node.x - side * 138;
+      add(sc.add.image(gx, y + 1, 'sint_gifts').setOrigin(0.5, 1).setDepth(DEPTH.decor).setFlipX(side > 0));
+      add(sc.add.image(gx + side * 18, y + 1, 'sint_letter').setOrigin(0.5, 1).setDepth(DEPTH.decor + 1).setAngle(side * -8));
+      // Bunting of little mitres from the tent's ridge out to the pines.
+      const x0 = spot(92), x1 = spot(126);
+      const a = Math.min(x0, x1), b = Math.max(x0, x1), y0 = y - 24, sag = 5;
+      const yAt = (x) => y0 + Math.sin(((x - a) / Math.max(1, b - a)) * Math.PI) * sag;
+      const line = add(sc.add.graphics().setDepth(DEPTH.decor + 1));
+      line.lineStyle(1, 0x3a2418, 1);
+      line.beginPath(); line.moveTo(a, y0);
+      for (let x = a; x <= b; x += 3) line.lineTo(x, yAt(x));
+      line.strokePath();
+      let i = 0;
+      for (let x = a + 4; x < b - 2; x += 7) {
+        const f = add(sc.add.image(x, Math.round(yAt(x)) + 1, 'sint_flag', i % 3).setOrigin(0.5, 0).setDepth(DEPTH.decor + 1.1));
+        this.animated.push({ type: 'pennant', obj: f, y: f.y, phase: i * 0.37, seg: 0 });
+        i++;
+      }
+      // The Sint on his white horse, riding over camp now and then.
+      const ride = add(sc.add.sprite(-60, y - 120, 'sint_ride', 0).setDepth(DEPTH.decor + 3).setVisible(false));
+      this.animated.push({ type: 'sintride', obj: ride, y: y - 118, seg: 0 });
     } else if (season === 'christmas') {
       // Fairy lights along the tent's ridge, baubles in the two pines.
       const tx = spot(84);
