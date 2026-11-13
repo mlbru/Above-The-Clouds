@@ -12,7 +12,7 @@ import { gemForBiome } from '../data/gems.js';
 
 export const ROOM_W = 300, ROOM_H = 168;
 const ICY = ['frozen', 'aurora', 'crystal'];
-const GREEN = ['green', 'cascade', 'moss', 'stone', 'monastery'];
+const GREEN = ['green', 'cascade', 'moss', 'stone'];
 const HOT = ['obsidian', 'dragon', 'bones', 'volcano'];
 
 function addCanvas(scene, key, c) {

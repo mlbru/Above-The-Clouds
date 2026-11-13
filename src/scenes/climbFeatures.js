@@ -12,8 +12,7 @@
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT, levelToMeters } from '../config/gameConfig.js';
 import { biomeAt } from '../data/biomes.js';
 import { gemForBiome } from '../data/gems.js';
-import { caveMouthKey, caveRoomKey, creatureKey, creatureFor, ROOM_W, ROOM_H } from '../render/caveArt.js';
-import { PixelText, COLORS, drawFrame } from '../ui/PixelText.js';
+import { caveMouthKey, creatureFor } from '../render/caveArt.js';
 import { Audio } from '../systems/AudioSystem.js';
 import { toCss } from '../utils/color.js';
 
@@ -141,119 +140,64 @@ export const climbFeatures = {
       if (this.state === 'ROUTE_SELECT' && this.climber.sprite) this.climber.sprite.setAngle(Math.sin(t / 650) * 7 * k);
     } else if (this.climber.sprite && this.climber.sprite.angle && this.state !== 'FALLING' && this.state !== 'SLIPPING') this.climber.sprite.setAngle(0);
     if (this.state === 'CLIMBING_COMBO' && this.climber.sprite && Math.abs(this.climber.sprite.angle) > 0.1 && !this.climber.flailTween) this.climber.sprite.setAngle(this.climber.sprite.angle * 0.9);
-    if (this.cave) this.updateCave(dt);
   },
 
   // ---------------------------------------------------------------- the cave
+  // Step inside: the cave is a scene of its own (scenes/CaveScene.js),
+  // launched over the climb, which waits.
   enterCave(route) {
     const t = route.target, cv = route.cave;
     const biome = biomeAt(levelToMeters(t.level));
     this.state = 'CAVE';
     this.routeUI.hide();
     if (this.caveMouth) { this.caveMouth.objs.forEach((o) => o.destroy()); this.caveMouth = null; }
-    Audio.play('cloth');
-    const W = GAME_WIDTH, H = GAME_HEIGHT;
-    const cx = Math.round(W / 2), cy = Math.round(H / 2 - 6);
-    const D = DEPTH.hud - 4;
-    const objs = [];
-    const add = (o) => { objs.push(o); return o.setScrollFactor(0); };
-    const back = add(this.add.rectangle(0, 0, W, H, 0x050408).setOrigin(0, 0).setDepth(D).setAlpha(0));
-    const frameG = add(this.add.graphics().setDepth(D + 0.1));
-    drawFrame(frameG, cx - ROOM_W / 2 - 5, cy - ROOM_H / 2 - 5, ROOM_W + 10, ROOM_H + 10, { accent: biome.accentC, alpha: 1 });
-    const key = caveRoomKey(this, biome, cv.kind, cv.side);
-    const room = add(this.add.image(cx, cy, key).setDepth(D + 0.2));
-    const roomGlow = add(this.add.image(cx, cy, `${key}_glow`).setDepth(D + 0.4).setBlendMode('ADD').setAlpha(0.8));
-    // The headlamp's beam from the entrance, dust turning in it.
-    const beam = add(this.add.graphics().setDepth(D + 0.3).setBlendMode('ADD'));
-    let sleeper = null;
-    if (cv.kind === 'creature') sleeper = add(this.add.sprite(cx + 6, cy + ROOM_H / 2 - 52, creatureKey(this, biome.id), 0).setDepth(D + 0.25).setScale(2));
-    // Open like an eye: a circle of light grows out of the dark.
-    const maskG = this.make.graphics({ add: false }).setScrollFactor(0);
-    const mask = maskG.createGeometryMask();
-    [room, roomGlow, beam, frameG].concat(sleeper ? [sleeper] : []).forEach((o) => o.setMask(mask));
-    // What you find, and what it gives.
-    const gem = gemForBiome(biome.id);
-    let title = '', line1 = '', line2 = '', color = COLORS.gold;
+    this.cave = { route };
     this.prog.bump('caves');
     this.discover('hidden-cave');
-    if (cv.kind === 'cache') {
+    this.time.delayedCall(250, () => {
+      if (!this.sys.isActive()) return;
+      this.paused = false;
+      this.openOverlay('Cave', { returnTo: 'Climb', biome: biome.id, kind: cv.kind, side: cv.side });
+    });
+  },
+
+  // The cave scene asks for the find: applies it, returns what to show.
+  caveReward(kind) {
+    const c = this.cave;
+    if (!c || c.rewarded) return null;
+    c.rewarded = true;
+    const biome = biomeAt(levelToMeters(c.route.target.level));
+    const gem = gemForBiome(biome.id);
+    if (kind === 'cache') {
       const n = this.runRng.int(CAVE.cacheStones[0], CAVE.cacheStones[1]);
       this.awardGems(gem.value * n);
-      title = `A CACHE OF ${gem.name}`; line1 = `SOMEONE HID ${n} STONES HERE LONG AGO.`; line2 = 'THEY ARE YOURS NOW.'; color = toCss(gem.color);
-    } else if (cv.kind === 'fossil') {
+      return { stones: n, title: `${n} ${gem.name}${n > 1 ? 'S' : ''}`, line1: 'SOMEONE HID THEM HERE LONG AGO.', line2: 'THEY ARE YOURS NOW.', color: toCss(gem.color) };
+    }
+    if (kind === 'fossil') {
       this.awardGems(gem.value * 2);
       this.discover('cave-fossil');
-      title = "A DRAGON'S SKULL"; line1 = 'OLDER THAN THE MOUNTAIN, SET IN THE STONE.'; line2 = `YOU PRY ${gem.name} FROM ITS SOCKET.`; color = '#fff2d8';
-    } else if (cv.kind === 'page') {
+      return { stones: 2, title: `THE SKULL'S EYE: ${gem.name}`, line1: 'OLDER THAN THE MOUNTAIN. IT COMES OUT', line2: 'OF THE SOCKET WARM IN YOUR HAND.', color: '#ffb070' };
+    }
+    if (kind === 'page') {
       const p = PAGES[this.runRng.int(0, PAGES.length - 1)];
       this.awardGems(gem.value);
       this.discover('cave-page');
-      title = 'A PAGE FROM AN OLD JOURNAL'; [line1, line2] = p; color = '#f0e6cc';
-    } else {
-      const cr = creatureFor(biome.id);
-      this.grip.restoreFull();
-      this.discover('cave-creature');
-      title = `A ${cr.name}, ASLEEP`; line1 = 'YOU SIT A WHILE BESIDE IT IN THE WARM.'; line2 = 'YOUR GRIP IS FULL AGAIN.'; color = '#ffd8a0';
+      return { page: p, title: 'A LOST PAGE', line1: 'TUCKED UNDER IT: ONE STONE, FOR LUCK.', line2: '', color: '#f0e6cc' };
     }
-    const txt = (y, s, c, scale = 1) => add(new PixelText(this, cx, y, s, { color: c }).setOrigin(0.5, 0).setScale(scale).setDepth(D + 1).setAlpha(0));
-    const head = txt(Math.max(4, cy - ROOM_H / 2 - 22), 'A HIDDEN CAVE', COLORS.dim);
-    const t1 = txt(cy + ROOM_H / 2 - 30, title, color, 1);
-    const t2 = txt(cy + ROOM_H / 2 - 19, line1, '#e8e4dc');
-    const t3 = txt(cy + ROOM_H / 2 - 10, line2, '#e8e4dc');
-    const hint = txt(Math.min(GAME_HEIGHT - 10, cy + ROOM_H / 2 + 8), 'SPACE OR TAP: CLIMB ON', COLORS.faint);
-    const plate = add(this.add.graphics().setDepth(D + 0.9).setAlpha(0));
-    plate.fillStyle(0x07060c, 0.8).fillRect(cx - ROOM_W / 2, cy + ROOM_H / 2 - 33, ROOM_W, 33);
-    this.cave = { route, objs, beam, maskG, sleeper, t: 0, side: cv.side, texts: [head, t1, t2, t3, hint, plate], back, motes: Array.from({ length: 26 }, () => ({ u: Math.random(), v: Math.random(), s: 0.3 + Math.random() * 0.7 })), cx, cy, opened: false };
-    this.tweens.add({ targets: back, alpha: 0.86, duration: 300 });
-    Audio.play(cv.kind === 'cache' ? 'gem' : 'checkpoint', { value: gem.value });
+    const cr = creatureFor(biome.id);
+    this.grip.restoreFull();
+    this.discover('cave-creature');
+    return { title: `THE ${cr.name} SLEEPS ON`, line1: 'YOU SIT A WHILE BESIDE IT IN THE WARM.', line2: 'YOUR GRIP IS FULL AGAIN.', color: '#ffd8a0' };
   },
 
-  updateCave(dt) {
-    const c = this.cave;
-    c.t += dt;
-    const open = Math.min(1, c.t / 700);
-    const e = open * open * (3 - 2 * open);
-    c.maskG.clear().fillStyle(0xffffff).fillCircle(c.cx, c.cy, e * (ROOM_W * 0.62));
-    if (c.t > 500) c.texts.forEach((o) => o.setAlpha(Math.min(1, (c.t - 500) / 300)));
-    // The beam: a soft cone from the entrance side, flickering a little.
-    const b = c.beam.clear();
-    const ex = c.cx + c.side * (ROOM_W / 2 - 8), ey = c.cy - 26;
-    const fl = 0.85 + 0.15 * Math.sin(c.t / 90) * Math.sin(c.t / 37);
-    for (let i = 0; i < 5; i++) {
-      const spread = 28 + i * 12, reach = ROOM_W * (0.55 + i * 0.07);
-      b.fillStyle(0xffd8a0, 0.022 * fl).fillTriangle(ex, ey, ex - c.side * reach, ey - spread * 0.4, ex - c.side * reach, ey + spread * 1.4);
-    }
-    for (const m of c.motes) {
-      m.u = (m.u + dt * 0.00003 * m.s) % 1; m.v = (m.v + Math.sin(c.t / 900 + m.s * 9) * 0.0004) % 1;
-      const x = ex - c.side * m.u * ROOM_W * 0.7, y = ey - 10 + m.v * 60 * m.u + m.u * 20;
-      b.fillStyle(0xffffff, 0.5 * (1 - m.u) * fl).fillRect(Math.round(x), Math.round(y), 1, 1);
-    }
-    if (c.sleeper) {
-      c.sleeper.setFrame(Math.floor(c.t / 1100) % 2);
-      // Zzz drifting up.
-      const zt = (c.t % 2400) / 2400;
-      b.fillStyle(0xd8e4ff, 0.7 * (1 - zt)).fillRect(Math.round(c.sleeper.x + 12 + zt * 10), Math.round(c.sleeper.y - 10 - zt * 18), 3, 1)
-        .fillRect(Math.round(c.sleeper.x + 14 + zt * 10), Math.round(c.sleeper.y - 9 - zt * 18), 1, 1)
-        .fillRect(Math.round(c.sleeper.x + 12 + zt * 10), Math.round(c.sleeper.y - 8 - zt * 18), 3, 1);
-    }
-    // The autopilot climbs on by itself.
-    if (this.bot && c.t > 1200) this.leaveCave();
-  },
-
-  caveInput() {
-    if (!this.cave || this.cave.t < 600) return;
-    this.leaveCave();
-  },
-
+  // Back out of the cave: you are on the hold at its mouth.
   leaveCave() {
     const c = this.cave;
     if (!c) return;
     this.cave = null;
     Audio.play('cloth');
-    this.tweens.add({
-      targets: c.objs.filter((o) => o.alpha !== undefined), alpha: 0, duration: 260,
-      onComplete: () => { c.objs.forEach((o) => o.destroy()); c.maskG.destroy(); },
-    });
     this.arrive(c.route.target, 0);
   },
+
+  caveInput() {},
 };

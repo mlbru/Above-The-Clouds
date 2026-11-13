@@ -346,7 +346,6 @@ export class ClimbScene extends Phaser.Scene {
     this.initRun();
     // Overhangs and hidden caves (scenes/climbFeatures.js).
     this.initFeatures();
-    this.input.on('pointerdown', () => this.caveInput());
 
     this.wall.update(0, RENDER_AHEAD_LEVELS, this.camY, this.camY + GAME_HEIGHT);
     this.wall.flush();
@@ -474,7 +473,6 @@ export class ClimbScene extends Phaser.Scene {
       return;
     }
     if (code === 'Escape' || code === 'KeyP') { this.pauseGame(); return; }
-    if (this.cave) { if (DIR_KEYS[code] || code === 'Space' || code === 'Enter') this.caveInput(); return; }
     if (this.wish && code === 'KeyE') { this.makeWish(); return; }
     if (isDebugKey(event) && this.prog.debugUnlocked) { this.setDebug(!this.debugVisible); return; }
     if (code === 'KeyB' && ((this.debugVisible && this.prog.debugUnlocked) || this.prog.autopilotUnlocked)) {
